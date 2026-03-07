@@ -1,0 +1,28 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/scrape-jobs",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/match-jobs",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/culture-refresh",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/flywheel",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/notify",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/gmail-sync",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}
