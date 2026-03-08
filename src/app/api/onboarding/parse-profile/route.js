@@ -32,14 +32,22 @@ Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
   "companies": ["companies worked at, most recent first"],
   "education": "highest degree + institution, or null",
   "strongest_card": "one specific sentence — this candidate's single biggest differentiator. Make it concrete and specific to this person, never generic.",
-  "keywords": ["15-20 keywords for job matching — mix of skills, domains, tools, and role types"]
+  "keywords": ["15-20 keywords for job matching — mix of skills, domains, tools, and role types"],
+  "job_search_titles": {
+    "suitable": ["2-3 job titles this candidate can credibly apply for RIGHT NOW — exact current role + obvious equivalents. E.g. if they're a PM, include 'Product Manager' and 'Senior Product Manager' if >5 yrs exp."],
+    "maybe": ["3-5 lateral or stretch titles worth exploring — adjacent roles with strong skill overlap (e.g. PM → Growth Manager, Product Owner, AI Product Manager) or one seniority step up they haven't held yet. These require some assumption."],
+    "excluded": ["3-5 roles this profile clearly cannot claim — no signal for these in their background. Be honest. E.g. a PM with no engineering background should have 'Software Engineer' here."]
+  }
 }
 
 Rules:
 - Be accurate. If something is not clear, use null — do not fabricate.
 - "strongest_card" must be genuinely specific. Never write "experienced professional with proven track record."
 - "skills" must be actual skills — not job duties.
-- years_exp: estimate conservatively from what's available.`;
+- years_exp: estimate conservatively from what's available.
+- job_search_titles.suitable: max 3, must be roles they can get interviews for TODAY with this profile.
+- job_search_titles.maybe: max 5, credible stretch — not fantasy. A PM can maybe do Growth Manager, not CTO.
+- job_search_titles.excluded: at least 3, be honest — helps us avoid wasting their time and our scraping credits.`;
 
 export async function POST(request) {
   try {

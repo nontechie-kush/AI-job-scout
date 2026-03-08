@@ -11,10 +11,11 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import useStore from '@/store/useStore';
 import JobCard from '@/components/JobCard';
 import DismissSheet from '@/components/DismissSheet';
+import JobSearchTitlesModal from '@/components/JobSearchTitlesModal';
 
 // ── Pilot Scan Card — 4 cohort tiles ───────────────────────────
 
-function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading }) {
+function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading, onUpdateSearch }) {
   if (loading) {
     return (
       <div className="card overflow-hidden animate-pulse">
@@ -102,6 +103,15 @@ function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading })
         <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">
           {narration}
         </p>
+
+        {hasAny && (
+          <button
+            onClick={onUpdateSearch}
+            className="mt-2 text-[11px] text-violet-500 dark:text-violet-400 underline underline-offset-2 text-left"
+          >
+            Seeing wrong roles? Update search →
+          </button>
+        )}
       </div>
     </div>
   );
@@ -197,6 +207,7 @@ export default function HomePage() {
 
   const [laptopReminders, setLaptopReminders] = useState([]);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [showUpdateSearch, setShowUpdateSearch] = useState(false);
 
   // Detect desktop + fetch laptop reminders
   useEffect(() => {
@@ -369,6 +380,7 @@ export default function HomePage() {
             goodCount={goodCount}
             othersCount={othersCount}
             loading={jobsLoading}
+            onUpdateSearch={() => setShowUpdateSearch(true)}
           />
         </motion.section>
 
@@ -470,6 +482,14 @@ export default function HomePage() {
           matchId={dismissTarget}
           onDismiss={handleDismiss}
           onClose={() => setDismissTarget(null)}
+        />
+      )}
+
+      {/* Update job search titles modal */}
+      {showUpdateSearch && (
+        <JobSearchTitlesModal
+          onClose={() => setShowUpdateSearch(false)}
+          onSaved={() => setShowUpdateSearch(false)}
         />
       )}
     </div>

@@ -27,7 +27,7 @@ export async function GET() {
         .maybeSingle(),
 
       supabase.from('profiles')
-        .select('parsed_json, parsed_at, source')
+        .select('parsed_json, parsed_at, source, job_search_titles')
         .eq('user_id', user.id)
         .order('parsed_at', { ascending: false })
         .limit(1)
@@ -67,6 +67,7 @@ export async function GET() {
             strongest_card: profile.parsed_json?.strongest_card || null,
             parsed_at: profile.parsed_at,
             source: profile.source,
+            job_search_titles: profile.job_search_titles || null,
           }
         : null,
       gmail: {
@@ -148,16 +149,28 @@ export async function PATCH(request) {
     if (body.salary_max !== undefined) update.salary_max = Number(body.salary_max) || null;
     if (body.salary_currency !== undefined) update.salary_currency = String(body.salary_currency).slice(0, 10);
 
-    if (Object.keys(update).length === 0) {
+    // job_search_titles lives on profiles table, not users
+    const hasJobSearchTitles = body.job_search_titles !== undefined;
+
+    if (Object.keys(update).length === 0 && !hasJobSearchTitles) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('users')
-      .update(update)
-      .eq('id', user.id);
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase
+        .from('users')
+        .update(update)
+        .eq('id', user.id);
+      if (error) throw error;
+    }
 
-    if (error) throw error;
+    if (hasJobSearchTitles) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ job_search_titles: body.job_search_titles })
+        .eq('user_id', user.id);
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -309,19 +309,34 @@ function StepImport({ onNext, onProfileParsed }) {
 }
 
 // ── Step 2: Target Roles + Preferences ────────────────────────
-function StepPreferences({ onNext, onPrefsSet, defaultRole }) {
-  const [roles, setRoles] = useState(defaultRole ? [defaultRole] : []);
+function StepPreferences({ onNext, onPrefsSet, jobSearchTitles }) {
+  const suitable = jobSearchTitles?.suitable || [];
+  const maybe    = jobSearchTitles?.maybe    || [];
+
+  const [roles, setRoles] = useState(suitable.slice(0, 3));
+  const [maybeAdded, setMaybeAdded] = useState([]); // user-opted-in maybe titles
   const [roleInput, setRoleInput] = useState('');
   const [prefs, setPrefs] = useState({ locations: [], ic_or_lead: null, stage: null });
 
   const addRole = () => {
     const trimmed = roleInput.trim();
-    if (trimmed && roles.length < 3 && !roles.includes(trimmed)) {
+    if (trimmed && roles.length < 5 && !roles.includes(trimmed)) {
       setRoles((r) => [...r, trimmed]);
     }
     setRoleInput('');
   };
   const removeRole = (r) => setRoles((prev) => prev.filter((x) => x !== r));
+
+  const toggleMaybe = (title) => {
+    if (roles.includes(title)) {
+      // already added via suitable — remove
+      setRoles((prev) => prev.filter((x) => x !== title));
+      setMaybeAdded((prev) => prev.filter((x) => x !== title));
+    } else if (roles.length < 5) {
+      setRoles((prev) => [...prev, title]);
+      setMaybeAdded((prev) => [...prev, title]);
+    }
+  };
 
   const toggleLocation = (val) =>
     setPrefs((p) => ({
@@ -331,13 +346,15 @@ function StepPreferences({ onNext, onPrefsSet, defaultRole }) {
   const set = (key, val) => setPrefs((p) => ({ ...p, [key]: val }));
   const allSet = roles.length > 0 && prefs.locations.length > 0 && prefs.ic_or_lead && prefs.stage;
 
-  // Dynamic Pilot confirmation line once all set
   const locationLabels = { india: 'India', us_canada: 'US / Canada', remote: 'Remote' };
   const pilotSummary = allSet
-    ? `Looking for ${roles.join(' / ')}. ${prefs.locations.map((l) => locationLabels[l]).join(' + ')}. ${
+    ? `Looking for ${roles.slice(0, 2).join(' / ')}${roles.length > 2 ? ` +${roles.length - 2} more` : ''}. ${prefs.locations.map((l) => locationLabels[l]).join(' + ')}. ${
         prefs.ic_or_lead === 'ic' ? 'IC track.' : prefs.ic_or_lead === 'lead' ? 'Leadership.' : 'IC or lead.'
       } ${prefs.stage === 'startup' ? 'Early-stage.' : prefs.stage === 'growth' ? 'Growth.' : 'All stages.'} On it.`
     : null;
+
+  // maybe titles not yet added
+  const maybeUnselected = maybe.filter((t) => !roles.includes(t));
 
   return (
     <div className="flex flex-col gap-6">
@@ -345,48 +362,77 @@ function StepPreferences({ onNext, onPrefsSet, defaultRole }) {
         <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-2">
           Pilot
         </p>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">What are you actually looking for?</h2>
-        <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">I read your background. Now tell me the target.</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">I mapped your search.</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">Confirm what looks right. Add more if needed.</p>
       </div>
 
-      {/* Target roles — chip input */}
+      {/* Suitable titles — pre-selected */}
       <div>
-        <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Job titles you want <span className="text-gray-400 font-normal">(up to 3)</span></p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="e.g. Product Manager, Growth Lead…"
-            value={roleInput}
-            onChange={(e) => setRoleInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addRole(); }
-            }}
-            className="input-field flex-1 text-sm"
-            disabled={roles.length >= 3}
-          />
-          <button
-            onClick={addRole}
-            disabled={!roleInput.trim() || roles.length >= 3}
-            className="btn-gradient px-4 rounded-xl text-white font-semibold text-sm disabled:opacity-40"
-          >
-            Add
-          </button>
+        <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+          These look right for you
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {roles.map((r) => (
+            <span
+              key={r}
+              className="flex items-center gap-1.5 bg-violet-600 text-white text-sm font-medium px-3 py-1.5 rounded-full"
+            >
+              {r}
+              <button onClick={() => removeRole(r)} className="opacity-70 hover:opacity-100 leading-none">&times;</button>
+            </span>
+          ))}
         </div>
-        {roles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {roles.map((r) => (
-              <span
-                key={r}
-                className="flex items-center gap-1.5 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-sm font-medium px-3 py-1.5 rounded-full"
+        {roles.length === 0 && (
+          <p className="text-xs text-gray-400 mt-1">All removed — add titles below.</p>
+        )}
+      </div>
+
+      {/* Maybe titles — opt-in */}
+      {maybeUnselected.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Worth exploring?</p>
+          <p className="text-xs text-gray-400 mb-2">Based on your background — tap to add</p>
+          <div className="flex flex-wrap gap-2">
+            {maybeUnselected.map((title) => (
+              <button
+                key={title}
+                onClick={() => toggleMaybe(title)}
+                disabled={roles.length >= 5}
+                className="flex items-center gap-1 border border-dashed border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 text-sm font-medium px-3 py-1.5 rounded-full hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors disabled:opacity-40"
               >
-                {r}
-                <button onClick={() => removeRole(r)} className="text-violet-400 hover:text-violet-600 leading-none">&times;</button>
-              </span>
+                <span className="text-base leading-none">+</span> {title}
+              </button>
             ))}
           </div>
-        )}
-        <p className="text-xs text-gray-400 mt-2">Press Enter to add. Your current title is pre-filled — change it if you're targeting something different.</p>
-      </div>
+        </div>
+      )}
+
+      {/* Custom add */}
+      {roles.length < 5 && (
+        <div>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Add your own</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="e.g. Growth Lead, Chief of Staff…"
+              value={roleInput}
+              onChange={(e) => setRoleInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addRole(); }
+              }}
+              className="input-field flex-1 text-sm"
+            />
+            <button
+              onClick={addRole}
+              disabled={!roleInput.trim()}
+              className="btn-gradient px-4 rounded-xl text-white font-semibold text-sm disabled:opacity-40"
+            >
+              Add
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Up to 5 titles total.</p>
+        </div>
+      )}
 
       {/* Location — multi-select */}
       <div>
@@ -679,7 +725,7 @@ export default function OnboardingPage() {
             transition={{ duration: 0.3 }}
           >
             {step === 1 && <StepImport onNext={next} onProfileParsed={(p) => setParsedProfile(p)} />}
-            {step === 2 && <StepPreferences onNext={next} onPrefsSet={(p) => setPreferences(p)} defaultRole={parsedProfile?.title} />}
+            {step === 2 && <StepPreferences onNext={next} onPrefsSet={(p) => setPreferences(p)} jobSearchTitles={parsedProfile?.job_search_titles} />}
             {step === 3 && (
               <StepScanning onFinish={finish} parsedProfile={parsedProfile} preferences={preferences} />
             )}

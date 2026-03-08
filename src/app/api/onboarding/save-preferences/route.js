@@ -90,6 +90,14 @@ export async function POST(request) {
 
     if (error) throw error;
 
+    // Save job_search_titles to profiles if present (fire-and-forget, non-blocking)
+    if (profile?.job_search_titles) {
+      supabase.from('profiles')
+        .update({ job_search_titles: profile.job_search_titles })
+        .eq('user_id', user.id)
+        .then(() => {});
+    }
+
     // Phase 3: trigger async job matching (fire-and-forget, service-to-service)
     if (process.env.NEXT_PUBLIC_APP_URL) {
       fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/jobs/match`, {
