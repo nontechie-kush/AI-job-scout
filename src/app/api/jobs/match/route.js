@@ -31,6 +31,14 @@ const ROLE_STOPWORDS = new Set([
   'and', 'of', 'the', 'for', 'at', 'with',
 ]);
 
+// remote_type values allowed per user's remote_pref
+const REMOTE_FILTERS = {
+  remote_only: ['remote'],
+  hybrid:      ['remote', 'hybrid'],
+  onsite_ok:   ['remote', 'hybrid', 'onsite'],
+  open:        ['remote', 'hybrid', 'onsite'],
+};
+
 export async function POST(request) {
   try {
     let userId;
@@ -89,28 +97,33 @@ function buildRoleKeywords(targetRoles = []) {
 
 /**
  * Query jobs whose title contains any of the role keywords.
+ * Filters by remote_type to match user's work style preference.
  * Falls back to most-recent jobs if keywords yield < 10 results.
  */
-async function fetchRelevantJobs(supabase, roleKeywords, limit) {
+async function fetchRelevantJobs(supabase, roleKeywords, limit, remotePref) {
+  const remoteFilter = REMOTE_FILTERS[remotePref] || REMOTE_FILTERS.open;
+
   if (roleKeywords.length > 0) {
     const orFilter = roleKeywords.map((w) => `title.ilike.%${w}%`).join(',');
     const { data } = await supabase
       .from('jobs')
       .select(JOB_SELECT)
       .eq('is_active', true)
+      .in('remote_type', remoteFilter)
       .or(orFilter)
       .order('posted_at', { ascending: false, nullsFirst: false })
       .limit(limit);
 
     if (data?.length >= 10) return data;
-    console.log(`[match/trigger] ${data?.length ?? 0} role-relevant jobs in DB (${roleKeywords.join(', ')})`);
+    console.log(`[match/trigger] ${data?.length ?? 0} role-relevant jobs in DB (${roleKeywords.join(', ')}, remote_pref=${remotePref})`);
   }
 
-  // Generic fallback
+  // Generic fallback — still respects remote_pref
   const { data } = await supabase
     .from('jobs')
     .select(JOB_SELECT)
     .eq('is_active', true)
+    .in('remote_type', remoteFilter)
     .order('posted_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
@@ -145,8 +158,8 @@ async function runInitialMatch(userId) {
   // Only use explicit target_roles for keyword search — not CV content
   const roleKeywords = buildRoleKeywords(userRow.target_roles);
 
-  // Fetch role-relevant jobs from existing DB
-  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH * 3);
+  // Fetch role-relevant jobs from existing DB, filtered by user's remote_pref
+  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH * 3, userRow.remote_pref);
 
   // India users: always include recent Naukri jobs in the scoring pool.
   // fetchRelevantJobs may return 60 keyword-matched Greenhouse/Lever jobs and stop —
@@ -154,11 +167,13 @@ async function runInitialMatch(userId) {
   const targetsIndia = (userRow.locations || []).some((l) => l.toLowerCase() === 'india');
   if (targetsIndia) {
     const naukriSelect = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at, source';
+    const remoteFilter = REMOTE_FILTERS[userRow.remote_pref] || REMOTE_FILTERS.open;
     const { data: naukriJobs } = await supabase
       .from('jobs')
       .select(naukriSelect)
       .eq('is_active', true)
       .eq('source', 'naukri')
+      .in('remote_type', remoteFilter)
       .order('posted_at', { ascending: false, nullsFirst: false })
       .limit(40);
 

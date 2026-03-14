@@ -1,7 +1,7 @@
 /**
  * POST /api/onboarding/save-preferences
  *
- * Body: { profile: ParsedProfile, preferences: { location, ic_or_lead, stage } }
+ * Body: { profile: ParsedProfile, preferences: { locations[], work_style, ic_or_lead, stage, target_roles[] } }
  *
  * Saves parsed profile + user preferences to Supabase.
  * Marks onboarding_completed = true.
@@ -26,10 +26,11 @@ const STAGE_MAP = {
 };
 
 // Schema CHECK: remote_pref IN ('remote_only','hybrid','onsite_ok','open')
-const REMOTE_MAP = {
-  india: 'hybrid',
-  us_canada: 'hybrid',
-  remote: 'remote_only',
+// work_style from onboarding UI is explicit user intent; fall back to location inference if absent
+const WORK_STYLE_MAP = {
+  remote:  'remote_only',
+  hybrid:  'hybrid',
+  onsite:  'onsite_ok',
 };
 
 // Schema CHECK: ic_or_lead IN ('ic','lead','either')
@@ -58,10 +59,12 @@ export async function POST(request) {
 
     // Merge all selected location city arrays
     const mergedLocations = [...new Set(selectedLocs.flatMap((loc) => LOCATION_MAP[loc] || []))];
-    // remote_pref: remote_only if only remote selected, hybrid if any physical location included
-    const hasRemote = selectedLocs.includes('remote');
+    // remote_pref: use explicit work_style if provided (new UI), fall back to location inference
     const hasPhysical = selectedLocs.some((l) => l !== 'remote');
-    const remote_pref = hasRemote && !hasPhysical ? 'remote_only' : 'hybrid';
+    const hasRemoteOnly = !hasPhysical;
+    const remote_pref = preferences?.work_style
+      ? (WORK_STYLE_MAP[preferences.work_style] || 'hybrid')
+      : (hasRemoteOnly ? 'remote_only' : 'hybrid');
 
     // Use explicit target_roles from user input — never infer from CV title
     const target_roles = Array.isArray(preferences?.target_roles) && preferences.target_roles.length > 0

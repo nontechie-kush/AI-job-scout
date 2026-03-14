@@ -322,7 +322,7 @@ function StepPreferences({ onNext, onPrefsSet, jobSearchTitles }) {
   const [roles, setRoles] = useState(suitable.slice(0, 3));
   const [maybeAdded, setMaybeAdded] = useState([]); // user-opted-in maybe titles
   const [roleInput, setRoleInput] = useState('');
-  const [prefs, setPrefs] = useState({ locations: [], ic_or_lead: null, stage: null });
+  const [prefs, setPrefs] = useState({ locations: [], work_style: null, ic_or_lead: null, stage: null });
 
   const addRole = () => {
     const trimmed = roleInput.trim();
@@ -350,13 +350,19 @@ function StepPreferences({ onNext, onPrefsSet, jobSearchTitles }) {
       locations: p.locations.includes(val) ? p.locations.filter((l) => l !== val) : [...p.locations, val],
     }));
   const set = (key, val) => setPrefs((p) => ({ ...p, [key]: val }));
-  const allSet = roles.length > 0 && prefs.locations.length > 0 && prefs.ic_or_lead && prefs.stage;
+  // work_style required only if physical location selected; remote-only location implies remote_only
+  const hasPhysical = prefs.locations.some((l) => l !== 'remote');
+  const workStyleRequired = hasPhysical;
+  const allSet = roles.length > 0 && prefs.locations.length > 0 && (!workStyleRequired || prefs.work_style) && prefs.ic_or_lead && prefs.stage;
 
   const locationLabels = { india: 'India', us_canada: 'US / Canada', remote: 'Remote' };
+  const workStyleLabel = { onsite: 'On-site.', hybrid: 'Hybrid.', remote: 'Remote only.' };
   const pilotSummary = allSet
     ? `Looking for ${roles.slice(0, 2).join(' / ')}${roles.length > 2 ? ` +${roles.length - 2} more` : ''}. ${prefs.locations.map((l) => locationLabels[l]).join(' + ')}. ${
-        prefs.ic_or_lead === 'ic' ? 'IC track.' : prefs.ic_or_lead === 'lead' ? 'Leadership.' : 'IC or lead.'
-      } ${prefs.stage === 'startup' ? 'Early-stage.' : prefs.stage === 'growth' ? 'Growth.' : 'All stages.'} On it.`
+        workStyleLabel[prefs.work_style || 'remote'] || ''
+      } ${prefs.ic_or_lead === 'ic' ? 'IC track.' : prefs.ic_or_lead === 'lead' ? 'Leadership.' : 'IC or lead.'} ${
+        prefs.stage === 'startup' ? 'Early-stage.' : prefs.stage === 'growth' ? 'Growth.' : 'All stages.'
+      } On it.`
     : null;
 
   // maybe titles not yet added
@@ -464,6 +470,39 @@ function StepPreferences({ onNext, onPrefsSet, jobSearchTitles }) {
         </div>
       </div>
 
+      {/* Work Style — shown only when physical location selected */}
+      <AnimatePresence>
+        {workStyleRequired && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">How do you want to work?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { val: 'onsite', label: '🏢 On-site' },
+                { val: 'hybrid', label: '🔀 Hybrid' },
+                { val: 'remote', label: '💻 Remote only' },
+              ].map(({ val, label }) => (
+                <button
+                  key={val}
+                  onClick={() => set('work_style', val)}
+                  className={`py-3 px-2 rounded-xl text-xs font-medium border transition-all text-center leading-tight ${
+                    prefs.work_style === val
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* IC or Lead */}
       <div>
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">IC or leadership track?</p>
@@ -567,6 +606,9 @@ function StepScanning({ onFinish, parsedProfile, preferences }) {
             ? 'Targeting growth-stage — Series B and beyond.'
             : 'Looking across all stages.';
 
+      const workStyleMap = { remote: 'Remote only.', hybrid: 'Hybrid setups.', onsite: 'On-site roles.' };
+      const workStyleNarration = workStyleMap[preferences?.work_style] || '';
+
       const trackLabel =
         preferences?.ic_or_lead === 'ic'
           ? 'IC roles only. No management titles.'
@@ -579,7 +621,7 @@ function StepScanning({ onFinish, parsedProfile, preferences }) {
 
       const scanLines = [
         `Alright, ${firstName}. Targeting ${roleLabel}.`,
-        `Hitting ${locationLabel}.`,
+        `Hitting ${locationLabel}.${workStyleNarration ? ' ' + workStyleNarration : ''}`,
         stageLabel,
         trackLabel,
         'Cross-referencing against your profile. Filtering the noise.',
