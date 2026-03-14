@@ -1,0 +1,40 @@
+name: Scrape Jobs
+
+on:
+  schedule:
+    # Runs 4x daily: 0:00, 6:00, 12:00, 18:00 UTC
+    # 0:00 UTC = 5:30 IST | 6:00 UTC = 11:30 IST | 12:00 UTC = 17:30 IST | 18:00 UTC = 23:30 IST
+    - cron: '0 0,6,12,18 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  scrape:
+    name: Run all job scrapers
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: careerpilot-ai/package-lock.json
+
+      - name: Install dependencies
+        working-directory: careerpilot-ai
+        run: npm ci --omit=dev
+
+      - name: Run scrapers
+        working-directory: careerpilot-ai
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          # Tell Node not to suppress experimental loader warning in logs
+          NODE_NO_WARNINGS: '0'
+        run: |
+          node --experimental-loader ./scripts/alias-loader.mjs scripts/run-scrapers.mjs

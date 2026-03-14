@@ -21,7 +21,7 @@ import { buildCandidateSummary, makeProfileHash, scoreBatch } from '@/lib/ai/mat
 
 export const maxDuration = 300;
 
-const INITIAL_BATCH = 20; // score up to this many jobs on first login
+const INITIAL_BATCH = 10; // score up to this many jobs at signup — fits Vercel Hobby 10s limit
 const JOB_SELECT = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at';
 
 // Stopwords that don't carry job function signal
@@ -159,7 +159,7 @@ async function runInitialMatch(userId) {
   const roleKeywords = buildRoleKeywords(userRow.target_roles);
 
   // Fetch role-relevant jobs from existing DB, filtered by user's remote_pref
-  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH * 3, userRow.remote_pref);
+  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH, userRow.remote_pref);
 
   // India users: always include recent Naukri jobs in the scoring pool.
   // fetchRelevantJobs may return 60 keyword-matched Greenhouse/Lever jobs and stop —
@@ -186,7 +186,7 @@ async function runInitialMatch(userId) {
     }
   }
 
-  const jobsToScore = jobs.slice(0, INITIAL_BATCH * 3);
+  const jobsToScore = jobs.slice(0, INITIAL_BATCH);
   if (!jobsToScore.length) return;
 
   // Step 3: score in batches of 10

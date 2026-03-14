@@ -170,7 +170,7 @@ function parseInstahyreJob(raw) {
     apply_url:        url,
     apply_type:       'instahyre',
     department:       raw.department || null,
-    company_stage:    'unknown',
+    company_stage:    null,
     posted_at:        raw.createdAt || raw.postedAt || null,
     ...salary,
     description_hash: makeDescHash(company, title, desc),

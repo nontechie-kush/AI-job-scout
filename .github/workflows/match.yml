@@ -1,0 +1,47 @@
+name: Match Jobs
+
+on:
+  schedule:
+    # Runs 4x daily, 1 hour after each scrape run: 1:00, 7:00, 13:00, 19:00 UTC
+    # Gives scrapers time to finish before matching starts
+    - cron: '0 1,7,13,19 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+  workflow_run:
+    # Also runs automatically after scrape.yml completes
+    workflows: ['Scrape Jobs']
+    types: [completed]
+
+jobs:
+  match:
+    name: Score jobs for all users
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # If triggered by workflow_run, only run if scrape succeeded
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: careerpilot-ai/package-lock.json
+
+      - name: Install dependencies
+        working-directory: careerpilot-ai
+        run: npm ci --omit=dev
+
+      - name: Run matcher
+        working-directory: careerpilot-ai
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          node scripts/run-matcher.mjs

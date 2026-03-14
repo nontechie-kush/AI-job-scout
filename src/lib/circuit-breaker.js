@@ -10,7 +10,7 @@
  * Schema columns: source, state, failure_count, last_success, last_failure, opened_at
  */
 
-import { createServiceClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service-client';
 
 const FAILURE_THRESHOLD = 3;
 const OPEN_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
