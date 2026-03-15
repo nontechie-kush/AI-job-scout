@@ -167,7 +167,7 @@ function parseJob(j) {
       location,
       remote_type:      isRemote ? 'remote' : 'onsite',
       apply_url:        j.publicUrl || `${BASE}/job/${j._id}`,
-      apply_type:       'cutshort',
+      apply_type:       'external',
       department:       null,
       company_stage:    compStage,
       posted_at:        null,

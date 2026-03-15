@@ -108,7 +108,7 @@ function extractIIMJobs($) {
       location,
       remote_type: detectRemote(location),
       apply_url: url,
-      apply_type: 'iimjobs',
+      apply_type: 'external',
       department: null,
       company_stage: null,
       posted_at: null,
