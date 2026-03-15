@@ -242,5 +242,37 @@ export async function runAllScrapers(supabase) {
     }),
   );
 
+  // ── Staleness sweep ───────────────────────────────────────────────────────
+  // Run after all scrapers finish. Two rules:
+  //
+  // 1. API/feed sources (greenhouse, lever, ashby, cutshort, remotive):
+  //    Re-confirmed every 4h cron. If last_seen_at > 7 days ago → job closed.
+  //
+  // 2. Search-based sources (naukri, instahyre, wellfound, iimjobs):
+  //    These use jobAge=1 or keyword search — we cannot re-confirm old listings.
+  //    Use first_seen_at instead: jobs older than 30 days are almost certainly filled.
+  try {
+    const { count: expired1 } = await supabase
+      .from('jobs')
+      .update({ is_active: false })
+      .in('source', ['greenhouse', 'lever', 'ashby', 'cutshort', 'remotive'])
+      .eq('is_active', true)
+      .lt('last_seen_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .select('id', { count: 'exact', head: true });
+
+    const { count: expired2 } = await supabase
+      .from('jobs')
+      .update({ is_active: false })
+      .in('source', ['naukri', 'instahyre', 'wellfound', 'iimjobs'])
+      .eq('is_active', true)
+      .lt('first_seen_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .select('id', { count: 'exact', head: true });
+
+    const total = (expired1 || 0) + (expired2 || 0);
+    if (total > 0) console.log(`[scraper] staleness sweep: ${total} jobs marked inactive`);
+  } catch (err) {
+    console.warn('[scraper] staleness sweep failed (non-fatal):', err.message);
+  }
+
   return results;
 }
