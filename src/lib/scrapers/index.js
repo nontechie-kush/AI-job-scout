@@ -130,15 +130,13 @@ import { scrapeLever } from './lever';
 import { scrapeAshby } from './ashby';
 import { scrapeRemotive } from './remotive';
 import { scrapeCutshort } from './cutshort';
-import { scrapeHirect } from './hirect';
 import { scrapeWellfound } from './wellfound';
 import { scrapeNaukri } from './naukri';
 import { scrapeIIMJobs } from './iimjobs';
 import { scrapeInstahyre } from './instahyre';
-import { scrapeFoundit } from './foundit';
 
 // Sources that consume ScraperAPI credits — skipped automatically when credits are low
-const SCRAPERAPI_SOURCES = new Set(['naukri', 'iimjobs', 'instahyre', 'foundit', 'hirect', 'ashby']);
+const SCRAPERAPI_SOURCES = new Set(['naukri', 'iimjobs', 'instahyre', 'ashby']);
 
 export const SCRAPERS = [
   { source: 'greenhouse', fn: scrapeGreenhouse },
@@ -146,13 +144,12 @@ export const SCRAPERS = [
   { source: 'ashby', fn: scrapeAshby },   // ScraperAPI renders Ashby SPA
   { source: 'remotive', fn: scrapeRemotive },
   { source: 'cutshort', fn: scrapeCutshort },
-  { source: 'foundit', fn: scrapeFoundit },
-  { source: 'hirect', fn: scrapeHirect },
   { source: 'wellfound', fn: scrapeWellfound },
   { source: 'naukri', fn: scrapeNaukri },
   { source: 'iimjobs', fn: scrapeIIMJobs },
   { source: 'instahyre', fn: scrapeInstahyre },
   // arc, yc, nextleap, topstartups: dropped — async-loaded SPAs with no public API
+  // foundit, hirect: dropped — ScraperAPI HTTP 500 (proxy IPs blocked by these sites)
 ];
 
 /**

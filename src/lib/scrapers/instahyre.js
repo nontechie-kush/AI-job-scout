@@ -101,23 +101,28 @@ function extractInstahyreNextData($, html) {
 function extractInstahyreHTML($) {
   const jobs = [];
 
-  // Instahyre job card selectors — may change; gracefully returns empty if unmatched
-  $('[class*="job-card"], [class*="JobCard"], [class*="job_card"], [data-job-id]').each((_, el) => {
+  // Instahyre uses Angular 1.x — cards rendered in ng-repeat as div.employer-block
+  // company-name div contains "Company - Job Title" format
+  $('div.employer-block').each((_, el) => {
     const $el = $(el);
 
-    const title   = $el.find('[class*="job-title"], [class*="jobTitle"], h2, h3').first().text().trim();
-    const company = $el.find('[class*="company-name"], [class*="companyName"]').first().text().trim();
-    if (!title || !company) return;
+    // "Nielsen - Data Engineer" — split on first " - "
+    const nameText = $el.find('div.company-name').first().text().trim();
+    if (!nameText) return;
+    const dashIdx  = nameText.indexOf(' - ');
+    const company  = dashIdx > 0 ? nameText.slice(0, dashIdx).trim() : nameText;
+    const title    = dashIdx > 0 ? nameText.slice(dashIdx + 3).trim() : nameText;
+    if (!title) return;
 
-    const location   = $el.find('[class*="location"], [class*="Location"]').first().text().trim() || 'India';
-    const salaryText = $el.find('[class*="salary"], [class*="Salary"], [class*="ctc"]').first().text().trim();
-    const href       = $el.find('a[href*="/employer/"], a[href*="/job/"]').first().attr('href');
+    const location   = $el.find('.employer-locations .info .ng-binding, .employer-locations span').first().text().trim() || 'India';
+    const href       = $el.find('a#employer-profile-opportunity').attr('ng-href')
+                    || $el.find('a[href*="/job-"]').first().attr('href');
     if (!href) return;
 
-    const url    = href.startsWith('http') ? href : `${BASE}${href}`;
-    const jobId  = url.split('/').filter(Boolean).pop() || url;
-    const salary = parseSalary(salaryText);
-    const desc   = `${title} at ${company} — ${location}`;
+    const url   = href.startsWith('http') ? href : `${BASE}${href}`;
+    // URL format: /job-405179-data-engineer-at-nielsen-bangalore/
+    const jobId = href.match(/job-(\d+)/)?.[1] || url;
+    const desc  = `${title} at ${company} — ${location}`;
 
     jobs.push({
       source:           'instahyre',
@@ -134,7 +139,9 @@ function extractInstahyreHTML($) {
       department:       null,
       company_stage:    null,
       posted_at:        null,
-      ...salary,
+      salary_min:       null,
+      salary_max:       null,
+      salary_currency:  'INR',
       description_hash: makeDescHash(company, title, location),
     });
   });
