@@ -219,31 +219,57 @@ export default function SplashPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6, duration: 0.5 }}
-        className="mt-12 flex flex-col items-center gap-4 px-8 max-w-xs w-full"
+        className="mt-10 flex flex-col items-center gap-5 px-6 max-w-xs w-full"
       >
-        <div className="flex flex-col gap-2 w-full">
+        {/* Hook */}
+        <div className="text-center">
+          <p className="text-white font-semibold text-lg leading-snug">
+            Pilot handles the boring parts.
+          </p>
+          <p className="text-gray-400 text-sm mt-1 leading-relaxed">
+            So you spend your time preparing — not searching.
+          </p>
+        </div>
+
+        {/* Props */}
+        <div className="flex flex-col gap-2.5 w-full">
           {[
-            { icon: '🔍', text: 'Scans 10+ job portals every 4 hours' },
-            { icon: '✍️', text: 'Writes cover letters & screening answers' },
-            { icon: '🤝', text: 'Finds recruiters who can get you in' },
-          ].map(({ icon, text }) => (
-            <div key={text} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
-              <span className="text-base">{icon}</span>
-              <span className="text-gray-300 text-sm">{text}</span>
+            {
+              icon: '🌐',
+              label: 'Jobs, auto-searched',
+              sub: 'Every portal. Every 4 hours. Only the best matches land in your feed.',
+            },
+            {
+              icon: '🤝',
+              label: 'Referrals, auto-ranked',
+              sub: 'Quality recruiters and hiring managers — sorted by who\'ll actually respond.',
+            },
+            {
+              icon: '⚡',
+              label: 'Applications, pre-filled',
+              sub: 'Pilot researches the role and writes your answers. You just review and send.',
+            },
+          ].map(({ icon, label, sub }) => (
+            <div key={label} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5">
+              <span className="text-xl mt-0.5">{icon}</span>
+              <div>
+                <p className="text-white text-sm font-semibold">{label}</p>
+                <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{sub}</p>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* CTA — always visible */}
+        {/* CTA */}
         <button
           onClick={() => router.push('/auth/signup')}
-          className="btn-gradient w-full py-3.5 rounded-2xl text-white font-semibold text-base shadow-lg shadow-violet-500/30 mt-2"
+          className="btn-gradient w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-violet-500/30"
         >
           Start free →
         </button>
         <button
           onClick={() => router.push('/auth/login')}
-          className="text-gray-500 text-sm hover:text-gray-400 transition-colors"
+          className="text-gray-500 text-sm hover:text-gray-400 transition-colors -mt-1"
         >
           Already have an account
         </button>
