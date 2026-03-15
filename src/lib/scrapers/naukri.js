@@ -51,53 +51,86 @@ function getExpBand(yearsExp) {
   return         { expMin: 8, expMax: 20 };
 }
 
-// Words that indicate seniority/level — not useful as Naukri search keywords
-const SENIORITY = new Set(['general', 'senior', 'junior', 'associate', 'staff', 'principal',
-  'vp', 'managing', 'global', 'regional', 'group', 'chief', 'deputy', 'assistant', 'head',
-  'director', 'officer', 'president', 'executive']);
+/**
+ * Maps signal words found in a user's target_role to canonical Naukri URL slugs.
+ * Checked in order — first match wins per entry. Each entry can yield 1-2 slugs.
+ *
+ * Rules:
+ * - Slugs must be valid Naukri URL paths (naukri.com/{slug}-jobs returns results)
+ * - One slug per distinct job market (don't combine stack + role into one slug)
+ * - Seniority words (Senior, SDE II, AVP, VP) are ignored — Naukri's experience
+ *   filter handles seniority, not the URL slug
+ * - Stack qualifiers (React, Node, Python) produce a second tech-specific slug
+ *   only when that stack has a well-known Naukri search page
+ */
+const CANONICAL_ROLE_MAP = [
+  // ── Product ──────────────────────────────────────────────────────────────
+  { match: /product\s*manager|pm\b|head\s+of\s+product/i,        slugs: ['product-manager'] },
+  { match: /product\s*analyst/i,                                   slugs: ['product-analyst'] },
+  { match: /program\s*manager/i,                                   slugs: ['program-manager'] },
+  { match: /project\s*manager/i,                                   slugs: ['project-manager'] },
+  { match: /growth\s*manager|growth\s*lead/i,                      slugs: ['growth-manager'] },
+  { match: /crm\s*(manager|lead|head)/i,                           slugs: ['crm-manager'] },
+  { match: /category\s*manager/i,                                  slugs: ['category-manager'] },
+  { match: /operations\s*manager|ops\s*manager/i,                  slugs: ['operations-manager'] },
+  { match: /strategy\s*(manager|analyst|consultant)/i,             slugs: ['strategy-manager'] },
+  { match: /business\s*analyst|ba\b/i,                             slugs: ['business-analyst'] },
+  { match: /business\s*development|bd\s*manager/i,                 slugs: ['business-development-manager'] },
 
-// Role-type suffix words
-const ROLE_TYPES = new Set(['manager', 'engineer', 'developer', 'designer', 'analyst',
-  'consultant', 'lead', 'architect', 'scientist', 'specialist']);
+  // ── Engineering — by stack ───────────────────────────────────────────────
+  { match: /react\s*native/i,                                      slugs: ['react-native-developer'] },
+  { match: /react(\.?js)?(\s*developer|\s*engineer)?/i,            slugs: ['reactjs-developer'] },
+  { match: /node(\.?js)?(\s*developer|\s*engineer)?/i,             slugs: ['nodejs-developer'] },
+  { match: /python(\s*developer|\s*engineer)?/i,                   slugs: ['python-developer'] },
+  { match: /java(\s*developer|\s*engineer)?\b(?!script)/i,         slugs: ['java-developer'] },
+  { match: /javascript|js\s*developer/i,                           slugs: ['javascript-developer'] },
+  { match: /android(\s*developer|\s*engineer)?/i,                  slugs: ['android-developer'] },
+  { match: /ios(\s*developer|\s*engineer)?/i,                      slugs: ['ios-developer'] },
+  { match: /flutter(\s*developer)?/i,                              slugs: ['flutter-developer'] },
+  { match: /devops|site\s*reliability|sre\b/i,                     slugs: ['devops-engineer'] },
+  { match: /data\s*engineer/i,                                     slugs: ['data-engineer'] },
+  { match: /data\s*scientist/i,                                     slugs: ['data-scientist'] },
+  { match: /machine\s*learning|ml\s*engineer/i,                    slugs: ['machine-learning-engineer'] },
+  { match: /ai\s*(engineer|developer)|gen\s*ai|llm\s*engineer/i,  slugs: ['artificial-intelligence'] },
+  { match: /frontend|front[\s-]end/i,                              slugs: ['frontend-developer'] },
+  { match: /backend|back[\s-]end/i,                                slugs: ['backend-developer'] },
+  { match: /full[\s-]?stack/i,                                     slugs: ['full-stack-developer'] },
 
-const STOP = new Set(['of', 'the', 'and', 'or', 'at', 'in', 'for', 'a', 'an', 'to', 'by']);
+  // ── Engineering — by level/generic (catch-all after stack checks) ────────
+  { match: /engineering\s*manager|em\b/i,                          slugs: ['engineering-manager'] },
+  { match: /tech(nical)?\s*lead|tech\s*manager/i,                  slugs: ['technical-lead'] },
+  { match: /software\s*(engineer|developer)|sde\b|swe\b/i,         slugs: ['software-engineer'] },
+
+  // ── Design ───────────────────────────────────────────────────────────────
+  { match: /ui[\s/]?ux|product\s*design/i,                         slugs: ['ui-ux-designer'] },
+  { match: /graphic\s*design/i,                                    slugs: ['graphic-designer'] },
+
+  // ── Sales / Marketing ────────────────────────────────────────────────────
+  { match: /sales\s*manager/i,                                     slugs: ['sales-manager'] },
+  { match: /account\s*(manager|executive)/i,                       slugs: ['account-manager'] },
+  { match: /marketing\s*manager/i,                                  slugs: ['marketing-manager'] },
+  { match: /digital\s*marketing/i,                                 slugs: ['digital-marketing-manager'] },
+];
 
 /**
- * Extract 1-2 Naukri-friendly search keywords from a verbose role title.
- *
- * "General Manager, Growth (CRM Head)"  → ['growth-manager', 'crm-manager']
- * "Product Manager"                     → ['product-manager']
- * "Senior Software Engineer"            → ['software-engineer']
- * "Business Development Manager"        → ['business-development-manager']
- * "Head of Product"                     → ['product-manager']
+ * Maps a user's target_role string to 1-2 canonical Naukri slugs.
+ * Falls back to 'software-engineer' if nothing matches.
  */
 function extractNaukriKeywords(roleTitle) {
-  const clean = (roleTitle || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s,()]/g, '')
-    .replace(/[()]/g, ',');
+  const input = (roleTitle || '').trim();
+  if (!input) return ['software-engineer'];
 
-  // Detect role type from the whole string (default: manager)
-  const allWords = clean.replace(/,/g, ' ').split(/\s+/);
-  const roleType = allWords.find((w) => ROLE_TYPES.has(w)) || 'manager';
-
-  // Each comma/paren-delimited chunk can yield one keyword
-  const parts = clean.split(',').map((p) => p.trim()).filter(Boolean);
-  const keywords = [];
-
-  for (const part of parts) {
-    const words = part.split(/\s+/).filter((w) => w.length >= 3);
-    const funcWords = words.filter(
-      (w) => !SENIORITY.has(w) && !STOP.has(w) && !ROLE_TYPES.has(w)
-    );
-    if (!funcWords.length) continue;
-
-    // Up to 2 function words + role type → "growth-manager", "business-development-manager"
-    const kw = `${funcWords.slice(0, 2).join('-')}-${roleType}`;
-    if (!keywords.includes(kw)) keywords.push(kw);
+  const matched = [];
+  for (const { match, slugs } of CANONICAL_ROLE_MAP) {
+    if (match.test(input)) {
+      for (const s of slugs) {
+        if (!matched.includes(s)) matched.push(s);
+      }
+      if (matched.length >= 2) break; // cap at 2 slugs per role
+    }
   }
 
-  return keywords.length > 0 ? keywords.slice(0, 2) : [`${roleType}`];
+  return matched.length > 0 ? matched : ['software-engineer'];
 }
 
 // ── Search cluster builder ────────────────────────────────────────────────────
