@@ -216,7 +216,10 @@ export async function runAllScrapers(supabase) {
         return;
       }
 
-      const wrappedFn = source === 'naukri' ? () => fn(activeUsers, { maxClusters: 50 }) : fn;
+      const wrappedFn =
+        source === 'naukri'     ? () => fn(activeUsers, { maxClusters: 50 }) :
+        source === 'instahyre'  ? () => fn(activeUsers) :
+        fn;
 
       try {
         const cbResult = await withCircuitBreaker(source, wrappedFn);

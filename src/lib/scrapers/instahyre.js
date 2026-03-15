@@ -13,28 +13,98 @@ import { detectRemote, makeDescHash, parseSalary } from './index';
 
 const BASE = 'https://www.instahyre.com';
 
-const SEARCH_URLS = [
+// Maps signal words in user target_role → plain-text Instahyre search keyword
+// Instahyre uses free-text search (?keyword=...), not URL slugs like Naukri
+const ROLE_KEYWORD_MAP = [
+  { match: /product\s*manager|pm\b|head\s+of\s+product/i,       keyword: 'product manager' },
+  { match: /product\s*analyst/i,                                  keyword: 'product analyst' },
+  { match: /program\s*manager/i,                                  keyword: 'program manager' },
+  { match: /growth\s*manager|growth\s*lead/i,                     keyword: 'growth manager' },
+  { match: /engineering\s*manager/i,                              keyword: 'engineering manager' },
+  { match: /tech(nical)?\s*lead/i,                                keyword: 'tech lead' },
+  { match: /react\s*native/i,                                     keyword: 'react native developer' },
+  { match: /react(\.?js)?/i,                                      keyword: 'react developer' },
+  { match: /node(\.?js)?/i,                                       keyword: 'node.js developer' },
+  { match: /python/i,                                             keyword: 'python developer' },
+  { match: /java\b(?!script)/i,                                   keyword: 'java developer' },
+  { match: /android/i,                                            keyword: 'android developer' },
+  { match: /ios/i,                                                keyword: 'ios developer' },
+  { match: /flutter/i,                                            keyword: 'flutter developer' },
+  { match: /devops/i,                                             keyword: 'devops engineer' },
+  { match: /data\s*engineer/i,                                    keyword: 'data engineer' },
+  { match: /data\s*scientist/i,                                   keyword: 'data scientist' },
+  { match: /machine\s*learning|ml\s*engineer/i,                   keyword: 'machine learning engineer' },
+  { match: /frontend|front[\s-]end/i,                             keyword: 'frontend developer' },
+  { match: /backend|back[\s-]end/i,                               keyword: 'backend engineer' },
+  { match: /full[\s-]?stack/i,                                    keyword: 'full stack developer' },
+  { match: /software\s*(engineer|developer)|sde\b|swe\b/i,        keyword: 'software engineer' },
+  { match: /business\s*development/i,                             keyword: 'business development' },
+  { match: /sales\s*manager/i,                                    keyword: 'sales manager' },
+  { match: /ui[\s/]?ux|product\s*design/i,                        keyword: 'ui ux designer' },
+];
+
+const LOCATION_MAP = {
+  bangalore: 'bangalore', bengaluru: 'bangalore',
+  mumbai: 'mumbai', delhi: 'delhi', 'delhi ncr': 'delhi',
+  hyderabad: 'hyderabad', pune: 'pune', chennai: 'chennai',
+  india: '',  // empty = all-India search on Instahyre
+};
+
+function buildSearchURLs(users, maxURLs = 30) {
+  if (!users?.length) return DEFAULT_URLS;
+
+  const seen = new Set();
+  const urls = [];
+
+  for (const user of users) {
+    if (urls.length >= maxURLs) break;
+    const roles = (user.target_roles || []).slice(0, 3);
+    const rawLocs = user.locations || [];
+    const hasIndia = rawLocs.some((l) => l.toLowerCase() === 'india');
+    const locations = hasIndia
+      ? ['']  // empty = all-India
+      : [...new Set(rawLocs.map((l) => LOCATION_MAP[l.toLowerCase()]).filter((l) => l != null))].slice(0, 2);
+    if (!locations.length) continue;
+
+    for (const role of roles) {
+      const entry = ROLE_KEYWORD_MAP.find(({ match }) => match.test(role));
+      const keyword = entry?.keyword || 'software engineer';
+
+      for (const loc of locations) {
+        const url = loc
+          ? `${BASE}/search-jobs/?keyword=${encodeURIComponent(keyword)}&location=${loc}`
+          : `${BASE}/search-jobs/?keyword=${encodeURIComponent(keyword)}`;
+        if (!seen.has(url) && urls.length < maxURLs) { seen.add(url); urls.push(url); }
+      }
+    }
+  }
+
+  const final = urls.length > 0 ? urls : DEFAULT_URLS;
+  console.log(`[instahyre] ${final.length} search URLs: ${final.map(u => u.replace(BASE, '')).join(' | ')}`);
+  return final;
+}
+
+// Fallback when no users available
+const DEFAULT_URLS = [
   `${BASE}/search-jobs/?keyword=product+manager&location=bangalore`,
-  `${BASE}/search-jobs/?keyword=product+manager&location=mumbai`,
-  `${BASE}/search-jobs/?keyword=product+manager&location=delhi`,
   `${BASE}/search-jobs/?keyword=software+engineer&location=bangalore`,
   `${BASE}/search-jobs/?keyword=engineering+manager&location=bangalore`,
-  `${BASE}/search-jobs/?keyword=product+manager`, // remote / all-India
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function scrapeInstahyre() {
+export async function scrapeInstahyre(users = []) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey || scraperKey === 'placeholder') {
     console.log('[instahyre] no SCRAPERAPI_KEY — skipping');
     return [];
   }
 
+  const searchURLs = buildSearchURLs(users);
   const jobs = [];
   const seen = new Set();
 
-  for (const searchUrl of SEARCH_URLS) {
+  for (const searchUrl of searchURLs) {
     try {
       const fetchUrl = `https://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(searchUrl)}&render=true&country_code=in`;
 
@@ -44,7 +114,6 @@ export async function scrapeInstahyre() {
       const html = await res.text();
       const $ = load(html);
 
-      // Try embedded JSON first (faster + more complete), fall back to HTML
       const pageJobs = extractInstahyreNextData($, html) || extractInstahyreHTML($);
 
       pageJobs.forEach((j) => {
