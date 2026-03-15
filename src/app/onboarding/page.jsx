@@ -11,10 +11,91 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Globe, FileText, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { Upload, Globe, FileText, CheckCircle2, ChevronRight, Zap, Search, BrainCircuit, Users } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const TOTAL_STEPS = 3;
+
+// ── Step 0: Welcome / Value Proposition ───────────────────────
+function StepWelcome({ onNext }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="flex flex-col gap-8 pt-4"
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center shadow-lg">
+          <Zap className="w-5 h-5 text-white" />
+        </div>
+        <span className="text-lg font-bold text-gray-900 dark:text-white">CareerPilot</span>
+      </div>
+
+      {/* Hero */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">
+          Getting hired takes volume <span className="gradient-text">and</span> quality.
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-3 text-base leading-relaxed">
+          The average job search takes 5 months. Pilot handles the heavy lifting.
+        </p>
+      </div>
+
+      {/* Value prop cards */}
+      <div className="flex flex-col gap-3">
+        <div className="card p-4 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center flex-shrink-0">
+            <Search className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-white text-sm">Find</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5 leading-relaxed">
+              Scans Naukri, LinkedIn, Wellfound &amp; 10+ portals every 4 hours. Only your best matches.
+            </p>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+            <BrainCircuit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-white text-sm">Apply</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5 leading-relaxed">
+              Easy Apply is a myth. Pilot writes cover letters, answers screening questions, cuts 30-min forms to 3.
+            </p>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+            <Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-white text-sm">Connect</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5 leading-relaxed">
+              70% of jobs are filled through referrals. Pilot finds headhunters and hiring managers who can get you in.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <button
+        onClick={onNext}
+        className="btn-gradient w-full py-4 rounded-xl text-white font-semibold flex items-center justify-center gap-2 text-base"
+      >
+        Start with Pilot <ChevronRight className="w-5 h-5" />
+      </button>
+
+      <p className="text-center text-xs text-gray-400">
+        Takes 2 minutes. No card required.
+      </p>
+    </motion.div>
+  );
+}
 
 // ── Step 1: Profile Import ─────────────────────────────────────
 function StepImport({ onNext, onProfileParsed }) {
@@ -709,7 +790,7 @@ function StepScanning({ onFinish, parsedProfile, preferences }) {
 export default function OnboardingPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [parsedProfile, setParsedProfile] = useState(null);
   const [preferences, setPreferences] = useState(null);
   const [ready, setReady] = useState(false);
@@ -734,8 +815,8 @@ export default function OnboardingPage() {
 
   return (
     <div className="h-dvh flex flex-col bg-gray-50 dark:bg-slate-950 overflow-hidden">
-      {/* Progress header */}
-      <div className="px-6 header-safe-top pb-4">
+      {/* Progress header — hidden on welcome screen */}
+      <div className={`px-6 header-safe-top pb-4 ${step === 0 ? 'invisible pointer-events-none' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
@@ -744,7 +825,7 @@ export default function OnboardingPage() {
             <span className="text-gray-500 dark:text-gray-400 text-sm">Setup</span>
           </div>
           <span className="text-gray-400 text-sm">
-            {step} / {TOTAL_STEPS}
+            {Math.max(step, 1)} / {TOTAL_STEPS}
           </span>
         </div>
         <div className="flex gap-1.5">
@@ -753,7 +834,7 @@ export default function OnboardingPage() {
               <motion.div
                 className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full"
                 initial={false}
-                animate={{ width: i < step ? '100%' : '0%' }}
+                animate={{ width: i < step - 0 ? '100%' : '0%' }}
                 transition={{ duration: 0.35 }}
               />
             </div>
@@ -772,6 +853,7 @@ export default function OnboardingPage() {
             exit="exit"
             transition={{ duration: 0.3 }}
           >
+            {step === 0 && <StepWelcome onNext={next} />}
             {step === 1 && <StepImport onNext={next} onProfileParsed={(p) => setParsedProfile(p)} />}
             {step === 2 && <StepPreferences onNext={next} onPrefsSet={(p) => setPreferences(p)} jobSearchTitles={parsedProfile?.job_search_titles} />}
             {step === 3 && (

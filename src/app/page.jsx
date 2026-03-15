@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 
 const PILOT_LINES = [
@@ -26,7 +26,6 @@ export default function SplashPage() {
   const router = useRouter();
   const [pokeCount, setPokeCount] = useState(0);
   const [pilotLine, setPilotLine] = useState(null);
-  const [showCTA, setShowCTA] = useState(false);
   const [isPoking, setIsPoking] = useState(false);
   const [idleLineIndex, setIdleLineIndex] = useState(0);
   const [checking, setChecking] = useState(true);
@@ -87,8 +86,6 @@ export default function SplashPage() {
 
     const lineIndex = Math.min(pokeCountRef.current - 1, PILOT_LINES.length - 1);
     setPilotLine(PILOT_LINES[lineIndex]);
-
-    if (pokeCountRef.current >= 2) setShowCTA(true);
 
     setTimeout(() => setIsPoking(false), 400);
   }
@@ -217,47 +214,40 @@ export default function SplashPage() {
         )}
       </motion.button>
 
-      {/* CTA */}
-      <AnimatePresence>
-        {showCTA && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="mt-16 flex flex-col items-center gap-3"
-          >
-            <button
-              onClick={() => router.push('/auth/signup')}
-              className="btn-gradient px-8 py-3.5 rounded-2xl text-white font-semibold text-base shadow-lg shadow-violet-500/30"
-            >
-              Let's go →
-            </button>
-            <button
-              onClick={() => router.push('/auth/login')}
-              className="text-gray-500 text-sm hover:text-gray-400 transition-colors"
-            >
-              Already have an account
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Value props — always visible */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6, duration: 0.5 }}
+        className="mt-12 flex flex-col items-center gap-4 px-8 max-w-xs w-full"
+      >
+        <div className="flex flex-col gap-2 w-full">
+          {[
+            { icon: '🔍', text: 'Scans 10+ job portals every 4 hours' },
+            { icon: '✍️', text: 'Writes cover letters & screening answers' },
+            { icon: '🤝', text: 'Finds recruiters who can get you in' },
+          ].map(({ icon, text }) => (
+            <div key={text} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+              <span className="text-base">{icon}</span>
+              <span className="text-gray-300 text-sm">{text}</span>
+            </div>
+          ))}
+        </div>
 
-      {/* Skip — always visible */}
-      {!showCTA && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2 }}
-          className="absolute bottom-12 flex flex-col items-center gap-2"
+        {/* CTA — always visible */}
+        <button
+          onClick={() => router.push('/auth/signup')}
+          className="btn-gradient w-full py-3.5 rounded-2xl text-white font-semibold text-base shadow-lg shadow-violet-500/30 mt-2"
         >
-          <button
-            onClick={() => router.push('/auth/login')}
-            className="text-gray-600 text-xs hover:text-gray-400 transition-colors"
-          >
-            Sign in
-          </button>
-        </motion.div>
-      )}
+          Start free →
+        </button>
+        <button
+          onClick={() => router.push('/auth/login')}
+          className="text-gray-500 text-sm hover:text-gray-400 transition-colors"
+        >
+          Already have an account
+        </button>
+      </motion.div>
     </div>
   );
 }
