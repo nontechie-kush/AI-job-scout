@@ -40,10 +40,10 @@ Lessons learned from corrections. Review at session start. Update after every mi
 
 ## Naukri Clusters
 
-### extractNaukriKeywords produces junk for complex role titles
-**Observed junk clusters:** `sdeii-react-developer`, `process-digitalization-manager`, `avp-product-manager`, `product-aigenai-manager`, `product-management-manager`
-**Root cause:** Seniority filter doesn't catch all prefixes (SDE II, AVP); special chars like "/" in "AI/GenAI" aren't stripped before keyword extraction.
-**Rule:** When fixing, expand the `SENIORITY` set and strip special chars more aggressively before splitting.
+### Naukri clusters must use canonical URL slugs — not derived keywords
+**Root cause:** `extractNaukriKeywords` parsed freeform text and produced slugs like `sdeii-react-developer` that don't exist as Naukri URL paths → 0 results.
+**Fix:** Replaced with `CANONICAL_ROLE_MAP` — 35 regex entries that map signal words to actual Naukri slugs (`reactjs-developer`, `software-engineer`, `product-manager`, etc.).
+**Rule:** When adding new role types to the map, verify the slug works at `naukri.com/{slug}-jobs` before adding. Seniority (SDE II, AVP, VP) is handled by Naukri's experience filter — never put seniority in the slug.
 
 ### DEFAULT_CLUSTERS are only a fallback
 **Rule:** With real users in DB, clusters are built dynamically from `users.target_roles + locations`. DEFAULT_CLUSTERS only fire when `users = []`. Don't tune DEFAULT_CLUSTERS expecting them to run in production.
