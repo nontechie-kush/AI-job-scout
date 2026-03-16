@@ -1,106 +1,437 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
+import { useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-const PILOT_LINES = [
-  "Yeah, I see you.",
-  "Poke me again. I dare you.",
-  "Alright. I'm paying attention.",
-  "You done? Let's get to work.",
-  "I don't flinch. Just so you know.",
-  "Still here. Waiting on you.",
-  "That's it. Good. Now sign up.",
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.5, delay, ease: 'easeOut' },
+});
+
+// ── Navbar ────────────────────────────────────────────────────
+function Navbar({ onCTA }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 60);
+    window.addEventListener('scroll', fn);
+    return () => window.removeEventListener('scroll', fn);
+  }, []);
+
+  return (
+    <nav className={`fixed top-0 left-0 right-0 z-50 glass-nav border-b px-5 py-3.5 flex items-center justify-between lg:px-8 transition-all ${scrolled ? 'border-white/10' : 'border-transparent'}`}>
+      <div className="flex items-center gap-2.5 font-bold text-base tracking-tight text-white">
+        <div className="w-[26px] h-[26px] rounded-[7px] bg-gradient-to-br from-green-400 to-green-500 flex items-center justify-center text-[13px] font-extrabold text-slate-950">
+          ⌘
+        </div>
+        CareerPilot
+      </div>
+      <button
+        onClick={onCTA}
+        className="px-4 py-2 rounded-lg bg-white/[0.06] border border-white/10 text-slate-300 text-[13px] font-medium transition-colors hover:bg-white/10 hidden sm:block"
+      >
+        Get early access
+      </button>
+    </nav>
+  );
+}
+
+// ── Hero ──────────────────────────────────────────────────────
+function HeroSection({ onCTA }) {
+  return (
+    <section className="relative pt-24 pb-0 text-center lg:text-left lg:pt-0 overflow-hidden px-5 lg:px-0">
+      <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[360px] h-[360px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.08) 0%, transparent 70%)' }} />
+      <div className="relative">
+        <motion.div
+          {...fadeUp(0)}
+          className="inline-flex items-center gap-1.5 px-3 py-1 pr-3.5 rounded-full bg-green-400/10 border border-green-400/20 text-xs text-green-400 font-medium mb-6"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-blink" />
+          Scanning jobs right now
+        </motion.div>
+
+        <motion.h1
+          {...fadeUp(0.06)}
+          className="text-[38px] lg:text-[56px] font-extrabold tracking-[-0.045em] leading-[1.05] mb-4 text-white"
+        >
+          Never search{' '}
+          <br className="hidden lg:block" />
+          <span className="text-gradient-hero">for jobs</span> again.
+        </motion.h1>
+
+        <motion.p
+          {...fadeUp(0.12)}
+          className="text-[15px] lg:text-base leading-relaxed text-slate-400 max-w-md mx-auto lg:mx-0 mb-7"
+        >
+          CareerPilot finds jobs, identifies referrals, and drafts applications — automatically. You review. You submit. That&apos;s it.
+        </motion.p>
+
+        <motion.button
+          {...fadeUp(0.18)}
+          onClick={onCTA}
+          className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] lg:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300"
+        >
+          Start your autopilot →
+        </motion.button>
+
+        <motion.p
+          {...fadeUp(0.22)}
+          className="mt-3.5 text-xs text-slate-500 flex items-center justify-center lg:justify-start gap-1.5"
+        >
+          🔒 Scans 20+ job boards every 4 hours
+        </motion.p>
+      </div>
+    </section>
+  );
+}
+
+// ── Dashboard Preview ─────────────────────────────────────────
+const jobs = [
+  { role: 'Product Manager', co: 'Stripe · SF · $180–220K', score: 92, hi: true, tags: ['Draft ready', 'Recruiter found'] },
+  { role: 'Sr. Frontend Engineer', co: 'Vercel · Remote · $170–210K', score: 89, hi: true, tags: ['Draft ready', '2 referral paths'] },
+  { role: 'Product Designer', co: 'Linear · Remote · $150–190K', score: 78, hi: false, tags: ['Drafting…'] },
+];
+const activity = [
+  { time: '10:14', msg: 'Found PM role at <b>Notion</b>' },
+  { time: '10:16', msg: 'Drafted app for <b>Stripe</b>' },
+  { time: '10:18', msg: 'Found recruiter at <b>Vercel</b>' },
+  { time: '10:22', msg: '3 new matches at <b>Figma</b>' },
+];
+const referrals = [
+  { initials: 'AK', name: 'Anika Kapoor', role: 'Eng Manager, Stripe', pct: 87 },
+  { initials: 'JL', name: 'James Liu', role: 'Recruiter, Vercel', pct: 74 },
+  { initials: 'SM', name: 'Sara Mitchell', role: 'Design Lead, Linear', pct: 69 },
 ];
 
-const IDLE_LINES = [
-  "Your next job is already out there.",
-  "I find. You decide.",
-  "No spray-and-pray. Just signal.",
-  "Built different. For people who want different.",
+function DashboardPreview() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.32, ease: 'easeOut' }}
+      className="mx-5 mt-9 lg:mx-0 lg:mt-0"
+    >
+      <div className="rounded-2xl overflow-hidden dash-shadow border border-white/10" style={{ background: 'hsl(240 4% 10%)' }}>
+        {/* Title bar */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.08]" style={{ background: 'hsl(240 5% 7%)' }}>
+          <div className="flex gap-1.5">
+            {[0,1,2].map(i => <span key={i} className="w-[9px] h-[9px] rounded-full bg-white/10" />)}
+          </div>
+          <span className="font-mono text-[10px] font-medium text-green-400 flex items-center gap-1.5">
+            <span className="w-[5px] h-[5px] rounded-full bg-green-400 animate-blink" />
+            Autopilot active
+          </span>
+        </div>
+
+        <div className="p-3.5 lg:grid lg:grid-cols-3 lg:gap-4">
+          {/* Job feed */}
+          <div className="lg:col-span-2">
+            <p className="font-mono text-[9px] font-medium tracking-widest uppercase text-slate-500 mb-2.5">Job Feed — 12 new</p>
+            <div className="space-y-2">
+              {jobs.map((j) => (
+                <div key={j.role} className="rounded-[11px] p-3.5 border border-white/[0.08]" style={{ background: 'hsl(240 5% 7%)' }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="text-sm font-semibold tracking-tight leading-tight text-white">{j.role}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{j.co}</div>
+                    </div>
+                    <span className={`font-mono text-xs font-medium px-2 py-0.5 rounded-md ml-2.5 shrink-0 ${j.hi ? 'text-green-400 bg-green-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
+                      {j.score}%
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {j.tags.map((t) => (
+                      <span key={t} className="text-[10.5px] px-2 py-0.5 rounded-[5px] bg-white/[0.04] text-slate-400 flex items-center gap-1">
+                        {t.startsWith('Drafting') ? '⟳' : <span className="text-green-400 text-[10px]">✓</span>}
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="mt-3.5 pt-3.5 border-t border-white/[0.08] lg:mt-0 lg:pt-0 lg:border-t-0 lg:border-l lg:border-white/[0.08] lg:pl-4">
+            <p className="font-mono text-[9px] font-medium tracking-widest uppercase text-slate-500 mb-2.5">Activity</p>
+            <div className="space-y-2 mb-4">
+              {activity.map((a) => (
+                <div key={a.time} className="flex gap-2 items-start">
+                  <span className="font-mono text-[10px] text-slate-500 min-w-[38px] pt-px">{a.time}</span>
+                  <span className="text-xs text-slate-400 leading-snug" dangerouslySetInnerHTML={{ __html: a.msg.replace(/<b>(.*?)<\/b>/g, '<span class="text-white font-medium">$1</span>') }} />
+                </div>
+              ))}
+            </div>
+            <div className="pt-3.5 border-t border-white/[0.08]">
+              <p className="font-mono text-[9px] font-medium tracking-widest uppercase text-slate-500 mb-2.5">Referrals</p>
+              {referrals.map((r) => (
+                <div key={r.initials} className="flex items-center gap-2.5 py-2 border-b border-white/[0.06] last:border-b-0">
+                  <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-semibold text-slate-400 shrink-0">{r.initials}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-white">{r.name}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{r.role}</div>
+                  </div>
+                  <span className="font-mono text-[11px] text-green-400 font-medium shrink-0">{r.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Problem Section ───────────────────────────────────────────
+const problems = [
+  { num: '01', title: 'Endless scrolling', desc: 'LinkedIn, Greenhouse, Lever, Wellfound — every day, same boards, mostly the same listings.' },
+  { num: '02', title: 'Repetitive applications', desc: 'Same info, different format. Copy, paste, tweak, repeat. For every single company.' },
+  { num: '03', title: 'Cold outreach that dies', desc: 'You message recruiters with no idea who\'s responsive or even hiring for your role.' },
 ];
 
-export default function SplashPage() {
+function ProblemSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <section className="py-[72px] px-5 lg:px-8 max-w-7xl mx-auto" ref={ref}>
+      <p className="font-mono text-[10px] font-medium tracking-widest uppercase text-green-400 mb-2.5">The problem</p>
+      <h2 className="text-[26px] lg:text-[36px] font-bold tracking-[-0.035em] leading-[1.15] mb-2.5 text-white">
+        Job searching is<br />a full-time job.
+      </h2>
+      <p className="text-sm text-slate-400 leading-relaxed mb-8 max-w-md">
+        You spend more time searching than interviewing. CareerPilot fixes that.
+      </p>
+      <div className="grid gap-2.5 lg:grid-cols-3">
+        {problems.map((p, i) => (
+          <motion.div
+            key={p.num}
+            initial={{ opacity: 0, y: 18 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, delay: i * 0.1 }}
+            className="border border-white/[0.08] rounded-[14px] p-6 relative overflow-hidden"
+            style={{ background: 'hsl(240 4% 10%)' }}
+          >
+            <span className="absolute top-3 right-4 font-mono text-4xl font-bold text-white/[0.03]">{p.num}</span>
+            <h3 className="text-base font-semibold tracking-tight mb-1.5 text-white">{p.title}</h3>
+            <p className="text-[13px] text-slate-500 leading-relaxed">{p.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Features Section ──────────────────────────────────────────
+const features = [
+  { icon: '🔍', title: 'Jobs auto-discovered', desc: '20+ job boards scanned every 4 hours. Only roles matching your profile, skills, and preferences surface. No noise.' },
+  { icon: '🤝', title: 'Referrals ranked', desc: 'For every match, we find internal contacts and recruiters — ranked by response probability — with outreach messages ready.' },
+  { icon: '✍️', title: 'Applications drafted', desc: 'AI writes tailored cover letters and fills applications from your resume. Review, tweak, submit.' },
+];
+
+function FeaturesSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <section className="py-[72px] px-5 lg:px-8 max-w-7xl mx-auto" ref={ref}>
+      <p className="font-mono text-[10px] font-medium tracking-widest uppercase text-green-400 mb-2.5">What you get</p>
+      <h2 className="text-[26px] lg:text-[36px] font-bold tracking-[-0.035em] leading-[1.15] mb-2.5 text-white">
+        Three systems running for you.
+      </h2>
+      <p className="text-sm text-slate-400 leading-relaxed mb-8 max-w-md">
+        Working in the background so you don&apos;t have to.
+      </p>
+      <div className="grid gap-2.5 lg:grid-cols-3">
+        {features.map((f, i) => (
+          <motion.div
+            key={f.title}
+            initial={{ opacity: 0, y: 18 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, delay: i * 0.1 }}
+            className="border border-white/[0.08] rounded-[14px] p-6 relative overflow-hidden"
+            style={{ background: 'hsl(240 4% 10%)' }}
+          >
+            <div className="absolute top-0 left-5 right-5 h-px bg-gradient-to-r from-transparent via-green-400 to-transparent opacity-20" />
+            <div className="w-9 h-9 rounded-[9px] bg-green-400/10 flex items-center justify-center text-base mb-4">
+              {f.icon}
+            </div>
+            <h3 className="text-base font-semibold tracking-tight mb-1.5 text-white">{f.title}</h3>
+            <p className="text-[13px] text-slate-500 leading-relaxed">{f.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── How It Works ──────────────────────────────────────────────
+const steps = [
+  { icon: '📄', num: '01', title: 'Upload your resume', desc: 'Drop your resume. Set role, location, and salary preferences.' },
+  { icon: '⚙️', num: '02', title: 'Autopilot starts', desc: 'CareerPilot starts scanning boards and building your match feed.' },
+  { icon: '📋', num: '03', title: 'Review your feed', desc: 'Check matched jobs, drafted apps, and referral suggestions.' },
+  { icon: '🚀', num: '04', title: 'Submit and connect', desc: 'Approve applications and send referral messages in one tap.' },
+];
+
+function HowItWorksSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <section id="how" className="py-[72px] px-5 lg:px-8 max-w-7xl mx-auto" ref={ref}>
+      <p className="font-mono text-[10px] font-medium tracking-widest uppercase text-green-400 mb-2.5">How it works</p>
+      <h2 className="text-[26px] lg:text-[36px] font-bold tracking-[-0.035em] leading-[1.15] mb-2.5 text-white">
+        Five minutes of setup.<br />Then autopilot.
+      </h2>
+      <div className="relative mt-8">
+        <div className="absolute left-[19px] top-6 bottom-6 w-px bg-white/[0.08] lg:hidden" />
+        <div className="space-y-0 lg:grid lg:grid-cols-2 lg:gap-x-16">
+          {steps.map((s, i) => (
+            <motion.div
+              key={s.num}
+              initial={{ opacity: 0, y: 18 }}
+              animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              className="flex gap-4 items-start py-4 relative"
+            >
+              <div className="w-10 h-10 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-[15px] shrink-0 relative z-10">
+                {s.icon}
+              </div>
+              <div className="flex-1 pt-1">
+                <span className="font-mono text-[10px] text-green-400 font-medium">{s.num}</span>
+                <h3 className="text-[15px] font-semibold tracking-tight mt-1 mb-1 text-white">{s.title}</h3>
+                <p className="text-[13px] text-slate-500 leading-snug">{s.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Automation Section ────────────────────────────────────────
+const chips = [
+  { label: 'LinkedIn', color: 'bg-green-400' },
+  { label: 'Greenhouse', color: 'bg-blue-400' },
+  { label: 'Drafting', color: 'bg-amber-400' },
+  { label: 'Referrals', color: 'bg-violet-400' },
+];
+
+function AutomationSection() {
+  return (
+    <section className="py-[72px] px-5 lg:px-8 max-w-7xl mx-auto">
+      <div className="border border-white/[0.08] rounded-2xl p-8 text-center relative overflow-hidden"
+        style={{ background: 'hsl(240 4% 10%)' }}>
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[300px] h-[200px] pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.05) 0%, transparent 70%)' }} />
+        <h3 className="text-[22px] lg:text-[28px] font-bold tracking-[-0.03em] mt-2.5 mb-2.5 relative text-white">Always running</h3>
+        <p className="text-xl font-bold tracking-tight mb-2.5 relative text-white">Your AI agent never stops.</p>
+        <p className="text-[13px] text-slate-400 leading-relaxed mb-7 max-w-md mx-auto relative">
+          While you sleep, interview, or take a break — CareerPilot keeps scanning, matching, and drafting. Open your phone to a fresh feed.
+        </p>
+        <div className="flex flex-wrap gap-2 justify-center relative">
+          {chips.map((c, i) => (
+            <span
+              key={c.label}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-[9px] border border-white/[0.08] font-mono text-[11px] text-slate-400 animate-chip-float"
+              style={{ background: 'hsl(240 5% 7%)', animationDelay: `${i * 0.4}s` }}
+            >
+              <span className={`w-[5px] h-[5px] rounded-full ${c.color}`} />
+              {c.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Final CTA ─────────────────────────────────────────────────
+function FinalCTA({ onCTA }) {
+  return (
+    <section id="cta" className="py-[72px] px-5 lg:px-8 text-center max-w-7xl mx-auto">
+      <h2 className="text-[30px] lg:text-[42px] font-extrabold tracking-[-0.04em] leading-[1.1] mb-2.5 text-white">
+        Put your search<br />on autopilot.
+      </h2>
+      <p className="text-sm text-slate-400 mb-6">Stop scrolling. Start interviewing.</p>
+      <button
+        onClick={onCTA}
+        className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] lg:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300 mb-3"
+      >
+        Get early access — free →
+      </button>
+      <p className="text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
+        🔒 No credit card · Cancel anytime
+      </p>
+    </section>
+  );
+}
+
+// ── Sticky mobile bar ─────────────────────────────────────────
+function StickyBar({ onCTA }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const fn = () => setShow(window.scrollY > 400);
+    window.addEventListener('scroll', fn);
+    return () => window.removeEventListener('scroll', fn);
+  }, []);
+
+  return (
+    <div className={`fixed bottom-0 left-0 right-0 z-50 glass-sticky border-t border-white/[0.08] flex gap-2.5 px-5 py-3 transition-transform duration-300 lg:hidden ${show ? 'translate-y-0' : 'translate-y-full'}`}
+      style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}>
+      <button
+        onClick={onCTA}
+        className="flex-1 py-3.5 rounded-[10px] bg-green-400 text-slate-950 font-bold text-sm text-center transition-opacity active:opacity-85"
+      >
+        Get early access →
+      </button>
+      <a href="#how"
+        className="py-3.5 px-4 rounded-[10px] bg-white/[0.06] border border-white/10 text-slate-400 text-[13px] font-medium flex items-center active:bg-white/10">
+        How?
+      </a>
+    </div>
+  );
+}
+
+// ── Divider ───────────────────────────────────────────────────
+function Divider() {
+  return <div className="h-px bg-white/[0.06] mx-5 lg:max-w-7xl lg:mx-auto" />;
+}
+
+// ── Main Page ─────────────────────────────────────────────────
+export default function LandingPage() {
   const router = useRouter();
-  const [pokeCount, setPokeCount] = useState(0);
-  const [pilotLine, setPilotLine] = useState(null);
-  const [isPoking, setIsPoking] = useState(false);
-  const [idleLineIndex, setIdleLineIndex] = useState(0);
   const [checking, setChecking] = useState(true);
-  const pokeCountRef = useRef(0);
 
-  // Check auth on mount — redirect if already logged in
   useEffect(() => {
     const supabase = createClient();
     const timeout = setTimeout(() => setChecking(false), 800);
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout);
       if (session) {
-        supabase
-          .from('users')
-          .select('onboarding_completed')
-          .eq('id', session.user.id)
-          .single()
+        supabase.from('users').select('onboarding_completed').eq('id', session.user.id).single()
           .then(({ data }) => {
-            if (data?.onboarding_completed) {
-              router.replace('/dashboard');
-            } else {
-              router.replace('/onboarding');
-            }
+            router.replace(data?.onboarding_completed ? '/dashboard' : '/onboarding');
           });
       } else {
         setChecking(false);
       }
-    }).catch(() => {
-      clearTimeout(timeout);
-      setChecking(false);
-    });
+    }).catch(() => { clearTimeout(timeout); setChecking(false); });
   }, [router]);
 
-  // Cycle idle lines
-  useEffect(() => {
-    if (checking) return;
-    const interval = setInterval(() => {
-      if (!pilotLine) {
-        setIdleLineIndex((i) => (i + 1) % IDLE_LINES.length);
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [checking, pilotLine]);
-
-  // Clear pilot line after a delay
-  useEffect(() => {
-    if (!pilotLine) return;
-    const t = setTimeout(() => setPilotLine(null), 3000);
-    return () => clearTimeout(t);
-  }, [pilotLine]);
-
-  function handlePoke() {
-    if (isPoking) return;
-    setIsPoking(true);
-    pokeCountRef.current += 1;
-    setPokeCount(pokeCountRef.current);
-
-    const lineIndex = Math.min(pokeCountRef.current - 1, PILOT_LINES.length - 1);
-    setPilotLine(PILOT_LINES[lineIndex]);
-
-    setTimeout(() => setIsPoking(false), 400);
-  }
+  const goSignup = () => router.push('/auth/signup');
 
   if (checking) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950">
+      <div className="min-h-dvh flex items-center justify-center lp-root">
         <div className="flex items-center gap-1.5">
           {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              className="w-1.5 h-1.5 rounded-full bg-violet-400"
+            <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400"
               animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-            />
+              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }} />
           ))}
         </div>
       </div>
@@ -108,172 +439,33 @@ export default function SplashPage() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-violet-950 to-slate-950 relative overflow-hidden select-none">
-      {/* Background orbs */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="lp-root min-h-screen overflow-x-hidden pb-20 lg:pb-0">
+      <Navbar onCTA={goSignup} />
 
-      {/* Brand name */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-        className="mb-12 text-center"
-      >
-        <h1 className="text-2xl font-bold text-white tracking-tight">
-          CareerPilot<span className="text-violet-400"> AI</span>
-        </h1>
-      </motion.div>
-
-      {/* Pilot speech bubble */}
-      <div className="h-12 mb-6 flex items-center justify-center">
-        <AnimatePresence mode="wait">
-          {pilotLine ? (
-            <motion.div
-              key={pilotLine}
-              initial={{ opacity: 0, y: 8, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="bg-white/10 border border-white/15 backdrop-blur-sm rounded-2xl px-5 py-2.5"
-            >
-              <p className="text-white text-sm font-medium">{pilotLine}</p>
-            </motion.div>
-          ) : (
-            <motion.p
-              key={`idle-${idleLineIndex}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-gray-500 text-sm"
-            >
-              {IDLE_LINES[idleLineIndex]}
-            </motion.p>
-          )}
-        </AnimatePresence>
+      {/* Hero + Dashboard: side-by-side on desktop */}
+      <div className="max-w-7xl mx-auto lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center lg:px-8 lg:pt-32">
+        <HeroSection onCTA={goSignup} />
+        <DashboardPreview />
       </div>
 
-      {/* Pilot character — tap to poke */}
-      <motion.button
-        onClick={handlePoke}
-        whileTap={{ scale: 0.88 }}
-        animate={isPoking ? {
-          rotate: [0, -8, 8, -5, 5, 0],
-          scale: [1, 1.12, 0.95, 1.06, 0.98, 1],
-        } : {
-          y: [0, -6, 0],
-        }}
-        transition={isPoking ? {
-          duration: 0.4,
-          ease: 'easeInOut',
-        } : {
-          duration: 3,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-        className="relative w-32 h-32 focus:outline-none cursor-pointer"
-        aria-label="Poke Pilot"
-      >
-        {/* Glow ring */}
-        <motion.div
-          className="absolute inset-0 rounded-full bg-violet-500/25"
-          animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.15, 0.4] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
+      <Divider />
+      <ProblemSection />
+      <Divider />
+      <FeaturesSection />
+      <Divider />
+      <HowItWorksSection />
+      <Divider />
+      <AutomationSection />
+      <FinalCTA onCTA={goSignup} />
 
-        {/* Pilot avatar */}
-        <div className="relative w-full h-full rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-violet-500/40">
-          <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Helmet */}
-            <circle cx="32" cy="28" r="18" fill="white" fillOpacity="0.15" stroke="white" strokeOpacity="0.4" strokeWidth="1.5"/>
-            {/* Visor */}
-            <path d="M20 28 Q20 20 32 20 Q44 20 44 28 Q44 36 32 38 Q20 36 20 28Z" fill="white" fillOpacity="0.25"/>
-            {/* Face */}
-            <circle cx="27" cy="27" r="2" fill="white" fillOpacity="0.9"/>
-            <circle cx="37" cy="27" r="2" fill="white" fillOpacity="0.9"/>
-            {/* Smile */}
-            <path d="M27 33 Q32 37 37 33" stroke="white" strokeOpacity="0.8" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-            {/* Suit collar */}
-            <path d="M20 44 Q24 40 32 40 Q40 40 44 44 L46 56 Q32 60 18 56 Z" fill="white" fillOpacity="0.2"/>
-            {/* Chest badge */}
-            <rect x="28" y="45" width="8" height="5" rx="1" fill="white" fillOpacity="0.4"/>
-          </svg>
-        </div>
+      <footer className="border-t border-white/[0.06] py-7 px-5 text-center">
+        <p className="text-[11px] text-slate-500 leading-snug">
+          © 2026 CareerPilot<br />
+          Built for people who&apos;d rather interview than job hunt.
+        </p>
+      </footer>
 
-        {/* Tap hint on first visit */}
-        {pokeCount === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 1, 0] }}
-            transition={{ delay: 1.5, duration: 1.5, repeat: 3 }}
-            className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap"
-          >
-            <span className="text-gray-500 text-xs">tap me</span>
-          </motion.div>
-        )}
-      </motion.button>
-
-      {/* Value props — always visible */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6, duration: 0.5 }}
-        className="mt-10 flex flex-col items-center gap-5 px-6 max-w-xs w-full"
-      >
-        {/* Hook */}
-        <div className="text-center">
-          <p className="text-white font-semibold text-lg leading-snug">
-            Pilot handles the boring parts.
-          </p>
-          <p className="text-gray-400 text-sm mt-1 leading-relaxed">
-            So you spend your time preparing — not searching.
-          </p>
-        </div>
-
-        {/* Props */}
-        <div className="flex flex-col gap-2.5 w-full">
-          {[
-            {
-              icon: '🌐',
-              label: 'Jobs, auto-searched',
-              sub: 'Every portal. Every 4 hours. Only the best matches land in your feed.',
-            },
-            {
-              icon: '🤝',
-              label: 'Referrals, auto-ranked',
-              sub: 'Quality recruiters and hiring managers — sorted by who\'ll actually respond.',
-            },
-            {
-              icon: '⚡',
-              label: 'Applications, pre-filled',
-              sub: 'Pilot researches the role and writes your answers. You just review and send.',
-            },
-          ].map(({ icon, label, sub }) => (
-            <div key={label} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5">
-              <span className="text-xl mt-0.5">{icon}</span>
-              <div>
-                <p className="text-white text-sm font-semibold">{label}</p>
-                <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={() => router.push('/auth/signup')}
-          className="btn-gradient w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-violet-500/30"
-        >
-          Start free →
-        </button>
-        <button
-          onClick={() => router.push('/auth/login')}
-          className="text-gray-500 text-sm hover:text-gray-400 transition-colors -mt-1"
-        >
-          Already have an account
-        </button>
-      </motion.div>
+      <StickyBar onCTA={goSignup} />
     </div>
   );
 }
