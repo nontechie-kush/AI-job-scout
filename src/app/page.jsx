@@ -42,7 +42,7 @@ function Navbar({ onCTA }) {
 // ── Hero ──────────────────────────────────────────────────────
 function HeroSection({ onCTA }) {
   return (
-    <section className="relative pt-24 pb-0 text-center lg:text-left lg:pt-0 overflow-hidden px-5 lg:px-0">
+    <section className="relative pt-28 pb-8 text-center xl:text-left xl:pt-0 xl:pb-0 overflow-hidden px-5 xl:px-0">
       <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[360px] h-[360px] pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.08) 0%, transparent 70%)' }} />
       <div className="relative">
@@ -56,7 +56,7 @@ function HeroSection({ onCTA }) {
 
         <motion.h1
           {...fadeUp(0.06)}
-          className="text-[38px] lg:text-[56px] font-extrabold tracking-[-0.045em] leading-[1.05] mb-4 text-white"
+          className="text-[38px] xl:text-[56px] font-extrabold tracking-[-0.045em] leading-[1.05] mb-4 text-white"
         >
           Never search{' '}
           <br className="hidden lg:block" />
@@ -65,7 +65,7 @@ function HeroSection({ onCTA }) {
 
         <motion.p
           {...fadeUp(0.12)}
-          className="text-[15px] lg:text-base leading-relaxed text-slate-400 max-w-md mx-auto lg:mx-0 mb-7"
+          className="text-[15px] leading-relaxed text-slate-400 max-w-md mx-auto xl:mx-0 mb-7"
         >
           CareerPilot finds jobs, identifies referrals, and drafts applications — automatically. You review. You submit. That&apos;s it.
         </motion.p>
@@ -73,14 +73,14 @@ function HeroSection({ onCTA }) {
         <motion.button
           {...fadeUp(0.18)}
           onClick={onCTA}
-          className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] lg:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300"
+          className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] xl:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300"
         >
           Start your autopilot →
         </motion.button>
 
         <motion.p
           {...fadeUp(0.22)}
-          className="mt-3.5 text-xs text-slate-500 flex items-center justify-center lg:justify-start gap-1.5"
+          className="mt-3.5 text-xs text-slate-500 flex items-center justify-center xl:justify-start gap-1.5"
         >
           🔒 Scans 20+ job boards every 4 hours
         </motion.p>
@@ -113,7 +113,7 @@ function DashboardPreview() {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.32, ease: 'easeOut' }}
-      className="mx-5 mt-9 lg:mx-0 lg:mt-0"
+      className="mx-5 mt-6 xl:mx-0 xl:mt-0"
     >
       <div className="rounded-2xl overflow-hidden dash-shadow border border-white/10" style={{ background: 'hsl(240 4% 10%)' }}>
         {/* Title bar */}
@@ -127,7 +127,7 @@ function DashboardPreview() {
           </span>
         </div>
 
-        <div className="p-3.5 lg:grid lg:grid-cols-3 lg:gap-4">
+        <div className="p-3.5 xl:grid xl:grid-cols-3 xl:gap-4">
           {/* Job feed */}
           <div className="lg:col-span-2">
             <p className="font-mono text-[9px] font-medium tracking-widest uppercase text-slate-500 mb-2.5">Job Feed — 12 new</p>
@@ -157,7 +157,7 @@ function DashboardPreview() {
           </div>
 
           {/* Sidebar */}
-          <div className="mt-3.5 pt-3.5 border-t border-white/[0.08] lg:mt-0 lg:pt-0 lg:border-t-0 lg:border-l lg:border-white/[0.08] lg:pl-4">
+          <div className="mt-3.5 pt-3.5 border-t border-white/[0.08] xl:mt-0 xl:pt-0 xl:border-t-0 xl:border-l xl:border-white/[0.08] xl:pl-4">
             <p className="font-mono text-[9px] font-medium tracking-widest uppercase text-slate-500 mb-2.5">Activity</p>
             <div className="space-y-2 mb-4">
               {activity.map((a) => (
@@ -359,7 +359,7 @@ function FinalCTA({ onCTA }) {
       <p className="text-sm text-slate-400 mb-6">Stop scrolling. Start interviewing.</p>
       <button
         onClick={onCTA}
-        className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] lg:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300 mb-3"
+        className="inline-flex items-center justify-center gap-2 w-full max-w-[320px] xl:w-auto py-[15px] px-7 rounded-xl bg-green-400 text-slate-950 font-bold text-[15px] glow-primary transition-transform active:scale-[0.97] hover:bg-green-300 mb-3"
       >
         Get early access — free →
       </button>
@@ -380,7 +380,7 @@ function StickyBar({ onCTA }) {
   }, []);
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 glass-sticky border-t border-white/[0.08] flex gap-2.5 px-5 py-3 transition-transform duration-300 lg:hidden ${show ? 'translate-y-0' : 'translate-y-full'}`}
+    <div className={`fixed bottom-0 left-0 right-0 z-50 glass-sticky border-t border-white/[0.08] flex gap-2.5 px-5 py-3 transition-transform duration-300 xl:hidden ${show ? 'translate-y-0' : 'translate-y-full'}`}
       style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}>
       <button
         onClick={onCTA}
@@ -439,11 +439,11 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="lp-root min-h-screen overflow-x-hidden pb-20 lg:pb-0">
+    <div className="lp-root min-h-screen pb-20 xl:pb-0">
       <Navbar onCTA={goSignup} />
 
       {/* Hero + Dashboard: side-by-side on desktop */}
-      <div className="max-w-7xl mx-auto lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center lg:px-8 lg:pt-32">
+      <div className="max-w-7xl mx-auto xl:grid xl:grid-cols-2 xl:gap-12 xl:items-center xl:px-8 xl:pt-32">
         <HeroSection onCTA={goSignup} />
         <DashboardPreview />
       </div>
