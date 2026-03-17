@@ -16,6 +16,23 @@ const navItems = [
   { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID;
+
+// Push Supabase JWT to extension so it can authenticate API calls
+async function pushTokenToExtension(supabase) {
+  if (!EXTENSION_ID || typeof chrome === 'undefined' || !chrome.runtime) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    chrome.runtime.sendMessage(EXTENSION_ID, {
+      type: 'PILOT_SET_TOKEN',
+      token: session.access_token,
+    });
+  } catch {
+    // Extension not installed — silently ignore
+  }
+}
+
 export default function DashboardLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -23,7 +40,8 @@ export default function DashboardLayout({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setReady(true); // TEMP: bypassed for UI review
+    setReady(true);
+    pushTokenToExtension(supabase);
   }, []);
 
   if (!ready) return null;
