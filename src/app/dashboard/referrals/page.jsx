@@ -9,12 +9,13 @@
  * Flow:
  *   1. User taps "Select" → checkboxes appear on uncontacted cards
  *   2. User picks 1–15 contacts → sticky bar appears
- *   3. Tap CTA → ReviewSheet opens (notes editing, 200 char limit)
+ *   3. Tap CTA → ReviewSheet opens (notes editing, 300 char limit)
  *   4. "Start Automation" → queues jobs + triggers Chrome extension
  *   5. Progress shown live per contact
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -23,11 +24,12 @@ import {
   Chrome, CheckCircle2,
 } from 'lucide-react';
 import OutreachFlow from '@/components/OutreachFlow';
+import { createClient } from '@/lib/supabase/client';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAX_BATCH = 15;
-const NOTE_MAX = 200;
+const NOTE_MAX = 300;
 const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID || ''; // set after publish
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -313,7 +315,6 @@ function CapsuleCard({ item, onOutreach, isSent }) {
 
 function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
   const [notes, setNotes] = useState({});
-  const [loadingDrafts, setLoadingDrafts] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [starting, setStarting] = useState(false);
   const extensionInstalled = isExtensionInstalled();
@@ -321,7 +322,6 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
   // Fetch AI-generated notes for all selected matches
   useEffect(() => {
     async function fetchDrafts() {
-      setLoadingDrafts(true);
       const results = {};
       await Promise.all(
         selectedMatches.map(async (match) => {
@@ -332,18 +332,21 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
               body: JSON.stringify({ match_id: match.id }),
             });
             const json = await res.json();
-            results[match.id] = {
-              connection_note: json.connection_note || '',
-              dm_subject: json.dm_subject || '',
-              dm_body: json.dm_body || '',
-            };
+            if (!res.ok || !json.connection_note) {
+              results[match.id] = { connection_note: null, dm_subject: '', dm_body: '', error: json.error || 'Generation failed' };
+            } else {
+              results[match.id] = {
+                connection_note: json.connection_note,
+                dm_subject: json.dm_subject || '',
+                dm_body: json.dm_body || '',
+              };
+            }
           } catch {
-            results[match.id] = { connection_note: '', dm_subject: '', dm_body: '' };
+            results[match.id] = { connection_note: null, dm_subject: '', dm_body: '', error: 'Network error' };
           }
         })
       );
       setNotes(results);
-      setLoadingDrafts(false);
     }
     fetchDrafts();
   }, [selectedMatches]);
@@ -351,19 +354,37 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
   function applyToAll(note) {
     const updated = {};
     selectedMatches.forEach(m => {
-      updated[m.id] = { ...notes[m.id], connection_note: note };
+      updated[m.id] = { ...notes[m.id], connection_note: note, error: undefined };
     });
     setNotes(prev => ({ ...prev, ...updated }));
   }
 
+  function retryDraft(match) {
+    setNotes(prev => ({ ...prev, [match.id]: undefined }));
+    // Re-trigger fetch for this one match
+    fetch('/api/recruiters/outreach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ match_id: match.id }),
+    }).then(async res => {
+      const json = await res.json();
+      if (!res.ok || !json.connection_note) {
+        setNotes(prev => ({ ...prev, [match.id]: { connection_note: null, dm_subject: '', dm_body: '', error: json.error || 'Generation failed' } }));
+      } else {
+        setNotes(prev => ({ ...prev, [match.id]: { connection_note: json.connection_note, dm_subject: json.dm_subject || '', dm_body: json.dm_body || '' } }));
+      }
+    }).catch(() => {
+      setNotes(prev => ({ ...prev, [match.id]: { connection_note: null, dm_subject: '', dm_body: '', error: 'Network error' } }));
+    });
+  }
+
   async function handleStart() {
-    if (!extensionInstalled) return;
     setStarting(true);
 
     const jobs = selectedMatches.map(match => ({
       match_id:        match.id,
       linkedin_handle: linkedinHandle(match.linkedin_url),
-      connection_note: (notes[match.id]?.connection_note || '').slice(0, NOTE_MAX),
+      connection_note: ((notes[match.id]?.connection_note) ?? '').slice(0, NOTE_MAX),
       dm_subject:      notes[match.id]?.dm_subject || '',
       dm_body:         notes[match.id]?.dm_body || '',
     })).filter(j => j.linkedin_handle);
@@ -376,9 +397,19 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
         body: JSON.stringify({ jobs }),
       });
 
-      // Trigger extension
-      if (EXTENSION_ID) {
-        chrome.runtime.sendMessage(EXTENSION_ID, { type: 'PILOT_START_AUTOMATION' });
+      // Trigger extension with a fresh token — fire-and-forget, never block the flow
+      try {
+        if (EXTENSION_ID && typeof chrome !== 'undefined' && chrome.runtime) {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          chrome.runtime.sendMessage(EXTENSION_ID, {
+            type: 'PILOT_START_AUTOMATION',
+            token: session?.access_token || null,
+            refresh_token: session?.refresh_token || null,
+          });
+        }
+      } catch {
+        // Extension not responding — jobs are queued in DB, extension will poll next cycle
       }
 
       onStartAutomation(jobs);
@@ -420,14 +451,11 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
 
         {/* Notes list */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {loadingDrafts ? (
-            <div className="flex flex-col items-center gap-3 py-8">
-              <div className="w-6 h-6 spinner" />
-              <p className="text-gray-400 text-sm">Pilot is writing your notes…</p>
-            </div>
-          ) : (
-            selectedMatches.map((match, i) => {
-              const note = notes[match.id]?.connection_note || '';
+          {selectedMatches.map((match, i) => {
+              const noteData = notes[match.id];
+              const note = noteData?.connection_note ?? '';
+              const isFailed = noteData !== undefined && noteData.connection_note === null;
+              const isPending = noteData === undefined;
               const overLimit = note.length > NOTE_MAX;
               const isEditing = editingId === match.id;
 
@@ -441,15 +469,43 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                       <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{match.name}</p>
                       <p className="text-xs text-gray-400 truncate">{match.company}</p>
                     </div>
-                    <button
-                      onClick={() => setEditingId(isEditing ? null : match.id)}
-                      className="p-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 shrink-0"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                    </button>
+                    {!isPending && !isFailed && (
+                      <button
+                        onClick={() => setEditingId(isEditing ? null : match.id)}
+                        className="p-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 shrink-0"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                      </button>
+                    )}
                   </div>
 
-                  {isEditing ? (
+                  {isPending ? (
+                    <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-3 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 spinner shrink-0" />
+                      <p className="text-xs text-gray-400">Writing note…</p>
+                    </div>
+                  ) : isFailed ? (
+                    <div className="space-y-1">
+                      <textarea
+                        placeholder="Write your own note (max 300 chars)…"
+                        value={note}
+                        onChange={e => setNotes(prev => ({
+                          ...prev,
+                          [match.id]: { ...prev[match.id], connection_note: e.target.value, error: undefined },
+                        }))}
+                        className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-violet-400/30'}`}
+                        rows={3}
+                        maxLength={300}
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${overLimit ? 'text-red-500' : 'text-gray-400'}`}>{note.length}/{NOTE_MAX}</span>
+                        <button onClick={() => retryDraft(match)} className="text-xs text-violet-600 dark:text-violet-400 font-medium">
+                          Retry AI ↺
+                        </button>
+                      </div>
+                    </div>
+                  ) : isEditing ? (
                     <div className="space-y-1">
                       <textarea
                         value={note}
@@ -459,7 +515,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                         }))}
                         className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-violet-400/30'}`}
                         rows={4}
-                        maxLength={220}
+                        maxLength={300}
                       />
                       <div className="flex items-center justify-between">
                         <span className={`text-xs font-medium ${overLimit ? 'text-red-500' : 'text-gray-400'}`}>
@@ -478,32 +534,27 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                     </div>
                   ) : (
                     <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-3">
-                      <p className={`text-xs leading-relaxed ${overLimit ? 'text-red-400' : 'text-gray-600 dark:text-gray-300'}`}>
-                        {note || 'Loading…'}
-                      </p>
+                      <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{note}</p>
                       {overLimit && (
-                        <p className="text-red-500 text-xs mt-1">Tap edit — note exceeds 200 chars</p>
+                        <p className="text-red-500 text-xs mt-1">Tap edit — note exceeds 300 chars</p>
                       )}
                       <p className="text-gray-400 text-[10px] mt-1.5">{note.length}/{NOTE_MAX}</p>
                     </div>
                   )}
                 </div>
               );
-            })
-          )}
+            })}
 
           {/* Disclaimer */}
-          {!loadingDrafts && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 flex gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                CareerPilot automates this using your own Chrome browser and your LinkedIn session.
-                We never store your LinkedIn password or credentials.
-                Keep outreach genuine — LinkedIn may restrict accounts that spam.
-                Make sure you&apos;re signed into the right LinkedIn account.
-              </p>
-            </div>
-          )}
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 flex gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+              CareerPilot automates this using your own Chrome browser and your LinkedIn session.
+              We never store your LinkedIn password or credentials.
+              Keep outreach genuine — LinkedIn may restrict accounts that spam.
+              Make sure you&apos;re signed into the right LinkedIn account.
+            </p>
+          </div>
         </div>
 
         {/* CTA */}
@@ -518,9 +569,8 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                 </p>
               </div>
               <button
-                disabled={loadingDrafts}
                 onClick={handleStart}
-                className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm disabled:opacity-50"
+                className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm"
               >
                 Get Extension — Automate Sending
               </button>
@@ -528,7 +578,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
           ) : (
             <button
               onClick={handleStart}
-              disabled={loadingDrafts || starting || selectedMatches.some(m => (notes[m.id]?.connection_note || '').length > NOTE_MAX)}
+              disabled={starting || Object.keys(notes).length < selectedMatches.length || selectedMatches.some(m => ((notes[m.id]?.connection_note) ?? '').length > NOTE_MAX)}
               className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {starting ? (
@@ -609,6 +659,7 @@ export default function ReferralsPage() {
   const [reviewOpen, setReviewOpen]         = useState(false);
   const [automationStatus, setAutomationStatus] = useState({}); // matchId → status string
   const [showProgress, setShowProgress]     = useState(false);
+  const pollRef = useRef(null); // interval ref for cleanup
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
@@ -658,29 +709,46 @@ export default function ReferralsPage() {
 
   function handleStartAutomation(jobs) {
     // Initialise status for each queued job
+    const queuedMatchIds = new Set(jobs.map(j => j.match_id));
     const initial = {};
     jobs.forEach(j => { initial[j.match_id] = 'pending'; });
     setAutomationStatus(initial);
     setShowProgress(true);
     exitSelection();
 
-    // Poll for status updates (extension reports back via DB)
-    // Simple polling every 5s against /api/outreach/pending to infer progress
-    const poll = setInterval(async () => {
+    // Clear any previous poll
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    let attempts = 0;
+    const MAX_POLLS = 72; // stop after 6 min (72 × 5s) regardless
+
+    pollRef.current = setInterval(async () => {
+      attempts++;
       try {
         const res  = await fetch('/api/outreach/queue-status', { cache: 'no-store' });
         if (!res.ok) return;
         const json = await res.json();
-        setAutomationStatus(json.statuses || {});
-        const allDone = Object.values(json.statuses || {}).every(
-          s => !['pending', 'processing'].includes(s)
+
+        // Only track statuses for THIS batch
+        const batchStatuses = {};
+        for (const id of queuedMatchIds) {
+          if (json.statuses?.[id]) batchStatuses[id] = json.statuses[id];
+        }
+        setAutomationStatus(batchStatuses);
+
+        const allResolved = [...queuedMatchIds].every(
+          id => batchStatuses[id] && !['pending', 'processing'].includes(batchStatuses[id])
         );
-        if (allDone) clearInterval(poll);
+        if (allResolved || attempts >= MAX_POLLS) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
       } catch {}
     }, 5000);
-
-    return () => clearInterval(poll);
   }
+
+  // Cleanup poll on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const capsuleIds     = new Set(capsule.map(c => c.match_id));
   const targets        = matches.filter(m => m.status === 'pending' && !capsuleIds.has(m.id));
@@ -925,16 +993,17 @@ export default function ReferralsPage() {
         )}
       </AnimatePresence>
 
-      {/* Review sheet */}
-      <AnimatePresence>
-        {reviewOpen && (
+      {/* Review sheet — rendered in a portal so it sits above the bottom nav */}
+      {reviewOpen && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
           <ReviewSheet
             selectedMatches={selectedMatches}
             onClose={() => setReviewOpen(false)}
             onStartAutomation={handleStartAutomation}
           />
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Single outreach modal (existing flow) */}
       <AnimatePresence>

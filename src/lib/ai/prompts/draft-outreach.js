@@ -65,11 +65,12 @@ TASK:
 Generate three versions of outreach. Return ONLY valid JSON, no commentary.
 
 1. connection_note: A LinkedIn connection request note. MAX 200 characters (hard limit).
-   - Hook only — make them curious enough to accept
-   - Who the candidate is in one clause, what they want in another
-   - If mutual connections exist, a natural name-drop adds warmth
-   - Do NOT try to fit the full pitch here — it won't fit
-   - Must start with "Hi ${recFirstName},"
+   EXACT format (use \\n for newlines in JSON):
+   "Hi ${recFirstName},\\nHope you are doing well. I am seeking opportunities in ${targetRoles} and it would be great to connect with you. Please accept my invite.\\n\\nThanks\\n${firstName}"
+   - Keep the body sentence specific: mention the role domain, optionally the candidate's current/recent company if it adds credibility
+   - If mutual connections exist, replace "Hope you are doing well" with "We have [mutual name] in common."
+   - Do NOT add any other lines or sentences
+   - The \\n\\nThanks\\n${firstName} sign-off is mandatory
 
 2. dm_subject: Subject line for a LinkedIn DM (used if connection limit hit).
    - 6–8 words, specific to candidate + recruiter

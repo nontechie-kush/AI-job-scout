@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/supabase/get-auth-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ const TERMINAL_STATUSES = new Set(['sent', 'dm_sent', 'limit_hit', 'failed', 'in
 export async function POST(request) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthUser(supabase, request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { job_id, status, result_detail } = await request.json();

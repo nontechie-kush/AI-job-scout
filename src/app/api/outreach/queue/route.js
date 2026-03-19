@@ -26,9 +26,19 @@ export async function POST(request) {
     }
     // Cap at 15 per batch (LinkedIn daily safety limit)
     const batch = jobs.slice(0, 15);
+    const matchIds = batch.map(j => j.match_id);
+
+    // Reset stuck 'processing' jobs older than 5 minutes back to 'pending'
+    // so they don't block re-queuing if a previous run was interrupted
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    await supabase
+      .from('outreach_queue')
+      .update({ status: 'pending', picked_up_at: null })
+      .in('recruiter_match_id', matchIds)
+      .eq('status', 'processing')
+      .lt('picked_up_at', fiveMinutesAgo);
 
     // Check for already-queued or already-sent jobs for these match IDs
-    const matchIds = batch.map(j => j.match_id);
     const { data: existing } = await supabase
       .from('outreach_queue')
       .select('recruiter_match_id, status')
@@ -49,7 +59,7 @@ export async function POST(request) {
         user_id:             user.id,
         recruiter_match_id:  job.match_id,
         linkedin_handle:     job.linkedin_handle,
-        connection_note:     job.connection_note.slice(0, 200),
+        connection_note:     job.connection_note.slice(0, 300),
         dm_subject:          job.dm_subject || '',
         dm_body:             job.dm_body || '',
         status:              'pending',

@@ -27,6 +27,7 @@ async function pushTokenToExtension(supabase) {
     chrome.runtime.sendMessage(EXTENSION_ID, {
       type: 'PILOT_SET_TOKEN',
       token: session.access_token,
+      refresh_token: session.refresh_token,
     });
   } catch {
     // Extension not installed — silently ignore
