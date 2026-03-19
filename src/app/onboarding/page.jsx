@@ -790,7 +790,7 @@ function StepScanning({ onFinish, parsedProfile, preferences }) {
 export default function OnboardingPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(1);
   const [parsedProfile, setParsedProfile] = useState(null);
   const [preferences, setPreferences] = useState(null);
   const [ready, setReady] = useState(false);
@@ -854,7 +854,6 @@ export default function OnboardingPage() {
             exit="exit"
             transition={{ duration: 0.3 }}
           >
-            {step === 0 && <StepWelcome onNext={next} />}
             {step === 1 && <StepImport onNext={next} onProfileParsed={(p) => setParsedProfile(p)} />}
             {step === 2 && <StepPreferences onNext={next} onPrefsSet={(p) => setPreferences(p)} jobSearchTitles={parsedProfile?.job_search_titles} />}
             {step === 3 && (
