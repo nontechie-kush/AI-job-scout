@@ -53,10 +53,10 @@ export default function PrivacyPage() {
             <ul className="space-y-2 list-none">
               {[
                 'The extension does not read your LinkedIn inbox, messages, or connections.',
-                'The extension does not scrape LinkedIn profiles or collect data about other LinkedIn users.',
+                'When visiting a recruiter\'s LinkedIn profile as part of your approved outreach queue, the extension reads publicly visible profile data (job title, company, location, connection degree, follower count) and sends it to CareerPilot\'s servers to enrich your recruiter records. This data is about the recruiter you are reaching out to — not other users browsing LinkedIn.',
                 'The extension stores only your CareerPilot session token in local Chrome storage — no LinkedIn credentials are stored.',
-                'The extension communicates only with CareerPilot\'s own servers (careerpilot-ai-lac.vercel.app) to fetch your approved queue and report results.',
-                'No LinkedIn data is transmitted to CareerPilot\'s servers.',
+                'The extension communicates only with CareerPilot\'s own servers (careerpilot-ai-lac.vercel.app) to fetch your approved outreach queue, report delivery results, and send recruiter enrichment data.',
+                'The extension tracks daily and weekly connection counts locally on your device to enforce safe usage limits. These counts are not transmitted to CareerPilot\'s servers.',
               ].map((item) => (
                 <li key={item} className="flex gap-3">
                   <span className="text-green-400 font-mono text-xs mt-1 shrink-0">→</span>
