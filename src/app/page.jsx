@@ -181,26 +181,26 @@ function HeroSection({ onFileSelected, onWebsiteSubmit }) {
           className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium mb-5 ${darkMode ? 'bg-emerald-400/10 border border-emerald-400/20 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}
         >
           <Zap className="w-3 h-3" />
-          20+ job sites scanned every 4 hours
+          Scanning 20+ job sites right now
         </motion.div>
 
-        {/* Headline — outcome focused */}
+        {/* Headline — throughput multiplier */}
         <motion.h1
           {...fadeUp(0.06)}
           className={`text-[28px] sm:text-[34px] xl:text-[44px] font-extrabold tracking-[-0.04em] leading-[1.12] mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}
         >
-          Matched jobs, right people,{' '}
+          10x the effort.{' '}
           <br className="hidden sm:block" />
-          drafted applications.{' '}
+          1/10th the time.{' '}
           <br />
-          <span className="text-emerald-600">Every morning.</span>
+          <span className="text-emerald-600">Every 4 hours.</span>
         </motion.h1>
 
         <motion.p
           {...fadeUp(0.12)}
           className={`text-[15px] leading-relaxed max-w-md mb-7 ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}
         >
-          Import your profile once. CareerPilot scans job sites, finds the right people at each company, and drafts your applications. You just review and apply.
+          Every job search has 3 bottlenecks: finding openings, reaching the right people, and writing applications. CareerPilot handles all three — while you focus on interviews.
         </motion.p>
 
         {/* ── Import UI — right in the hero ── */}
@@ -330,22 +330,22 @@ function TrustStrip() {
 const outcomes = [
   {
     icon: Briefcase,
-    title: 'Jobs found for you',
-    desc: '20+ sites scanned every 4 hours. Only roles that match your profile show up.',
+    title: 'Bottleneck #1: Finding the right jobs',
+    desc: 'You\'d spend hours scrolling 20 job sites. CareerPilot auto-scans all of them every 4 hours and surfaces only what fits your profile.',
     stat: '20+',
-    statLabel: 'job sites',
+    statLabel: 'sites scanned',
   },
   {
     icon: Users,
-    title: 'Right people at every company',
-    desc: 'Hiring managers and recruiters matched to each job. Ready to message via LinkedIn or email.',
+    title: 'Bottleneck #2: Reaching the right people',
+    desc: 'For every matched job, CareerPilot identifies hiring managers and recruiters — and builds you a personalized outreach network.',
     stat: '1-click',
     statLabel: 'outreach',
   },
   {
     icon: FileText,
-    title: 'Applications drafted from your resume',
-    desc: 'Cover letters, bios, and screening answers — pre-written. You review, tweak, submit.',
+    title: 'Bottleneck #3: Writing applications',
+    desc: 'Cover letters, bios, screening answers — all drafted from your resume. You review, tweak, submit. Under 2 minutes per application.',
     stat: '< 2 min',
     statLabel: 'per apply',
   },
@@ -364,10 +364,10 @@ function OutcomesSection() {
         className="text-center mb-10"
       >
         <h2 className={`text-[24px] lg:text-[32px] font-bold tracking-[-0.03em] leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-          You open your phone to this. Every day.
+          3 things that eat 80% of your job search time
         </h2>
         <p className={`text-sm mt-2 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-          No searching. No scrolling job sites. No cold-emailing strangers.
+          CareerPilot eliminates all three. You focus on what actually matters — interviews.
         </p>
       </motion.div>
 
@@ -410,13 +410,13 @@ function ReferralsSection() {
         className="mb-8"
       >
         <p className={`text-[11px] font-semibold tracking-widest uppercase mb-2 ${darkMode ? 'text-violet-400' : 'text-violet-600'}`}>
-          Your unfair advantage
+          Networking on autopilot
         </p>
         <h2 className={`text-[24px] lg:text-[32px] font-bold tracking-[-0.03em] leading-tight max-w-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-          For every job: the right person to reach out to. For your career: a curated recruiter network.
+          The right people for every job. A recruiter network built around you.
         </h2>
         <p className={`text-sm mt-2 max-w-lg ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-          You don&apos;t have to search LinkedIn to find people. CareerPilot identifies hiring managers per job and curates recruiters matched to your profile.
+          You&apos;d spend hours searching LinkedIn for who to reach out to. CareerPilot maps hiring managers per job and builds a curated recruiter network — automatically.
         </p>
       </motion.div>
 
@@ -509,9 +509,9 @@ function ReferralsSection() {
 
 // ── How It Works ─────────────────────────────────────────────
 const steps = [
-  { num: '1', title: 'Import your profile', desc: 'Upload resume, paste a portfolio URL, or fill in details. Takes 2 minutes.', icon: Upload },
-  { num: '2', title: 'CareerPilot gets to work', desc: 'Starts scanning 20+ job sites. Matches roles, finds contacts, drafts applications.', icon: Zap },
-  { num: '3', title: 'Review and apply', desc: 'Open your feed. Check matches, tweak drafts, reach out to the right people. Apply in one tap.', icon: CheckCircle },
+  { num: '1', title: 'Import your profile', desc: 'Upload resume, paste a URL, or fill in details. 2 minutes.', icon: Upload },
+  { num: '2', title: 'It starts working immediately', desc: 'Scans 20+ job sites, matches roles, finds hiring contacts, drafts applications — every 4 hours.', icon: Zap },
+  { num: '3', title: 'You just review and apply', desc: 'Open your feed. Matches, drafts, and contacts are ready. Apply in under 2 minutes per job.', icon: CheckCircle },
 ];
 
 function HowItWorksSection() {
@@ -570,10 +570,10 @@ function AlwaysRunningSection() {
           <Zap className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
         </div>
         <h3 className={`text-[22px] lg:text-[28px] font-bold tracking-[-0.03em] mb-2.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-          Always running in the background
+          Works even when you don&apos;t
         </h3>
         <p className={`text-sm leading-relaxed mb-7 max-w-md mx-auto ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-          While you sleep, interview, or take a break — CareerPilot keeps scanning, matching, and drafting. Open your phone to a fresh feed.
+          While you sleep, interview, or take a break — CareerPilot keeps scanning, matching, and drafting. Wake up to new matches every morning.
         </p>
         <div className="flex flex-wrap gap-3 justify-center">
           {runningFeatures.map((c) => (
@@ -597,10 +597,10 @@ function FinalCTA({ onCTA }) {
   return (
     <section id="cta" className="py-16 lg:py-20 px-5 lg:px-8 text-center max-w-6xl mx-auto">
       <h2 className={`text-[26px] lg:text-[36px] font-extrabold tracking-[-0.04em] leading-[1.1] mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-        Your next role is closer<br />than you think.
+        Stop doing the grunt work.<br />Start getting interviews.
       </h2>
       <p className={`text-sm mb-6 max-w-md mx-auto ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-        Stop scrolling job sites. Let CareerPilot find the right opportunities, the right people, and draft your applications.
+        Import your profile once. CareerPilot does the searching, networking, and drafting — you just show up prepared.
       </p>
       <button
         onClick={onCTA}
