@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { motion, useInView } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import {
-  Upload, Globe, FileText, ArrowRight,
-  CheckCircle, Zap, Shield, Search, Users, PenTool,
-  Sun, Moon, Clock,
+  Upload, Globe, FileText, ArrowRight, ChevronRight,
+  CheckCircle, Zap, Shield, Briefcase, Users, Send,
+  Star, Clock, BarChart3, Sun, Moon,
 } from 'lucide-react';
 import useStore from '@/store/useStore';
 
@@ -30,7 +30,7 @@ function Navbar({ onSignIn }) {
   }, []);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 px-5 py-3.5 flex items-center justify-between lg:px-8 transition-all ${scrolled ? 'shadow-sm' : ''}`}
+    <nav className={`fixed top-0 left-0 right-0 z-50 px-5 py-3.5 flex items-center justify-between lg:px-8 transition-all ${scrolled ? 'lp-nav-scrolled shadow-sm' : ''}`}
       style={{ background: scrolled ? (darkMode ? 'rgba(15,15,20,0.92)' : 'rgba(255,255,255,0.92)') : 'transparent', backdropFilter: scrolled ? 'blur(20px)' : 'none' }}>
       <div className={`flex items-center gap-2.5 font-bold text-base tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
         <div className="w-[26px] h-[26px] rounded-[7px] bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-[13px] font-extrabold text-white">
@@ -57,7 +57,90 @@ function Navbar({ onSignIn }) {
   );
 }
 
-// ── Hero ─────────────────────────────────────────────────────
+// ── Outcome Cards (replaces dashboard screenshot) ────────────
+const outcomeJobs = [
+  {
+    role: 'Product Manager',
+    co: 'Stripe',
+    location: 'SF · Remote',
+    fit: 'Great fit',
+    fitColor: 'text-emerald-600 bg-emerald-50',
+    fitColorDark: 'text-emerald-400 bg-emerald-400/10',
+    tags: ['Application ready', 'Referral found'],
+  },
+  {
+    role: 'Growth Lead',
+    co: 'Razorpay',
+    location: 'Bangalore',
+    fit: 'Great fit',
+    fitColor: 'text-emerald-600 bg-emerald-50',
+    fitColorDark: 'text-emerald-400 bg-emerald-400/10',
+    tags: ['Application ready', '2 referral paths'],
+  },
+  {
+    role: 'Sr. Frontend Engineer',
+    co: 'Vercel',
+    location: 'Remote · $170–210K',
+    fit: 'Good fit',
+    fitColor: 'text-amber-600 bg-amber-50',
+    fitColorDark: 'text-amber-400 bg-amber-400/10',
+    tags: ['Drafting application…'],
+  },
+];
+
+function OutcomeVisual() {
+  const darkMode = useStore((s) => s.darkMode);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
+      className="w-full max-w-md mx-auto xl:mx-0"
+    >
+      <div className={`rounded-2xl overflow-hidden border ${darkMode ? 'border-white/10 shadow-2xl' : 'border-gray-200 shadow-xl shadow-gray-200/50'}`}
+        style={{ background: darkMode ? 'hsl(240 4% 10%)' : '#fff' }}>
+        {/* Header */}
+        <div className={`flex items-center justify-between px-4 py-2.5 border-b ${darkMode ? 'border-white/[0.08]' : 'border-gray-100'}`}
+          style={{ background: darkMode ? 'hsl(240 5% 7%)' : '#fafafa' }}>
+          <span className={`text-[11px] font-semibold tracking-wide uppercase ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            Your matched jobs
+          </span>
+          <span className="text-[10px] font-medium text-emerald-600 flex items-center gap-1.5">
+            <span className="w-[5px] h-[5px] rounded-full bg-emerald-500 animate-blink" />
+            12 new today
+          </span>
+        </div>
+
+        <div className="p-3 space-y-2">
+          {outcomeJobs.map((j) => (
+            <div key={j.role} className={`rounded-xl p-3.5 border ${darkMode ? 'border-white/[0.08]' : 'border-gray-100'}`}
+              style={{ background: darkMode ? 'hsl(240 5% 7%)' : '#fafafa' }}>
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <div className={`text-sm font-semibold tracking-tight leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>{j.role}</div>
+                  <div className={`text-[11px] mt-0.5 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{j.co} · {j.location}</div>
+                </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ml-2.5 shrink-0 ${darkMode ? j.fitColorDark : j.fitColor}`}>
+                  {j.fit}
+                </span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {j.tags.map((t) => (
+                  <span key={t} className={`text-[10.5px] px-2 py-0.5 rounded-[5px] flex items-center gap-1 ${darkMode ? 'bg-white/[0.04] text-slate-400' : 'bg-gray-100 text-gray-600'}`}>
+                    {t.startsWith('Drafting') ? <Clock className="w-2.5 h-2.5 text-amber-500" /> : <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />}
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Hero with Import UI ──────────────────────────────────────
 function HeroSection({ onFileSelected, onWebsiteSubmit }) {
   const darkMode = useStore((s) => s.darkMode);
   const fileInputRef = useRef(null);
@@ -90,110 +173,124 @@ function HeroSection({ onFileSelected, onWebsiteSubmit }) {
   };
 
   return (
-    <section className="pt-28 lg:pt-36 pb-12 lg:pb-16 px-5 lg:px-8 max-w-3xl mx-auto text-center">
-      {/* Headline */}
-      <motion.h1
-        {...fadeUp(0)}
-        className={`text-[32px] sm:text-[40px] lg:text-[52px] font-extrabold tracking-[-0.04em] leading-[1.1] mb-5 ${darkMode ? 'text-white' : 'text-gray-900'}`}
-      >
-        Your job search,{' '}
-        <span className="text-emerald-600">on autopilot.</span>
-      </motion.h1>
-
-      <motion.p
-        {...fadeUp(0.06)}
-        className={`text-base lg:text-lg leading-relaxed max-w-xl mx-auto mb-10 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}
-      >
-        CareerPilot scans 20+ job sites every 4 hours, finds the right people to reach out to, and drafts your applications. You just review and apply.
-      </motion.p>
-
-      {/* ── Import UI ── */}
-      <motion.div {...fadeUp(0.12)} className="max-w-md mx-auto">
-        {/* Upload */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`w-full rounded-2xl p-5 flex items-center gap-4 transition-all active:scale-[0.98] group text-left ${dragOver ? 'scale-[1.01]' : ''} ${darkMode ? 'hover:bg-white/[0.04]' : 'hover:bg-emerald-50/50'}`}
-          style={{
-            background: darkMode
-              ? (dragOver ? 'rgba(16,185,129,0.05)' : 'hsl(240 5% 7%)')
-              : (dragOver ? 'rgba(16,185,129,0.04)' : '#fafafa'),
-            border: `2px dashed ${dragOver
-              ? 'rgba(16,185,129,0.6)'
-              : (darkMode ? 'rgba(255,255,255,0.1)' : '#d1d5db')}`,
-          }}
+    <section className="relative pt-28 pb-10 xl:pt-0 xl:pb-0 px-5 xl:px-0">
+      <div className="relative">
+        {/* Tagline */}
+        <motion.div
+          {...fadeUp(0)}
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium mb-5 ${darkMode ? 'bg-emerald-400/10 border border-emerald-400/20 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}
         >
-          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${darkMode ? 'bg-emerald-400/10' : 'bg-emerald-50'}`}>
-            <Upload className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload resume or portfolio</p>
-            <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-500' : 'text-gray-500'}`}>PDF or Word · Drag & drop or click</p>
-          </div>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-        />
+          <Zap className="w-3 h-3" />
+          20+ job sites scanned every 4 hours
+        </motion.div>
 
-        {/* Website URL */}
-        <div className="flex gap-2 mt-3">
-          <div className="relative flex-1">
-            <Globe className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`} />
-            <input
-              type="url"
-              placeholder="Or paste portfolio / website URL"
-              value={websiteUrl}
-              onChange={(e) => setWebsiteUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleWebsite()}
-              className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm outline-none transition-all ${darkMode ? 'bg-[hsl(240,5%,8%)] border border-white/[0.08] text-white placeholder:text-slate-600 focus:ring-1 focus:ring-emerald-400/40' : 'bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30'}`}
-            />
-          </div>
-          <button
-            onClick={handleWebsite}
-            disabled={!websiteUrl.trim()}
-            className="px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40 hover:bg-emerald-700 transition-colors"
-          >
-            Go
-          </button>
-        </div>
+        {/* Headline — outcome focused */}
+        <motion.h1
+          {...fadeUp(0.06)}
+          className={`text-[28px] sm:text-[34px] xl:text-[44px] font-extrabold tracking-[-0.04em] leading-[1.12] mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}
+        >
+          Matched jobs, right people,{' '}
+          <br className="hidden sm:block" />
+          drafted applications.{' '}
+          <br />
+          <span className="text-emerald-600">Every morning.</span>
+        </motion.h1>
 
-        {/* Tertiary links */}
-        <div className={`flex items-center justify-center gap-4 mt-3 text-xs ${darkMode ? 'text-slate-500' : 'text-gray-500'}`}>
+        <motion.p
+          {...fadeUp(0.12)}
+          className={`text-[15px] leading-relaxed max-w-md mb-7 ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}
+        >
+          Import your profile once. CareerPilot scans job sites, finds the right people at each company, and drafts your applications. You just review and apply.
+        </motion.p>
+
+        {/* ── Import UI — right in the hero ── */}
+        <motion.div {...fadeUp(0.18)} className="max-w-md">
+          {/* Primary: Upload */}
           <button
-            onClick={() => {
-              sessionStorage.setItem('careerpilot_import', JSON.stringify({ method: 'paste', showPaste: true }));
-              window.location.href = '/auth/signup?method=paste';
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`w-full rounded-2xl p-5 flex items-center gap-4 transition-all active:scale-[0.98] group text-left ${dragOver ? 'scale-[1.01]' : ''} ${darkMode ? 'hover:bg-white/[0.04]' : 'hover:bg-emerald-50/50'}`}
+            style={{
+              background: darkMode
+                ? (dragOver ? 'rgba(16,185,129,0.05)' : 'hsl(240 5% 7%)')
+                : (dragOver ? 'rgba(16,185,129,0.04)' : '#fafafa'),
+              border: `2px dashed ${dragOver
+                ? 'rgba(16,185,129,0.6)'
+                : (darkMode ? 'rgba(255,255,255,0.1)' : '#d1d5db')}`,
             }}
-            className={`flex items-center gap-1 hover:underline ${darkMode ? 'hover:text-slate-300' : 'hover:text-gray-700'}`}
           >
-            <FileText className="w-3 h-3" /> Paste text
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${darkMode ? 'bg-emerald-400/10' : 'bg-emerald-50'}`}>
+              <Upload className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload resume or portfolio</p>
+              <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-500' : 'text-gray-500'}`}>PDF or Word · Drag & drop or click</p>
+            </div>
           </button>
-          <span className={darkMode ? 'text-slate-700' : 'text-gray-300'}>|</span>
-          <button
-            onClick={() => window.location.href = '/auth/signup?method=manual'}
-            className={`hover:underline ${darkMode ? 'hover:text-slate-300' : 'hover:text-gray-700'}`}
-          >
-            No resume? Fill in details
-          </button>
-        </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
 
-        {error && (
-          <p className="text-red-500 text-xs mt-2 flex items-center justify-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-red-500" /> {error}
+          {/* Secondary: Website URL */}
+          <div className="flex gap-2 mt-3">
+            <div className="relative flex-1">
+              <Globe className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+              <input
+                type="url"
+                placeholder="Or paste portfolio / website URL"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleWebsite()}
+                className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm outline-none transition-all ${darkMode ? 'bg-[hsl(240,5%,8%)] border border-white/[0.08] text-white placeholder:text-slate-600 focus:ring-1 focus:ring-emerald-400/40' : 'bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30'}`}
+              />
+            </div>
+            <button
+              onClick={handleWebsite}
+              disabled={!websiteUrl.trim()}
+              className="px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40 hover:bg-emerald-700 transition-colors"
+            >
+              Go
+            </button>
+          </div>
+
+          {/* Tertiary links */}
+          <div className={`flex items-center gap-4 mt-3 text-xs ${darkMode ? 'text-slate-500' : 'text-gray-500'}`}>
+            <button
+              onClick={() => {
+                sessionStorage.setItem('careerpilot_import', JSON.stringify({ method: 'paste', showPaste: true }));
+                window.location.href = '/auth/signup?method=paste';
+              }}
+              className={`flex items-center gap-1 hover:underline ${darkMode ? 'hover:text-slate-300' : 'hover:text-gray-700'}`}
+            >
+              <FileText className="w-3 h-3" /> Paste text
+            </button>
+            <span className={darkMode ? 'text-slate-700' : 'text-gray-300'}>|</span>
+            <button
+              onClick={() => window.location.href = '/auth/signup?method=manual'}
+              className={`hover:underline ${darkMode ? 'hover:text-slate-300' : 'hover:text-gray-700'}`}
+            >
+              No resume? Fill in details
+            </button>
+          </div>
+
+          {error && (
+            <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+              <span className="w-1 h-1 rounded-full bg-red-500" /> {error}
+            </p>
+          )}
+
+          <p className={`text-[11px] mt-3 flex items-center gap-1.5 ${darkMode ? 'text-slate-600' : 'text-gray-400'}`}>
+            <Shield className="w-3 h-3" />
+            Encrypted. Never shared. Free for 14 days.
           </p>
-        )}
-
-        <p className={`text-[11px] mt-3 flex items-center justify-center gap-1.5 ${darkMode ? 'text-slate-600' : 'text-gray-400'}`}>
-          <Shield className="w-3 h-3" />
-          Free for 14 days · No credit card
-        </p>
-      </motion.div>
+        </motion.div>
+      </div>
     </section>
   );
 }
@@ -208,8 +305,8 @@ const portals = [
 function TrustStrip() {
   const darkMode = useStore((s) => s.darkMode);
   return (
-    <section className={`py-5 border-y overflow-hidden ${darkMode ? 'border-white/[0.06]' : 'border-gray-100'}`}>
-      <p className={`text-center text-[10px] font-medium uppercase tracking-widest mb-3 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+    <section className={`py-6 border-y overflow-hidden ${darkMode ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+      <p className={`text-center text-[11px] font-medium uppercase tracking-widest mb-4 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
         Scanning jobs from
       </p>
       <div className="flex items-center gap-3">
@@ -217,10 +314,10 @@ function TrustStrip() {
           {[...portals, ...portals].map((name, i) => (
             <span
               key={`${name}-${i}`}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg border whitespace-nowrap ${darkMode ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-100 bg-white'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border whitespace-nowrap ${darkMode ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-100 bg-white'}`}
             >
               <Globe className={`w-3 h-3 shrink-0 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
-              <span className={`text-[12px] font-medium ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}>{name}</span>
+              <span className={`text-[13px] font-medium ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}>{name}</span>
             </span>
           ))}
         </div>
@@ -229,54 +326,69 @@ function TrustStrip() {
   );
 }
 
-// ── What CareerPilot does — 3 clean cards ────────────────────
-const features = [
+// ── What You Get — 3 outcome blocks ──────────────────────────
+const outcomes = [
   {
-    icon: Search,
-    title: 'Finds the right jobs',
-    desc: 'Scans 20+ job sites every 4 hours. Only roles that match your profile show up in your feed.',
+    icon: Briefcase,
+    title: 'Jobs found for you',
+    desc: '20+ sites scanned every 4 hours. Only roles that match your profile show up.',
+    stat: '20+',
+    statLabel: 'job sites',
   },
   {
     icon: Users,
-    title: 'Connects you to the right people',
-    desc: 'Identifies hiring managers and recruiters for each job. Drafts personalized outreach messages.',
+    title: 'Right people at every company',
+    desc: 'Hiring managers and recruiters matched to each job. Ready to message via LinkedIn or email.',
+    stat: '1-click',
+    statLabel: 'outreach',
   },
   {
-    icon: PenTool,
-    title: 'Drafts your applications',
-    desc: 'Cover letters, bios, and screening answers — written from your resume. Review, tweak, submit.',
+    icon: FileText,
+    title: 'Applications drafted from your resume',
+    desc: 'Cover letters, bios, and screening answers — pre-written. You review, tweak, submit.',
+    stat: '< 2 min',
+    statLabel: 'per apply',
   },
 ];
 
-function FeaturesSection() {
+function OutcomesSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-60px' });
   const darkMode = useStore((s) => s.darkMode);
 
   return (
-    <section className="py-16 lg:py-20 px-5 lg:px-8 max-w-5xl mx-auto" ref={ref}>
-      <motion.h2
+    <section className="py-16 lg:py-20 px-5 lg:px-8 max-w-6xl mx-auto" ref={ref}>
+      <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={inView ? { opacity: 1, y: 0 } : {}}
-        className={`text-center text-[22px] lg:text-[28px] font-bold tracking-[-0.03em] mb-10 ${darkMode ? 'text-white' : 'text-gray-900'}`}
+        className="text-center mb-10"
       >
-        What CareerPilot does for you
-      </motion.h2>
+        <h2 className={`text-[24px] lg:text-[32px] font-bold tracking-[-0.03em] leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          You open your phone to this. Every day.
+        </h2>
+        <p className={`text-sm mt-2 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+          No searching. No scrolling job sites. No cold-emailing strangers.
+        </p>
+      </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {features.map((f, i) => (
+        {outcomes.map((o, i) => (
           <motion.div
-            key={f.title}
+            key={o.title}
             initial={{ opacity: 0, y: 18 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.4, delay: i * 0.1 }}
-            className={`rounded-2xl p-6 border ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)]' : 'border-gray-100 bg-white shadow-sm'}`}
+            className={`rounded-2xl p-6 border relative overflow-hidden ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)]' : 'border-gray-100 bg-white shadow-sm'}`}
           >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${darkMode ? 'bg-emerald-400/10' : 'bg-emerald-50'}`}>
-              <f.icon className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+              <o.icon className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
             </div>
-            <h3 className={`text-[15px] font-bold tracking-tight mb-1.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{f.title}</h3>
-            <p className={`text-[13px] leading-relaxed ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}>{f.desc}</p>
+            <h3 className={`text-[15px] font-bold tracking-tight mb-1.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{o.title}</h3>
+            <p className={`text-[13px] leading-relaxed mb-4 ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}>{o.desc}</p>
+            <div className={`pt-3 border-t ${darkMode ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+              <span className={`text-lg font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{o.stat}</span>
+              <span className={`text-xs ml-1.5 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>{o.statLabel}</span>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -284,64 +396,196 @@ function FeaturesSection() {
   );
 }
 
-// ── How It Works — 3 steps, compact ─────────────────────────
+// ── Referrals — Unified Section ──────────────────────────────
+function ReferralsSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  const darkMode = useStore((s) => s.darkMode);
+
+  return (
+    <section className="py-16 lg:py-20 px-5 lg:px-8 max-w-6xl mx-auto" ref={ref}>
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={inView ? { opacity: 1, y: 0 } : {}}
+        className="mb-8"
+      >
+        <p className={`text-[11px] font-semibold tracking-widest uppercase mb-2 ${darkMode ? 'text-violet-400' : 'text-violet-600'}`}>
+          Your unfair advantage
+        </p>
+        <h2 className={`text-[24px] lg:text-[32px] font-bold tracking-[-0.03em] leading-tight max-w-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          For every job: the right person to reach out to. For your career: a curated recruiter network.
+        </h2>
+        <p className={`text-sm mt-2 max-w-lg ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+          You don&apos;t have to search LinkedIn to find people. CareerPilot identifies hiring managers per job and curates recruiters matched to your profile.
+        </p>
+      </motion.div>
+
+      {/* Visual: Job → Person connections + Message preview */}
+      <div className="grid gap-5 lg:grid-cols-5">
+        {/* Left: Job → Person connections (3 cols) */}
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className={`lg:col-span-3 rounded-2xl border p-5 ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)]' : 'border-gray-100 bg-white shadow-sm'}`}
+        >
+          <h3 className={`text-[14px] font-bold tracking-tight mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            Hiring contacts per matched job
+          </h3>
+          <div className="space-y-3">
+            {[
+              { job: 'Product Manager', co: 'Stripe · SF', person: 'Sarah Chen', title: 'Eng Manager', initials: 'SC', color: 'bg-violet-500', status: 'Likely to respond', statusColor: 'text-emerald-600' },
+              { job: 'Growth Lead', co: 'Razorpay · Bangalore', person: 'Meera K.', title: 'Product Lead', initials: 'MK', color: 'bg-blue-500', status: 'Active this week', statusColor: 'text-emerald-600' },
+              { job: 'Sr. Engineer', co: 'Vercel · Remote', person: 'Alex T.', title: 'VP Engineering', initials: 'AT', color: 'bg-emerald-500', status: 'Likely to respond', statusColor: 'text-emerald-600' },
+            ].map((item) => (
+              <div key={item.job} className="flex items-center gap-0">
+                <div className={`flex-1 rounded-xl border p-3 ${darkMode ? 'border-white/[0.08] bg-[hsl(240,5%,7%)]' : 'border-gray-100 bg-gray-50'}`}>
+                  <div className={`text-[12px] font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{item.job}</div>
+                  <div className={`text-[10px] ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>{item.co}</div>
+                </div>
+                <div className="w-6 flex items-center justify-center shrink-0">
+                  <div className={`w-full border-t border-dashed ${darkMode ? 'border-violet-400/40' : 'border-violet-300'}`} />
+                </div>
+                <div className={`flex-1 rounded-xl border p-3 ${darkMode ? 'border-violet-400/20 bg-violet-400/[0.04]' : 'border-violet-200 bg-violet-50/50'}`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <div className={`w-6 h-6 rounded-full ${item.color} flex items-center justify-center text-[8px] font-bold text-white`}>{item.initials}</div>
+                    <div>
+                      <div className={`text-[12px] font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{item.person}</div>
+                      <div className={`text-[10px] ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{item.title}</div>
+                    </div>
+                  </div>
+                  <span className={`text-[9px] flex items-center gap-1 mt-1 ${item.statusColor}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    {item.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Right: Message preview (2 cols) */}
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className={`lg:col-span-2 rounded-2xl border p-5 ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)]' : 'border-gray-100 bg-white shadow-sm'}`}
+        >
+          <h3 className={`text-[14px] font-bold tracking-tight mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            Ready-to-send message
+          </h3>
+
+          <div className={`rounded-xl border overflow-hidden ${darkMode ? 'border-white/[0.08]' : 'border-gray-200'}`}>
+            <div className={`flex items-center gap-2.5 p-3 border-b ${darkMode ? 'border-white/[0.06] bg-[hsl(240,5%,7%)]' : 'border-gray-100 bg-gray-50'}`}>
+              <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-[9px] font-bold text-white">RP</div>
+              <div className="flex-1">
+                <div className={`text-[12px] font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ravi Patel</div>
+                <div className={`text-[10px] ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>Sr. Recruiter · Razorpay</div>
+              </div>
+            </div>
+            <div className="p-3">
+              <p className={`text-[11px] leading-relaxed italic ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                &ldquo;Hi Ravi, I saw Razorpay is scaling the growth team. 4 years driving product-led growth at Series B–D. Would love to chat about the Growth Lead role...&rdquo;
+              </p>
+            </div>
+            <div className={`flex border-t ${darkMode ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+              <button className={`flex-1 py-2.5 text-[11px] font-semibold flex items-center justify-center gap-1.5 border-r transition-colors ${darkMode ? 'text-blue-400 border-white/[0.06] hover:bg-blue-400/5' : 'text-blue-600 border-gray-100 hover:bg-blue-50'}`}>
+                <span className="text-[9px] font-bold">in</span> LinkedIn
+              </button>
+              <button className={`flex-1 py-2.5 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors ${darkMode ? 'text-emerald-400 hover:bg-emerald-400/5' : 'text-emerald-600 hover:bg-emerald-50'}`}>
+                <Send className="w-3 h-3" /> Email
+              </button>
+            </div>
+          </div>
+
+          <p className={`text-[10px] text-center mt-3 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+            Personalized per recruiter · Your tone, your style
+          </p>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ── How It Works ─────────────────────────────────────────────
+const steps = [
+  { num: '1', title: 'Import your profile', desc: 'Upload resume, paste a portfolio URL, or fill in details. Takes 2 minutes.', icon: Upload },
+  { num: '2', title: 'CareerPilot gets to work', desc: 'Starts scanning 20+ job sites. Matches roles, finds contacts, drafts applications.', icon: Zap },
+  { num: '3', title: 'Review and apply', desc: 'Open your feed. Check matches, tweak drafts, reach out to the right people. Apply in one tap.', icon: CheckCircle },
+];
+
 function HowItWorksSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
   const darkMode = useStore((s) => s.darkMode);
 
-  const steps = [
-    { num: '1', title: 'Import your profile', desc: '2 minutes. Upload, paste, or type.', icon: Upload },
-    { num: '2', title: 'It starts immediately', desc: 'Scans jobs, finds contacts, drafts applications.', icon: Zap },
-    { num: '3', title: 'You review and apply', desc: 'Everything is ready. Under 2 min per application.', icon: CheckCircle },
-  ];
-
   return (
-    <section id="how" className={`py-16 lg:py-20 px-5 lg:px-8 ${darkMode ? 'bg-[hsl(240,4%,6%)]' : 'bg-gray-50'}`} ref={ref}>
-      <div className="max-w-5xl mx-auto">
-        <motion.h2
-          initial={{ opacity: 0, y: 14 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          className={`text-center text-[22px] lg:text-[28px] font-bold tracking-[-0.03em] mb-10 ${darkMode ? 'text-white' : 'text-gray-900'}`}
-        >
-          Setup takes 2 minutes. Then it runs.
-        </motion.h2>
+    <section id="how" className="py-16 lg:py-20 px-5 lg:px-8 max-w-6xl mx-auto" ref={ref}>
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={inView ? { opacity: 1, y: 0 } : {}}
+        className="text-center mb-10"
+      >
+        <h2 className={`text-[24px] lg:text-[32px] font-bold tracking-[-0.03em] leading-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          Two minutes of setup. Then it runs.
+        </h2>
+      </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {steps.map((s, i) => (
-            <motion.div
-              key={s.num}
-              initial={{ opacity: 0, y: 18 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
-              className="text-center"
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {steps.map((s, i) => (
+          <motion.div
+            key={s.num}
+            initial={{ opacity: 0, y: 18 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.4, delay: i * 0.1 }}
+            className="text-center"
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${darkMode ? 'bg-emerald-400/10 border border-emerald-400/20' : 'bg-emerald-50 border border-emerald-100'}`}>
+              <s.icon className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+            </div>
+            <span className={`text-[11px] font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Step {s.num}</span>
+            <h3 className={`text-[15px] font-bold tracking-tight mt-1 mb-1.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.title}</h3>
+            <p className={`text-[13px] leading-relaxed ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{s.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Always Running ───────────────────────────────────────────
+const runningFeatures = [
+  { label: 'Fresh matches every morning', icon: Briefcase },
+  { label: 'New contacts every week', icon: Users },
+  { label: 'Applications pre-drafted', icon: FileText },
+  { label: 'Outreach timed optimally', icon: Clock },
+];
+
+function AlwaysRunningSection() {
+  const darkMode = useStore((s) => s.darkMode);
+  return (
+    <section className="py-16 lg:py-20 px-5 lg:px-8 max-w-6xl mx-auto">
+      <div className={`rounded-2xl p-8 lg:p-12 text-center relative overflow-hidden border ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)]' : 'border-gray-100 bg-gradient-to-b from-emerald-50/50 to-white'}`}>
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-5 ${darkMode ? 'bg-emerald-400/10' : 'bg-emerald-100'}`}>
+          <Zap className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+        </div>
+        <h3 className={`text-[22px] lg:text-[28px] font-bold tracking-[-0.03em] mb-2.5 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          Always running in the background
+        </h3>
+        <p className={`text-sm leading-relaxed mb-7 max-w-md mx-auto ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+          While you sleep, interview, or take a break — CareerPilot keeps scanning, matching, and drafting. Open your phone to a fresh feed.
+        </p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          {runningFeatures.map((c) => (
+            <span
+              key={c.label}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-medium border ${darkMode ? 'border-white/[0.08] bg-[hsl(240,5%,7%)] text-slate-300' : 'border-gray-200 bg-white text-gray-700 shadow-sm'}`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3 text-sm font-bold ${darkMode ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                {s.num}
-              </div>
-              <h3 className={`text-[15px] font-bold tracking-tight mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{s.title}</h3>
-              <p className={`text-[13px] leading-relaxed ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{s.desc}</p>
-            </motion.div>
+              <c.icon className={`w-3.5 h-3.5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+              {c.label}
+            </span>
           ))}
         </div>
-
-        {/* Always running callout */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.4 }}
-          className={`mt-12 rounded-xl p-5 flex items-center gap-4 max-w-lg mx-auto ${darkMode ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-200 shadow-sm'}`}
-        >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${darkMode ? 'bg-emerald-400/10' : 'bg-emerald-50'}`}>
-            <Clock className={`w-5 h-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
-          </div>
-          <div>
-            <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Works even when you don&apos;t</p>
-            <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-              Runs every 4 hours — while you sleep, interview, or take a break. New matches every morning.
-            </p>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
@@ -351,12 +595,12 @@ function HowItWorksSection() {
 function FinalCTA({ onCTA }) {
   const darkMode = useStore((s) => s.darkMode);
   return (
-    <section id="cta" className="py-16 lg:py-20 px-5 lg:px-8 text-center max-w-5xl mx-auto">
-      <h2 className={`text-[24px] lg:text-[32px] font-extrabold tracking-[-0.04em] leading-[1.1] mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-        Less scrolling. More interviews.
+    <section id="cta" className="py-16 lg:py-20 px-5 lg:px-8 text-center max-w-6xl mx-auto">
+      <h2 className={`text-[26px] lg:text-[36px] font-extrabold tracking-[-0.04em] leading-[1.1] mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+        Your next role is closer<br />than you think.
       </h2>
       <p className={`text-sm mb-6 max-w-md mx-auto ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-        Import your profile once. CareerPilot does the searching, networking, and writing — you just show up prepared.
+        Stop scrolling job sites. Let CareerPilot find the right opportunities, the right people, and draft your applications.
       </p>
       <button
         onClick={onCTA}
@@ -443,12 +687,15 @@ export default function LandingPage() {
   const goSignup = () => router.push('/auth/signup');
   const goSignIn = () => router.push('/auth/login');
 
+  // Handle file import from hero → store in sessionStorage → go to signup
   const handleFileSelected = (file) => {
+    // Store file info — actual file can't go in sessionStorage, user re-uploads on signup page
     sessionStorage.setItem('careerpilot_import', JSON.stringify({
       method: 'pdf',
       fileName: file.name,
       needsReupload: false,
     }));
+    // We need to pass the file — store it in a module-level ref and navigate
     window.__careerpilot_file = file;
     router.push('/auth/signup?method=pdf');
   };
@@ -480,19 +727,45 @@ export default function LandingPage() {
       style={{ fontFamily: "'Outfit', -apple-system, sans-serif" }}>
       <Navbar onSignIn={goSignIn} />
 
-      <HeroSection onFileSelected={handleFileSelected} onWebsiteSubmit={handleWebsiteSubmit} />
+      {/* Hero + Outcome visual: side-by-side on desktop */}
+      <div className="max-w-6xl mx-auto xl:grid xl:grid-cols-2 xl:gap-12 xl:items-center xl:px-8 xl:pt-32">
+        <HeroSection onFileSelected={handleFileSelected} onWebsiteSubmit={handleWebsiteSubmit} />
+        <div className="px-5 mt-6 xl:mt-0 xl:px-0">
+          <OutcomeVisual />
+        </div>
+      </div>
 
-      <TrustStrip />
+      {/* Trust strip — job sites we scan */}
+      <div className="mt-10">
+        <TrustStrip />
+      </div>
 
-      <FeaturesSection />
+      {/* What you get */}
+      <OutcomesSection />
 
+      {/* Divider */}
+      <div className={`h-px mx-5 lg:max-w-6xl lg:mx-auto ${darkMode ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
+
+      {/* Referrals */}
+      <ReferralsSection />
+
+      <div className={`h-px mx-5 lg:max-w-6xl lg:mx-auto ${darkMode ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
+
+      {/* How it works */}
       <HowItWorksSection />
 
+      <div className={`h-px mx-5 lg:max-w-6xl lg:mx-auto ${darkMode ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
+
+      {/* Always running */}
+      <AlwaysRunningSection />
+
+      {/* Final CTA */}
       <FinalCTA onCTA={goSignup} />
 
       <footer className={`border-t py-7 px-5 text-center ${darkMode ? 'border-white/[0.06]' : 'border-gray-100'}`}>
         <p className={`text-[11px] leading-snug ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-          © 2026 CareerPilot · Built for people who&apos;d rather interview than job hunt.
+          © 2026 CareerPilot<br />
+          Built for people who&apos;d rather interview than job hunt.
         </p>
       </footer>
 
