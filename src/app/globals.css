@@ -53,6 +53,17 @@
 .animate-blink { animation: blink 2s ease infinite; }
 .animate-chip-float { animation: chip-float 3.5s ease-in-out infinite; }
 
+@keyframes portal-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-portal-scroll {
+  animation: portal-scroll 25s linear infinite;
+}
+.animate-portal-scroll:hover {
+  animation-play-state: paused;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;

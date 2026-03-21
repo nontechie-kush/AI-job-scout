@@ -8,8 +8,8 @@
  * Step 3: Pilot scanning narration → redirect to dashboard
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Globe, FileText, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import Link from 'next/link';
@@ -664,17 +664,57 @@ function StepScanning({ onFinish, parsedProfile, preferences }) {
 
 // ── Main Onboarding Page ───────────────────────────────────────
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingInner />
+    </Suspense>
+  );
+}
+
+function OnboardingInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
-  const [step, setStep] = useState(1);
+
+  // If ?skip=1, profile was already parsed during signup — start at step 2
+  const skipImport = searchParams.get('skip') === '1';
+  const [step, setStep] = useState(skipImport ? 2 : 1);
   const [parsedProfile, setParsedProfile] = useState(null);
   const [preferences, setPreferences] = useState(null);
   const [ready, setReady] = useState(false);
 
+  const totalSteps = skipImport ? 2 : TOTAL_STEPS;
+  const displayStep = skipImport ? step - 1 : step; // Show 1/2 or 2/2 when skipping
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) router.replace('/auth/login');
-      else setReady(true);
+      if (!user) { router.replace('/auth/login'); return; }
+      setReady(true);
+
+      // If skipping import, load parsed profile from DB for job_search_titles
+      if (skipImport) {
+        supabase.from('profiles').select('parsed_json').eq('user_id', user.id).maybeSingle()
+          .then(({ data }) => {
+            if (data?.parsed_json) setParsedProfile(data.parsed_json);
+          });
+
+        // Check for manual data from signup
+        try {
+          const manualRaw = sessionStorage.getItem('careerpilot_manual');
+          if (manualRaw) {
+            const manual = JSON.parse(manualRaw);
+            // Build a minimal parsed profile from manual data
+            setParsedProfile({
+              name: manual.name,
+              title: manual.title,
+              years_exp: parseInt(manual.years_exp) || null,
+              skills: manual.skills ? manual.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+              job_search_titles: { suitable: [manual.title], maybe: [], excluded: [] },
+            });
+            sessionStorage.removeItem('careerpilot_manual');
+          }
+        } catch {}
+      }
     });
   }, []);
 
@@ -700,7 +740,7 @@ export default function OnboardingPage() {
           </div>
           CareerPilot
         </Link>
-        <span className="text-slate-500 text-sm font-mono">{step} / {TOTAL_STEPS}</span>
+        <span className="text-slate-500 text-sm font-mono">{displayStep} / {totalSteps}</span>
       </header>
 
       {/* ── Progress bar ── */}
@@ -708,7 +748,7 @@ export default function OnboardingPage() {
         <motion.div
           className="h-full bg-green-400"
           initial={false}
-          animate={{ width: `${(step / TOTAL_STEPS) * 100}%` }}
+          animate={{ width: `${(displayStep / totalSteps) * 100}%` }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
