@@ -24,6 +24,7 @@ import {
   Chrome, CheckCircle2,
 } from 'lucide-react';
 import OutreachFlow from '@/components/OutreachFlow';
+import CascadeConsentSheet from '@/components/CascadeConsentSheet';
 import { createClient } from '@/lib/supabase/client';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID || ''; // set after pu
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  'bg-violet-600', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600',
+  'bg-emerald-600', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600',
   'bg-rose-600', 'bg-indigo-600', 'bg-cyan-600', 'bg-pink-600',
 ];
 function avatarColor(str = '') {
@@ -81,49 +82,88 @@ function isExtensionInstalled() {
   return typeof chrome !== 'undefined' && chrome.runtime && !!EXTENSION_ID;
 }
 
+function isMobileBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+const CHROME_STORE_URL = `https://chromewebstore.google.com/detail/${EXTENSION_ID || 'kphfbkfdffodecfioadmbdogmmkgdbaj'}`;
+
 // ── Automation status helpers ─────────────────────────────────────────────────
 
 const STATUS_LABEL = {
-  pending:          'Queued',
-  processing:       'Sending…',
-  sent:             'Sent',
-  dm_sent:          'DM sent',
-  limit_hit:        'Limit hit',
-  failed:           'Failed',
-  interrupted:      'Interrupted',
-  cancelled:        'Cancelled',
-  already_pending:  'Already pending',
-  profile_not_found:'Not found',
-  restricted:       'Restricted',
-  account_restricted: 'Account restricted',
+  pending:              'Queued',
+  processing:           'Sending…',
+  sent:                 'Sent',
+  dm_sent:              'DM sent',
+  dm_approved:          'DM approved',
+  dm_pending_review:    'DM pending',
+  connect_limit_hit:    'Connect limit',
+  dm_limit_hit:         'DM limit',
+  email_pending_review: 'Email pending',
+  email_ready:          'Email ready',
+  email_sent:           'Email sent',
+  deferred:             'Parked',
+  limit_hit:            'Limit hit',
+  failed:               'Failed',
+  interrupted:          'Interrupted',
+  cancelled:            'Cancelled',
+  already_pending:      'Already pending',
+  profile_not_found:    'Not found',
+  restricted:           'Restricted',
+  account_restricted:   'Account restricted',
 };
 const STATUS_COLOR = {
-  pending:          'text-violet-600 dark:text-violet-400',
-  processing:       'text-amber-600 dark:text-amber-400',
-  sent:             'text-emerald-600 dark:text-emerald-400',
-  dm_sent:          'text-emerald-600 dark:text-emerald-400',
-  limit_hit:        'text-red-500',
-  failed:           'text-red-500',
-  interrupted:      'text-orange-500',
-  cancelled:        'text-gray-400',
-  already_pending:  'text-blue-500',
-  profile_not_found:'text-red-500',
-  restricted:       'text-orange-500',
-  account_restricted:'text-red-600',
+  pending:              'text-emerald-600 dark:text-emerald-400',
+  processing:           'text-amber-600 dark:text-amber-400',
+  sent:                 'text-emerald-600 dark:text-emerald-400',
+  dm_sent:              'text-emerald-600 dark:text-emerald-400',
+  dm_approved:          'text-blue-500',
+  dm_pending_review:    'text-amber-500',
+  connect_limit_hit:    'text-amber-600 dark:text-amber-400',
+  dm_limit_hit:         'text-orange-500',
+  email_pending_review: 'text-amber-500',
+  email_ready:          'text-blue-500',
+  email_sent:           'text-emerald-600 dark:text-emerald-400',
+  deferred:             'text-gray-400',
+  limit_hit:            'text-red-500',
+  failed:               'text-red-500',
+  interrupted:          'text-orange-500',
+  cancelled:            'text-gray-400',
+  already_pending:      'text-blue-500',
+  profile_not_found:    'text-red-500',
+  restricted:           'text-orange-500',
+  account_restricted:   'text-red-600',
 };
 
 // ── RecruiterCard ─────────────────────────────────────────────────────────────
 
-function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSelect, automationStatus }) {
+function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSelect, automationStatus, onEnterSelection }) {
   const isMessaged = match.status === 'messaged';
   const isReplied  = match.status === 'replied';
   const canSelect  = selectionMode && !isMessaged && !isReplied && linkedinHandle(match.linkedin_url);
+  const canQuickSend = !selectionMode && !isMessaged && !isReplied;
   const jobStatus  = automationStatus?.[match.id];
+  const longPressRef = useRef(null);
+
+  // Long-press to enter selection mode
+  const handleTouchStart = () => {
+    if (selectionMode || isMessaged || isReplied || !linkedinHandle(match.linkedin_url)) return;
+    longPressRef.current = setTimeout(() => {
+      onEnterSelection?.(match.id);
+    }, 500);
+  };
+  const handleTouchEnd = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+  };
 
   return (
     <div
-      className={`card p-4 transition-all ${selected ? 'ring-2 ring-violet-500' : ''}`}
+      className={`card p-4 transition-all ${selected ? 'ring-2 ring-emerald-500' : ''}`}
       onClick={canSelect ? () => onToggleSelect(match.id) : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <div className="flex items-start gap-3">
         {/* Checkbox in selection mode */}
@@ -131,7 +171,7 @@ function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSel
           <div className="shrink-0 mt-1">
             {canSelect ? (
               selected
-                ? <CheckSquare className="w-5 h-5 text-violet-600" />
+                ? <CheckSquare className="w-5 h-5 text-emerald-600" />
                 : <Square className="w-5 h-5 text-gray-300 dark:text-gray-600" />
             ) : (
               <Square className="w-5 h-5 text-gray-200 dark:text-gray-700 opacity-40" />
@@ -149,7 +189,7 @@ function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSel
               <p className="font-semibold text-gray-900 dark:text-white text-sm leading-snug">{match.name}</p>
               <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5 truncate">{match.title}</p>
               {match.company && (
-                <p className="text-violet-600 dark:text-violet-400 text-xs font-medium mt-0.5 truncate">@ {match.company}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-xs font-medium mt-0.5 truncate">@ {match.company}</p>
               )}
             </Link>
             <div className="flex items-center gap-1 shrink-0">
@@ -160,7 +200,7 @@ function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSel
 
           <div className="flex flex-wrap gap-1 mt-2">
             {match.reasons.slice(0, 3).map((r) => (
-              <span key={r} className="tag-pill bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[10px] py-0.5">
+              <span key={r} className="tag-pill bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] py-0.5">
                 {r}
               </span>
             ))}
@@ -185,19 +225,29 @@ function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSel
                   <Send className="w-3.5 h-3.5" />Message sent
                 </div>
               ) : (
-                <button
-                  onClick={() => onOutreach(match)}
-                  className="flex items-center gap-1.5 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-700 transition-colors active:scale-95"
-                >
-                  <Send className="w-3.5 h-3.5" />Start Outreach
-                </button>
+                <>
+                  <button
+                    onClick={() => onOutreach(match)}
+                    className="flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors active:scale-95"
+                  >
+                    <Send className="w-3.5 h-3.5" />Send DM
+                  </button>
+                  <Link
+                    href={`/dashboard/referrals/${match.id}`}
+                    className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs"
+                  >
+                    View <ChevronRight className="w-3 h-3" />
+                  </Link>
+                </>
               )}
-              <Link
-                href={`/dashboard/referrals/${match.id}`}
-                className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs"
-              >
-                View profile <ChevronRight className="w-3 h-3" />
-              </Link>
+              {(isReplied || isMessaged) && (
+                <Link
+                  href={`/dashboard/referrals/${match.id}`}
+                  className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs"
+                >
+                  View <ChevronRight className="w-3 h-3" />
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -229,7 +279,7 @@ function FollowUpCard({ match }) {
             </p>
           </div>
         </div>
-        <button onClick={() => setExpanded(!expanded)} className="text-violet-600 dark:text-violet-400 text-xs font-medium shrink-0">
+        <button onClick={() => setExpanded(!expanded)} className="text-emerald-600 dark:text-emerald-400 text-xs font-medium shrink-0">
           {expanded ? 'Hide' : 'View'}
         </button>
       </div>
@@ -270,7 +320,7 @@ function CapsuleCard({ item, onOutreach, isSent }) {
   const color = avatarColor(rec.name);
 
   return (
-    <div className={`card p-4 border-violet-100 dark:border-violet-800/40 ${isSent ? 'opacity-60' : ''}`}>
+    <div className={`card p-4 border-emerald-100 dark:border-emerald-800/40 ${isSent ? 'opacity-60' : ''}`}>
       <div className="flex items-start gap-3">
         <Link href={`/dashboard/referrals/${item.match_id}`} className="shrink-0">
           <div className={`w-10 h-10 rounded-full ${color} flex items-center justify-center text-white font-semibold text-sm`}>
@@ -299,7 +349,7 @@ function CapsuleCard({ item, onOutreach, isSent }) {
                   send_time: item.send_time, send_time_label: item.send_time_label,
                   channel: item.channel,
                 })}
-                className="flex items-center gap-1.5 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-700 transition-colors active:scale-95"
+                className="flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors active:scale-95"
               >
                 <Zap className="w-3.5 h-3.5" />Reach out
               </button>
@@ -317,7 +367,30 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
   const [notes, setNotes] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [starting, setStarting] = useState(false);
-  const extensionInstalled = isExtensionInstalled();
+  const [extensionInstalled, setExtensionInstalled] = useState(isExtensionInstalled());
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollRef = useRef(null);
+  const isMobile = isMobileBrowser();
+
+  // Poll for extension installation after user clicks install
+  useEffect(() => {
+    if (!polling) return;
+    pollRef.current = setInterval(() => {
+      if (isExtensionInstalled()) {
+        setExtensionInstalled(true);
+        setPolling(false);
+        setShowInstallModal(false);
+        clearInterval(pollRef.current);
+      }
+    }, 2000);
+    // Stop polling after 60s
+    const timeout = setTimeout(() => {
+      setPolling(false);
+      clearInterval(pollRef.current);
+    }, 60000);
+    return () => { clearInterval(pollRef.current); clearTimeout(timeout); };
+  }, [polling]);
 
   // Fetch AI-generated notes for all selected matches
   useEffect(() => {
@@ -397,19 +470,15 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
         body: JSON.stringify({ jobs }),
       });
 
-      // Trigger extension with a fresh token — fire-and-forget, never block the flow
+      // Signal extension to start — it reads auth from cookies directly
       try {
-        if (EXTENSION_ID && typeof chrome !== 'undefined' && chrome.runtime) {
-          const supabase = createClient();
-          const { data: { session } } = await supabase.auth.getSession();
+        if (EXTENSION_ID && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
           chrome.runtime.sendMessage(EXTENSION_ID, {
             type: 'PILOT_START_AUTOMATION',
-            token: session?.access_token || null,
-            refresh_token: session?.refresh_token || null,
-          });
+          }, () => { void chrome.runtime?.lastError; });
         }
       } catch {
-        // Extension not responding — jobs are queued in DB, extension will poll next cycle
+        // Extension not installed — jobs are queued in DB, extension will poll next cycle
       }
 
       onStartAutomation(jobs);
@@ -493,14 +562,14 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                           ...prev,
                           [match.id]: { ...prev[match.id], connection_note: e.target.value, error: undefined },
                         }))}
-                        className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-violet-400/30'}`}
+                        className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-emerald-400/30'}`}
                         rows={3}
                         maxLength={300}
                         autoFocus
                       />
                       <div className="flex items-center justify-between">
                         <span className={`text-xs font-medium ${overLimit ? 'text-red-500' : 'text-gray-400'}`}>{note.length}/{NOTE_MAX}</span>
-                        <button onClick={() => retryDraft(match)} className="text-xs text-violet-600 dark:text-violet-400 font-medium">
+                        <button onClick={() => retryDraft(match)} className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                           Retry AI ↺
                         </button>
                       </div>
@@ -513,7 +582,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                           ...prev,
                           [match.id]: { ...prev[match.id], connection_note: e.target.value },
                         }))}
-                        className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-violet-400/30'}`}
+                        className={`w-full text-sm bg-gray-50 dark:bg-slate-800 border rounded-xl p-3 resize-none text-gray-900 dark:text-white outline-none focus:ring-2 ${overLimit ? 'border-red-400 focus:ring-red-400/30' : 'border-gray-200 dark:border-slate-700 focus:ring-emerald-400/30'}`}
                         rows={4}
                         maxLength={300}
                       />
@@ -525,7 +594,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
                         {i === 0 && selectedMatches.length > 1 && (
                           <button
                             onClick={() => applyToAll(note)}
-                            className="text-xs text-violet-600 dark:text-violet-400 font-medium"
+                            className="text-xs text-emerald-600 dark:text-emerald-400 font-medium"
                           >
                             Apply to all
                           </button>
@@ -559,23 +628,73 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
 
         {/* CTA */}
         <div className="px-5 pb-4 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2">
-          {!extensionInstalled ? (
+          {isMobile ? (
+            /* ── Mobile: automation not available ── */
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 text-center space-y-1">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                Automation requires a desktop browser
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-300">
+                Open CareerPilot on your laptop or desktop to automate LinkedIn outreach.
+              </p>
+            </div>
+          ) : !extensionInstalled ? (
+            /* ── Desktop, no extension ── */
             <div className="space-y-2">
-              <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl p-3 flex gap-2">
-                <Chrome className="w-4 h-4 text-violet-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-violet-800 dark:text-violet-200">
-                  Install the CareerPilot Chrome extension to automate sending.
-                  Without it, you&apos;ll need to send each message manually.
-                </p>
-              </div>
               <button
-                onClick={handleStart}
-                className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm"
+                onClick={() => {
+                  window.open(CHROME_STORE_URL, '_blank');
+                  setShowInstallModal(true);
+                  setPolling(true);
+                }}
+                className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2"
               >
-                Get Extension — Automate Sending
+                <Chrome className="w-4 h-4" />
+                Install Extension to Automate
               </button>
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+                One-time setup — takes 10 seconds
+              </p>
+
+              {/* Install detection modal */}
+              {showInstallModal && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    {polling ? (
+                      <div className="w-4 h-4 spinner shrink-0 mt-0.5" />
+                    ) : (
+                      <Chrome className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                        {polling ? 'Waiting for installation…' : 'Installed the extension?'}
+                      </p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">
+                        {polling
+                          ? 'Click "Add to Chrome" on the Web Store page. We\'ll detect it automatically.'
+                          : 'If you\'ve installed it, refresh this page to continue.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                    >
+                      I&apos;ve installed it — refresh
+                    </button>
+                    <button
+                      onClick={() => { setShowInstallModal(false); setPolling(false); }}
+                      className="py-2 px-3 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
+            /* ── Desktop, extension installed ── */
             <button
               onClick={handleStart}
               disabled={starting || Object.keys(notes).length < selectedMatches.length || selectedMatches.some(m => ((notes[m.id]?.connection_note) ?? '').length > NOTE_MAX)}
@@ -608,11 +727,11 @@ function AutomationProgressBanner({ statuses, onDismiss }) {
       animate={{ opacity: 1, y: 0 }}
       className="mx-5 mb-3"
     >
-      <div className={`rounded-xl p-4 border ${running ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40'}`}>
+      <div className={`rounded-xl p-4 border ${running ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40'}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {running ? (
-              <div className="w-3 h-3 rounded-full bg-violet-600 animate-pulse" />
+              <div className="w-3 h-3 rounded-full bg-emerald-600 animate-pulse" />
             ) : (
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             )}
@@ -632,7 +751,7 @@ function AutomationProgressBanner({ statuses, onDismiss }) {
         {/* Progress bar */}
         <div className="mt-2 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full transition-all duration-500"
+            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500"
             style={{ width: `${(sent / total) * 100}%` }}
           />
         </div>
@@ -660,6 +779,12 @@ export default function ReferralsPage() {
   const [automationStatus, setAutomationStatus] = useState({}); // matchId → status string
   const [showProgress, setShowProgress]     = useState(false);
   const pollRef = useRef(null); // interval ref for cleanup
+
+  // Cascade state
+  const [cascadeData, setCascadeData]       = useState(null); // { connect_limit_hit: N, ... }
+  const [cascadeJobs, setCascadeJobs]       = useState([]); // jobs needing review
+  const [showCascade, setShowCascade]       = useState(false);
+  const cascadePollRef = useRef(null);
 
   const loadMatches = useCallback(async () => {
     setLoading(true);
@@ -693,6 +818,68 @@ export default function ReferralsPage() {
   }, []);
 
   useEffect(() => { loadMatches(); }, [loadMatches]);
+
+  // ── Cascade detection polling ──────────────────────────────────────────────
+  const checkCascade = useCallback(async () => {
+    try {
+      const res = await fetch('/api/outreach/queue-status', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+
+      if (json.cascade) {
+        setCascadeData(json.cascade);
+        // Auto-show cascade sheet if there are actionable cascade states
+        const hasActionable = (json.cascade.connect_limit_hit > 0) ||
+          (json.cascade.dm_pending_review > 0) ||
+          (json.cascade.dm_limit_hit > 0) ||
+          (json.cascade.email_pending_review > 0);
+        if (hasActionable && !showCascade) {
+          // Fetch job details for cascade review cards
+          try {
+            const supabase = createClient();
+            const { data: cJobs } = await supabase
+              .from('outreach_queue')
+              .select('id, status, outreach_method, dm_subject, dm_body, email_subject, email_body, recruiter_match_id, recruiter_matches(recruiters(name, title, current_company, linkedin_url))')
+              .in('status', ['dm_pending_review', 'email_pending_review'])
+              .order('queue_position', { ascending: true });
+
+            const formatted = (cJobs || []).map(j => {
+              const rec = j.recruiter_matches?.recruiters || {};
+              const initials = (rec.name || '??').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+              return {
+                ...j,
+                name: rec.name || 'Unknown',
+                company: rec.current_company || '',
+                linkedin_url: rec.linkedin_url || '',
+                avatar: initials,
+                avatarColor: avatarColor(rec.name || ''),
+              };
+            });
+            setCascadeJobs(formatted);
+          } catch {}
+          setShowCascade(true);
+        }
+      } else {
+        setCascadeData(null);
+      }
+    } catch {}
+  }, [showCascade]);
+
+  // Poll for cascade every 10s when automation is active
+  useEffect(() => {
+    if (!showProgress) return;
+    checkCascade();
+    cascadePollRef.current = setInterval(checkCascade, 10000);
+    return () => { if (cascadePollRef.current) clearInterval(cascadePollRef.current); };
+  }, [showProgress, checkCascade]);
+
+  // Cleanup cascade poll
+  useEffect(() => () => { if (cascadePollRef.current) clearInterval(cascadePollRef.current); }, []);
+
+  const handleCascadeRefresh = () => {
+    checkCascade();
+    loadMatches();
+  };
 
   function toggleSelect(id) {
     setSelectedIds(prev => {
@@ -779,11 +966,18 @@ export default function ReferralsPage() {
     }
   };
 
+  // Enter selection mode from long-press on a card
+  const handleEnterSelection = (matchId) => {
+    setSelectionMode(true);
+    setTab('targets');
+    setSelectedIds(new Set([matchId]));
+  };
+
   return (
     <>
       <div className="page-enter">
         {/* Header */}
-        <div className="px-5 header-safe-top pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-20">
+        <div className="px-5 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-20">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">Referrals</h1>
@@ -802,12 +996,12 @@ export default function ReferralsPage() {
               )}
               {!selectionMode ? (
                 <>
-                  {selectableTargets.length > 0 && (
+                  {selectableTargets.length > 1 && (
                     <button
                       onClick={() => { setSelectionMode(true); setTab('targets'); }}
-                      className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 px-3 py-1.5 rounded-full text-xs font-semibold"
+                      className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition-transform"
                     >
-                      <CheckSquare className="w-3.5 h-3.5" />Select
+                      <Users className="w-3.5 h-3.5" />Batch Send
                     </button>
                   )}
                   <button onClick={loadMatches} className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
@@ -824,11 +1018,24 @@ export default function ReferralsPage() {
 
           {/* Selection mode hint */}
           {selectionMode && (
-            <p className="text-xs text-violet-600 dark:text-violet-400 mb-3">
-              {selectedIds.size === 0
-                ? 'Tap contacts to select them for bulk outreach'
-                : `${selectedIds.size} selected${atBatchLimit ? ` (max ${MAX_BATCH})` : ''}`}
-            </p>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 flex-1">
+                {selectedIds.size === 0
+                  ? 'Tap cards to select — Pilot will draft connection notes for each'
+                  : `${selectedIds.size} selected${atBatchLimit ? ` (max ${MAX_BATCH})` : ''}`}
+              </p>
+              {selectableTargets.length > 0 && selectedIds.size < selectableTargets.length && (
+                <button
+                  onClick={() => {
+                    const all = new Set(selectableTargets.slice(0, MAX_BATCH).map(m => m.id));
+                    setSelectedIds(all);
+                  }}
+                  className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold whitespace-nowrap"
+                >
+                  Select all
+                </button>
+              )}
+            </div>
           )}
 
           {!selectionMode && (
@@ -863,6 +1070,29 @@ export default function ReferralsPage() {
           )}
         </AnimatePresence>
 
+        {/* Cascade action banner — re-open cascade sheet */}
+        {!showCascade && cascadeData && (cascadeData.connect_limit_hit > 0 || cascadeData.dm_pending_review > 0 || cascadeData.dm_limit_hit > 0) && (
+          <div className="mx-5 mb-3">
+            <button
+              onClick={() => setShowCascade(true)}
+              className="w-full rounded-xl p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+            >
+              <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {cascadeData.connect_limit_hit > 0 ? 'Connects maxed — switch to DMs?' :
+                   cascadeData.dm_limit_hit > 0 ? 'DMs maxed — switch to email?' :
+                   `${cascadeData.dm_pending_review} DMs ready for review`}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tap to continue</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+          </div>
+        )}
+
         <div className="px-5 py-4 space-y-3">
           {loading && (
             <div className="flex flex-col items-center gap-3 py-16">
@@ -875,7 +1105,7 @@ export default function ReferralsPage() {
             <div className="card p-5 text-center space-y-2">
               <p className="text-gray-500 dark:text-gray-400 font-medium">Hit a wall.</p>
               <p className="text-gray-400 text-sm">{error}</p>
-              <button onClick={loadMatches} className="text-violet-600 text-sm font-semibold">Try again</button>
+              <button onClick={loadMatches} className="text-emerald-600 text-sm font-semibold">Try again</button>
             </div>
           )}
 
@@ -886,7 +1116,7 @@ export default function ReferralsPage() {
               {!selectionMode && capsule.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-violet-500" />
+                    <Zap className="w-4 h-4 text-emerald-500" />
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">Pilot&apos;s picks for today</p>
                   </div>
                   {capsule.map(item => (
@@ -926,6 +1156,7 @@ export default function ReferralsPage() {
                 </div>
               )}
 
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {targets.map(match => (
                 <RecruiterCard
                   key={match.id}
@@ -938,8 +1169,10 @@ export default function ReferralsPage() {
                     toggleSelect(id);
                   }}
                   automationStatus={automationStatus[match.id]}
+                  onEnterSelection={handleEnterSelection}
                 />
               ))}
+              </div>
             </>
           )}
 
@@ -977,16 +1210,16 @@ export default function ReferralsPage() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className="fixed bottom-0 left-0 right-0 z-40 px-5 pb-safe"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}
+            className="fixed bottom-0 right-0 z-40 px-5"
+            style={{ paddingBottom: '16px', left: '240px' }}
           >
-            <div className="max-w-[430px] mx-auto">
+            <div className="max-w-[1100px] mx-auto px-8">
               <button
                 onClick={() => setReviewOpen(true)}
                 className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-xl"
               >
                 <Send className="w-4 h-4" />
-                Send Connect Request to {selectedIds.size} {selectedIds.size === 1 ? 'person' : 'people'} →
+                Review &amp; Send to {selectedIds.size} {selectedIds.size === 1 ? 'person' : 'people'}
               </button>
             </div>
           </motion.div>
@@ -1013,6 +1246,18 @@ export default function ReferralsPage() {
             onClose={() => setActiveMatch(null)}
             onSent={() => setActiveMatch(null)}
             onConfirmSend={handleConfirmSend}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Cascade consent sheet */}
+      <AnimatePresence>
+        {showCascade && cascadeData && (
+          <CascadeConsentSheet
+            cascade={cascadeData}
+            jobs={cascadeJobs}
+            onClose={() => setShowCascade(false)}
+            onRefresh={handleCascadeRefresh}
           />
         )}
       </AnimatePresence>

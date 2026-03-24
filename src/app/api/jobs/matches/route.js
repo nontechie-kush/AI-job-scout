@@ -115,7 +115,13 @@ export async function GET(request) {
         .gt('scored_at', lastActive.toISOString()),
     ]);
 
-    if (error) throw error;
+    if (error) {
+      // Column may not exist yet (e.g. remind_on_desktop) — return empty instead of 500
+      if (error.message?.includes('column') || error.code === '42703') {
+        return NextResponse.json({ matches: [], total: 0, excellent_count: 0, good_count: 0, others_count: 0, new_count: 0, has_more: false });
+      }
+      throw error;
+    }
 
     // Annotate each match with is_new (excellent or good scored since last visit)
     const matches = (data || []).map((m) => ({

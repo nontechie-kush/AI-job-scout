@@ -3,12 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ChevronRight, TrendingUp, ArrowRight, Moon, Sun, Users, Laptop } from 'lucide-react';
+import { ChevronRight, TrendingUp, ArrowRight, Users, Laptop } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useJobs } from '@/hooks/useJobs';
 import { usePipeline } from '@/hooks/usePipeline';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
-import useStore from '@/store/useStore';
 import JobCard from '@/components/JobCard';
 import DismissSheet from '@/components/DismissSheet';
 import JobSearchTitlesModal from '@/components/JobSearchTitlesModal';
@@ -19,7 +18,7 @@ function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading, o
   if (loading) {
     return (
       <div className="card overflow-hidden animate-pulse">
-        <div className="bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 h-11" />
+        <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3 h-11" />
         <div className="p-4 space-y-2.5">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-gray-200 dark:bg-slate-700 h-16" />
@@ -48,7 +47,7 @@ function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading, o
 
   return (
     <div className="card overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 flex items-center justify-between">
+      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
           <span className="text-white text-sm font-semibold">
@@ -73,9 +72,9 @@ function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading, o
           </Link>
 
           {/* Excellent */}
-          <Link href="/dashboard/jobs?tab=excellent" className={`rounded-xl p-3 active:scale-[0.97] transition-transform block ${excellentCount > 0 ? 'bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/30' : 'bg-gray-50 dark:bg-slate-800'}`}>
-            <span className="text-[10px] font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wider">Excellent</span>
-            <p className={`text-2xl font-bold mt-1 ${excellentCount > 0 ? 'text-violet-700 dark:text-violet-300' : 'text-gray-400 dark:text-gray-600'}`}>
+          <Link href="/dashboard/jobs?tab=excellent" className={`rounded-xl p-3 active:scale-[0.97] transition-transform block ${excellentCount > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30' : 'bg-gray-50 dark:bg-slate-800'}`}>
+            <span className="text-[10px] font-semibold text-emerald-500 dark:text-emerald-400 uppercase tracking-wider">Excellent</span>
+            <p className={`text-2xl font-bold mt-1 ${excellentCount > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-400 dark:text-gray-600'}`}>
               {excellentCount || '—'}
             </p>
             <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">≥75% match</p>
@@ -107,7 +106,7 @@ function ScanCard({ newCount, excellentCount, goodCount, othersCount, loading, o
         {hasAny && (
           <button
             onClick={onUpdateSearch}
-            className="mt-2 text-[11px] text-violet-500 dark:text-violet-400 underline underline-offset-2 text-left"
+            className="mt-2 text-[11px] text-emerald-500 dark:text-emerald-400 underline underline-offset-2 text-left"
           >
             Seeing wrong roles? Update search →
           </button>
@@ -200,7 +199,6 @@ const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
 // ── Page ───────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const { toggleDarkMode, darkMode } = useStore();
   const supabase = createClient();
   const [userName, setUserName] = useState('');
   const [dismissTarget, setDismissTarget] = useState(null);
@@ -281,7 +279,7 @@ export default function HomePage() {
     if (jobsLoading || total === 0) return null;
     if (excellentCount > 0) return (
       <>
-        <span className="text-violet-600 dark:text-violet-400 font-semibold">{excellentCount} excellent</span>
+        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{excellentCount} excellent</span>
         {goodCount > 0 && <span className="text-blue-500 font-semibold"> · {goodCount} good</span>}
         {newCount > 0 && <span className="text-emerald-500 font-semibold"> · {newCount} new</span>}
       </>
@@ -292,26 +290,25 @@ export default function HomePage() {
     return <span className="text-amber-600 dark:text-amber-400 font-semibold">No strong fits yet · {othersCount} ranked</span>;
   })();
 
-  // Get user display name — prefer CV name over OAuth metadata over email
+  // Get user display name — prefer DB name (from CV) over OAuth metadata
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      // Try profile first (CV-parsed name is most accurate)
+    (async () => {
       try {
         const res = await fetch('/api/profile');
         if (res.ok) {
           const data = await res.json();
-          const cvName = data.profile?.parsed_json?.name;
-          if (cvName) {
-            setUserName(cvName.split(' ')[0]);
+          if (data.user?.name) {
+            setUserName(data.user.name.split(' ')[0]);
             return;
           }
         }
       } catch {}
-      // Fallback: OAuth metadata, then email prefix
+      // Fallback: OAuth metadata
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       const metaName = user.user_metadata?.name || user.user_metadata?.full_name || '';
       setUserName(metaName.split(' ')[0] || '');
-    });
+    })();
   }, []);
 
   const handleDismiss = useCallback((matchId, reason) => {
@@ -330,7 +327,7 @@ export default function HomePage() {
           className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center transition-all"
           style={{ height: refreshing ? 48 : pullY * 0.75, overflow: 'hidden' }}
         >
-          <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
             {refreshing ? (
               <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
@@ -353,23 +350,10 @@ export default function HomePage() {
       )}
 
       {/* Header */}
-      <div className="px-5 header-safe-top pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">{greeting},</p>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
-              {userName || '—'}
-            </h1>
-          </div>
-          <button
-            onClick={toggleDarkMode}
-            className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center"
-          >
-            {darkMode
-              ? <Sun className="w-4 h-4 text-amber-400" />
-              : <Moon className="w-4 h-4 text-gray-500" />}
-          </button>
-        </div>
+      <div className="px-5 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
+          {greeting}{userName ? `, ${userName}` : ''}
+        </h1>
       </div>
 
       <motion.div
@@ -406,21 +390,21 @@ export default function HomePage() {
             </div>
             <Link
               href="/dashboard/jobs"
-              className="flex items-center gap-1 text-violet-600 dark:text-violet-400 text-sm font-medium"
+              className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-sm font-medium"
             >
               View all <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {jobsLoading ? (
               [1, 2, 3].map((i) => <JobSkeleton key={i} />)
             ) : matches.length === 0 ? (
               <div className="card p-6 text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping [animation-delay:0.2s]" />
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping [animation-delay:0.4s]" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping [animation-delay:0.2s]" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping [animation-delay:0.4s]" />
                 </div>
                 <p className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Pilot is scanning</p>
                 <p className="text-gray-400 text-xs mt-1">
@@ -471,17 +455,19 @@ export default function HomePage() {
           <div className={`card p-4 bg-gradient-to-br ${
             noExcellent
               ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-100 dark:border-amber-800/50'
-              : 'from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 border-violet-100 dark:border-violet-800/50'
+              : 'from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 border-emerald-100 dark:border-emerald-800/50'
           }`}>
             <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${
-              noExcellent ? 'text-amber-600 dark:text-amber-400' : 'text-violet-600 dark:text-violet-400'
+              noExcellent ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
             }`}>
               Pilot
             </p>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
               {noExcellent
                 ? 'No excellent fits today. Send 2 DMs\u2014that\u2019s your move. I\u2019ll keep scanning.'
-                : 'Do 3 things today. That\u2019s it. I\u2019ll handle the research, the sorting, the noise.'}
+                : excellentCount > 0
+                  ? `${excellentCount} excellent ${excellentCount === 1 ? 'match' : 'matches'} waiting. Apply to the top one today \u2014 I\u2019ll keep the pipeline full.`
+                  : 'Scanning your sources now. Matches land within the hour \u2014 I\u2019ll notify you.'}
             </p>
           </div>
         </motion.section>

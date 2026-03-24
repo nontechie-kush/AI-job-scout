@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 const JOBS_STATE_KEY = 'jobs_page_state';
@@ -20,7 +20,7 @@ const COHORT_TABS = [
 ];
 
 const TAB_ACTIVE_CLASS = {
-  excellent: 'bg-violet-600 text-white border-violet-600',
+  excellent: 'bg-emerald-600 text-white border-emerald-600',
   good:      'bg-blue-600 text-white border-blue-600',
   others:    'bg-gray-600 text-white border-gray-600',
   saved:     'bg-blue-600 text-white border-blue-600',
@@ -33,7 +33,15 @@ const REMOTE_FILTERS = [
   { id: 'onsite', label: 'On-site' },
 ];
 
-export default function JobsPage() {
+export default function JobsPageWrapper() {
+  return (
+    <Suspense fallback={<div className="px-5 py-10 space-y-3">{[1,2,3].map(i => <SkeletonCard key={i} />)}</div>}>
+      <JobsPage />
+    </Suspense>
+  );
+}
+
+function JobsPage() {
   const searchParams = useSearchParams();
   const scrollRestoredRef = useRef(false);
 
@@ -151,8 +159,8 @@ export default function JobsPage() {
 
         {/* ── FREE WORLD MODE ── */}
         {freeWorld && (
-          <motion.div key="freeworld" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="px-5 header-safe-top pb-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 sticky top-0 z-20">
+          <motion.div key="freeworld" initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="px-5 pt-6 pb-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/40 sticky top-0 z-20">
               <div className="flex items-center justify-between mb-2">
                 <button
                   onClick={exitFreeWorld}
@@ -175,10 +183,10 @@ export default function JobsPage() {
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search all jobs, companies…" className="input-field pl-10" />
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-5 px-5 scrollbar-none">
+              <div className="flex flex-wrap gap-2 pb-1">
                 {REMOTE_FILTERS.map((rf) => (
                   <button key={rf.id} onClick={() => setRemoteFilter(remoteFilter === rf.id ? 'all' : rf.id)}
-                    className={`shrink-0 tag-pill text-xs py-1.5 border transition-all ${remoteFilter === rf.id ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700'}`}>
+                    className={`tag-pill text-xs py-1.5 border transition-all ${remoteFilter === rf.id ? 'bg-amber-600 text-white border-amber-600' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-700'}`}>
                     {rf.label}
                   </button>
                 ))}
@@ -192,7 +200,7 @@ export default function JobsPage() {
               ) : (
                 <>
                   <p className="text-gray-400 text-xs">{filtered.length} job{filtered.length !== 1 ? 's' : ''}{search ? ` matching "${search}"` : ' · score shows fit with your profile'}</p>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {filtered.map((match) => (
                       <JobCard key={match.id} match={match} onDismiss={() => setDismissTarget(match.id)} onSave={() => save(match.id)} showSource />
                     ))}
@@ -205,9 +213,9 @@ export default function JobsPage() {
 
         {/* ── COHORT MODE (default) ── */}
         {!freeWorld && (
-          <motion.div key="cohort" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div key="cohort" initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {/* Sticky header */}
-            <div className="px-5 header-safe-top pb-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-20">
+            <div className="px-5 pt-6 pb-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 sticky top-0 z-20">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h1 className="text-xl font-bold text-gray-900 dark:text-white">Job Matches</h1>
@@ -225,13 +233,13 @@ export default function JobsPage() {
               </div>
 
               {/* Search */}
-              <div className="relative mb-3">
+              <div className="relative mb-3 max-w-md">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search jobs, companies…" className="input-field pl-10" />
               </div>
 
               {/* Cohort tabs + remote filters */}
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-5 px-5 scrollbar-none">
+              <div className="flex flex-wrap gap-2 pb-1">
                 {COHORT_TABS.map((tab) => (
                   <button
                     key={tab.id}
@@ -245,7 +253,7 @@ export default function JobsPage() {
                     {tab.label}
                     {/* count badge on cohort tabs */}
                     {tab.id === 'excellent' && excellentCount > 0 && cohortTab !== 'excellent' && (
-                      <span className="ml-1 text-[9px] bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 px-1 rounded-full">{excellentCount}</span>
+                      <span className="ml-1 text-[9px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 px-1 rounded-full">{excellentCount}</span>
                     )}
                     {tab.id === 'good' && goodCount > 0 && cohortTab !== 'good' && (
                       <span className="ml-1 text-[9px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-1 rounded-full">{goodCount}</span>
@@ -288,7 +296,7 @@ export default function JobsPage() {
                     {!search && cohortTab === 'good'      && ' · 50–74% match'}
                     {!search && cohortTab === 'others'    && ' · below 50%'}
                   </p>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {filtered.map((match) => (
                       <JobCard
                         key={match.id}

@@ -18,7 +18,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  User, FileText, Target, Mail, LogOut,
+  User, FileText, Target, Mail, LogOut, Upload,
   ChevronRight, Moon, Sun, Check, Bell, BellOff,
   RefreshCw, Zap, Briefcase, MapPin, DollarSign,
 } from 'lucide-react';
@@ -34,7 +34,7 @@ function Toggle({ on, onChange, disabled }) {
       onClick={() => !disabled && onChange(!on)}
       disabled={disabled}
       className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-        on ? 'bg-violet-600' : 'bg-gray-300 dark:bg-slate-700'
+        on ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-slate-700'
       } disabled:opacity-50`}
     >
       <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -55,7 +55,7 @@ function ChipRow({ options, selected, onToggle }) {
             onClick={() => onToggle(opt.value)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               active
-                ? 'bg-violet-600 text-white'
+                ? 'bg-emerald-600 text-white'
                 : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400'
             }`}
           >
@@ -76,7 +76,7 @@ function SingleChipRow({ options, value, onChange }) {
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             value === opt.value
-              ? 'bg-violet-600 text-white'
+              ? 'bg-emerald-600 text-white'
               : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400'
           }`}
         >
@@ -258,30 +258,20 @@ export default function ProfilePage() {
   return (
     <div className="page-enter min-h-dvh bg-gray-50 dark:bg-slate-950">
       {/* Header */}
-      <div className="px-5 header-safe-top pb-6 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+      <div className="px-5 pt-6 pb-6 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Profile</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadProfile}
-              className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center"
-            >
-              <RefreshCw className="w-4 h-4 text-gray-500" />
-            </button>
-            <button
-              onClick={toggleDarkMode}
-              className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center"
-            >
-              {darkMode
-                ? <Sun className="w-4 h-4 text-amber-400" />
-                : <Moon className="w-4 h-4 text-gray-500" />}
-            </button>
-          </div>
+          <button
+            onClick={loadProfile}
+            className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center"
+          >
+            <RefreshCw className="w-4 h-4 text-gray-500" />
+          </button>
         </div>
 
         {/* User card */}
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold text-xl">
             {initials}
           </div>
           <div>
@@ -340,7 +330,7 @@ export default function ProfilePage() {
               </div>
             )}
             {profile.strongest_card && (
-              <p className="text-xs text-violet-600 dark:text-violet-400 mt-2 font-medium">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
                 Strongest card: {profile.strongest_card}
               </p>
             )}
@@ -349,6 +339,13 @@ export default function ProfilePage() {
                 Parsed {new Date(profile.parsed_at).toLocaleDateString()} · {profile.source}
               </p>
             )}
+            <button
+              onClick={() => router.push('/onboarding')}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Update resume / portfolio
+            </button>
           </motion.div>
         )}
 
@@ -365,12 +362,12 @@ export default function ProfilePage() {
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Location</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {['india', 'us_canada', 'remote'].map((loc) => {
-                const labels = { india: 'India', us_canada: 'US / Canada', remote: 'Remote' };
+              {['india', 'usa', 'canada', 'uk', 'europe', 'thailand', 'china', 'anywhere'].map((loc) => {
+                const labels = { india: 'India', usa: 'USA', canada: 'Canada', uk: 'UK', europe: 'Europe', thailand: 'Thailand', china: 'China', anywhere: 'Anywhere' };
                 const active = prefs.locations.includes(loc);
                 return (
                   <button key={loc} onClick={() => toggleArray('locations', loc)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-violet-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400'}`}>
                     {labels[loc]}
                   </button>
                 );
@@ -460,7 +457,7 @@ export default function ProfilePage() {
         {/* Pilot mode */}
         <motion.div variants={item} className="card p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-4 h-4 text-violet-500" />
+            <Zap className="w-4 h-4 text-emerald-500" />
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Pilot Mode
             </p>
@@ -477,12 +474,12 @@ export default function ProfilePage() {
                   }}
                   className={`p-3 rounded-xl text-left transition-all border ${
                     active
-                      ? 'bg-violet-600 border-violet-600 text-white'
+                      ? 'bg-emerald-600 border-emerald-600 text-white'
                       : 'bg-gray-50 dark:bg-slate-800 border-transparent text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   <p className={`text-sm font-semibold ${active ? 'text-white' : ''}`}>{mode.label}</p>
-                  <p className={`text-[11px] mt-0.5 ${active ? 'text-violet-200' : 'text-gray-400'}`}>{mode.desc}</p>
+                  <p className={`text-[11px] mt-0.5 ${active ? 'text-emerald-200' : 'text-gray-400'}`}>{mode.desc}</p>
                 </button>
               );
             })}
@@ -516,7 +513,7 @@ export default function ProfilePage() {
             ) : (
               <button
                 onClick={() => setShowPushPrompt(true)}
-                className="text-xs font-semibold text-violet-600 dark:text-violet-400"
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400"
               >
                 Enable
               </button>
@@ -538,7 +535,7 @@ export default function ProfilePage() {
                     }}
                     className={`py-2 px-3 rounded-lg text-xs font-medium transition-all ${
                       active
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-emerald-600 text-white'
                         : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400'
                     }`}
                   >
@@ -587,7 +584,7 @@ export default function ProfilePage() {
               </div>
               <button
                 onClick={handleConnectGmail}
-                className="text-xs font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1"
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
               >
                 Connect <ChevronRight className="w-3 h-3" />
               </button>

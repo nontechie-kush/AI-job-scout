@@ -16,14 +16,14 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft, Lightbulb, Users, MessageSquare,
-  ExternalLink, Send, CheckCircle2, Star, Zap,
+  ChevronLeft, MessageSquare,
+  ExternalLink, Send, CheckCircle2, Star,
 } from 'lucide-react';
 import OutreachFlow from '@/components/OutreachFlow';
 
 // ── Deterministic avatar color ────────────────────────────────────────────
 const AVATAR_COLORS = [
-  'bg-violet-600', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600',
+  'bg-emerald-600', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600',
   'bg-rose-600', 'bg-indigo-600', 'bg-cyan-600', 'bg-pink-600',
 ];
 function avatarColor(str = '') {
@@ -62,7 +62,7 @@ function TypeLabel({ type }) {
   const colors = {
     inhouse: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
     agency: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-    independent: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
+    independent: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
   };
   return (
     <span className={`tag-pill ${colors[type] || colors.agency} text-[10px] py-0.5`}>
@@ -94,7 +94,14 @@ export default function ReferralDetailPage() {
           const formatted = formatMatch(found);
           setMatch(formatted);
           if (found.outreach_draft) {
-            setDraft(found.outreach_draft);
+            // outreach_draft is stored as JSON string: { connection_note, dm_subject, dm_body }
+            try {
+              const parsed = JSON.parse(found.outreach_draft);
+              setDraft(parsed.dm_body || parsed.connection_note || '');
+            } catch {
+              // If it's plain text, use as-is
+              setDraft(found.outreach_draft);
+            }
           }
         }
       } catch (e) {
@@ -122,8 +129,9 @@ export default function ReferralDetailPage() {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Generation failed');
-        setDraft(json.draft || '');
-        setMatch((prev) => prev ? { ...prev, outreach_draft: json.draft } : prev);
+        const body = json.dm_body || json.connection_note || '';
+        setDraft(body);
+        setMatch((prev) => prev ? { ...prev, outreach_draft: body } : prev);
       } catch (e) {
         setDraftError('Pilot hit a wall on this one. Tap to retry.');
       } finally {
@@ -155,7 +163,7 @@ export default function ReferralDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-dvh gap-3">
         <p className="text-gray-500 dark:text-gray-400">Recruiter not found</p>
-        <button onClick={() => router.back()} className="text-violet-600 text-sm font-medium">
+        <button onClick={() => router.back()} className="text-emerald-600 text-sm font-medium">
           Go back
         </button>
       </div>
@@ -169,7 +177,7 @@ export default function ReferralDetailPage() {
       <div className="page-enter min-h-dvh bg-gray-50 dark:bg-slate-950">
         {/* Header */}
         <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
-          <div className="flex items-center justify-between px-5 header-safe-top pb-4">
+          <div className="flex items-center justify-between px-5 pt-6 pb-4">
             <button
               onClick={() => router.back()}
               className="flex items-center gap-1 text-gray-600 dark:text-gray-400 font-medium text-sm"
@@ -201,7 +209,7 @@ export default function ReferralDetailPage() {
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   <TypeLabel type={match.type} />
                   {match.reasons.map((r) => (
-                    <span key={r} className="tag-pill bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[10px] py-0.5">
+                    <span key={r} className="tag-pill bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] py-0.5">
                       {r}
                     </span>
                   ))}
@@ -213,13 +221,13 @@ export default function ReferralDetailPage() {
             <div className="mt-4 flex items-center gap-3">
               <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full"
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full"
                   initial={{ width: 0 }}
                   animate={{ width: `${match.relevanceScore}%` }}
                   transition={{ duration: 0.8, ease: 'easeOut' }}
                 />
               </div>
-              <span className="text-sm font-bold text-violet-600 dark:text-violet-400 shrink-0">
+              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
                 {match.relevanceScore}% relevant
               </span>
             </div>
@@ -229,10 +237,10 @@ export default function ReferralDetailPage() {
         {/* Body */}
         <div className="px-5 py-5 space-y-4">
           {/* Stats row */}
-          {(match.response_rate > 0 || match.avg_reply_days || match.placements_at.length > 0) && (
-            <div className="grid grid-cols-3 gap-3">
+          {(match.response_rate > 0 || match.avg_reply_days) && (
+            <div className="flex gap-3">
               {match.response_rate > 0 && (
-                <div className="card p-3 text-center">
+                <div className="card p-3 text-center flex-1">
                   <div className="flex items-center justify-center gap-1 mb-0.5">
                     <Star className="w-3.5 h-3.5 text-amber-500" />
                     <span className="text-base font-bold text-gray-900 dark:text-white">{match.response_rate}%</span>
@@ -241,39 +249,11 @@ export default function ReferralDetailPage() {
                 </div>
               )}
               {match.avg_reply_days && (
-                <div className="card p-3 text-center">
+                <div className="card p-3 text-center flex-1">
                   <p className="text-base font-bold text-gray-900 dark:text-white">{match.avg_reply_days}d</p>
                   <p className="text-gray-400 text-[10px]">Avg reply</p>
                 </div>
               )}
-              {match.placements_at.length > 0 && (
-                <div className="card p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <Zap className="w-3.5 h-3.5 text-violet-500" />
-                    <span className="text-base font-bold text-gray-900 dark:text-white">{match.placements_at.length}</span>
-                  </div>
-                  <p className="text-gray-400 text-[10px]">Placements</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Placements */}
-          {match.placements_at.length > 0 && (
-            <div className="card p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-4 h-4 text-gray-500" />
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Known Placements
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {match.placements_at.map((co) => (
-                  <span key={co} className="tag-pill bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 text-xs">
-                    {co}
-                  </span>
-                ))}
-              </div>
             </div>
           )}
 
@@ -293,23 +273,6 @@ export default function ReferralDetailPage() {
                 Specializes in {match.specialization.join(', ')}.
               </p>
             )}
-          </div>
-
-          {/* Outreach angle */}
-          <div className="card p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50">
-            <div className="flex items-center gap-2 mb-3">
-              <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                Pilot&apos;s Angle
-              </p>
-            </div>
-            <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
-              {match.response_rate >= 70
-                ? `${match.name.split(' ')[0]} has a ${match.response_rate}% reply rate — worth reaching out directly. Reference their ${match.placements_at.slice(0, 2).join(' / ') || 'placements'}.`
-                : match.placements_at.length > 0
-                  ? `Lead with a placement they've made at ${match.placements_at[0]} — shows you did your research.`
-                  : `Keep it short and direct. Reference their specialization in ${match.specialization.join(' and ')}.`}
-            </p>
           </div>
 
           {/* AI-drafted message */}
@@ -333,7 +296,7 @@ export default function ReferralDetailPage() {
                 <p className="text-sm text-gray-400">{draftError}</p>
                 <button
                   onClick={() => { setDraftError(null); }}
-                  className="text-violet-600 text-sm font-semibold"
+                  className="text-emerald-600 text-sm font-semibold"
                 >
                   Retry
                 </button>
@@ -362,7 +325,7 @@ export default function ReferralDetailPage() {
         </div>
 
         {/* CTA */}
-        <div className="px-5 pb-28">
+        <div className="px-5 pb-6">
           {isMessaged ? (
             <div className="w-full py-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
               <CheckCircle2 className="w-5 h-5" />

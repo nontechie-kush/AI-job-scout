@@ -10,7 +10,7 @@ import { stages } from '@/data/pipeline';
 
 function companyColor(name) {
   const colors = [
-    'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+    'bg-emerald-500', 'bg-blue-500', 'bg-teal-500', 'bg-amber-500',
     'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500',
   ];
   let hash = 0;
@@ -159,9 +159,9 @@ function KanbanColumn({ stage, cards, onDrop }) {
         const cardId = e.dataTransfer.getData('cardId');
         onDrop(cardId, stage);
       }}
-      className={`kanban-column shrink-0 w-44 rounded-2xl transition-all ${
+      className={`kanban-column min-w-[160px] rounded-2xl transition-all ${
         isDragOver
-          ? 'ring-2 ring-violet-400 ring-offset-2 dark:ring-offset-slate-950 bg-violet-50 dark:bg-violet-900/10'
+          ? 'ring-2 ring-emerald-400 ring-offset-2 dark:ring-offset-slate-950 bg-emerald-50 dark:bg-emerald-900/10'
           : 'bg-gray-100 dark:bg-slate-800/50'
       }`}
     >
@@ -184,8 +184,8 @@ function KanbanColumn({ stage, cards, onDrop }) {
           <PipelineCard key={card.id} card={card} />
         ))}
         {isDragOver && cards.length === 0 && (
-          <div className="h-16 border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl flex items-center justify-center">
-            <span className="text-violet-400 text-xs font-medium">Drop here</span>
+          <div className="h-16 border-2 border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl flex items-center justify-center">
+            <span className="text-emerald-400 text-xs font-medium">Drop here</span>
           </div>
         )}
       </div>
@@ -308,7 +308,7 @@ export default function TrackerPage() {
   return (
     <div className="page-enter min-h-dvh">
       {/* Header */}
-      <div className="px-5 header-safe-top pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+      <div className="px-5 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center justify-between mb-1">
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Pipeline Tracker</h1>
@@ -329,17 +329,17 @@ export default function TrackerPage() {
             )}
             <button
               onClick={() => setShowAddModal(true)}
-              className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center"
+              className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center"
               title="Add manually"
             >
               <Plus className="w-4 h-4 text-white" />
             </button>
-            <BarChart2 className="w-5 h-5 text-violet-500" />
+            <BarChart2 className="w-5 h-5 text-emerald-500" />
           </div>
         </div>
 
         {/* Stage summary pills */}
-        <div className="flex gap-2 mt-3 overflow-x-auto pb-1 -mx-5 px-5 scrollbar-none">
+        <div className="flex flex-wrap gap-2 mt-3 pb-1">
           {stages.map((s) => {
             const count = byStage[s.id]?.length || 0;
             if (!count) return null;
@@ -398,12 +398,12 @@ export default function TrackerPage() {
       ) : (
         <>
           <div className="px-5 pb-2">
-            <p className="text-gray-400 text-xs text-center">← Swipe · Drag cards between columns →</p>
+            <p className="text-gray-400 text-xs text-center">Drag cards between columns</p>
           </div>
 
-          {/* Kanban board */}
-          <div className="kanban-scroll scrollbar-none pb-4">
-            <div className="flex gap-3 px-5 min-w-max">
+          {/* Kanban board — grid on desktop */}
+          <div className="px-5 pb-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {stages.map((s) => (
                 <KanbanColumn
                   key={s.id}
@@ -412,7 +412,6 @@ export default function TrackerPage() {
                   onDrop={handleDrop}
                 />
               ))}
-              <div className="w-4 shrink-0" />
             </div>
           </div>
         </>
@@ -428,7 +427,7 @@ export default function TrackerPage() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg text-white ${
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg text-white ${
           toast.type === 'success' ? 'bg-emerald-600' :
           toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'
         }`}>

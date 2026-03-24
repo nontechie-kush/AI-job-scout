@@ -15,7 +15,7 @@ import LaptopReminderSheet from '@/components/LaptopReminderSheet';
 
 function companyColor(name) {
   const colors = [
-    'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
+    'bg-emerald-500', 'bg-blue-500', 'bg-teal-500', 'bg-amber-500',
     'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500',
   ];
   let hash = 0;
@@ -93,9 +93,9 @@ function CulturePanel({ intelligence }) {
             </div>
           )}
           {hiring_velocity_30d != null && (
-            <div className="flex-1 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-3 text-center">
-              <p className="text-xl font-bold text-violet-700 dark:text-violet-400">{hiring_velocity_30d}</p>
-              <p className="text-[10px] text-violet-600 dark:text-violet-500 font-medium mt-0.5">Hires/30d</p>
+            <div className="flex-1 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-3 text-center">
+              <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{hiring_velocity_30d}</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium mt-0.5">Hires/30d</p>
             </div>
           )}
         </div>
@@ -284,7 +284,7 @@ export default function JobDetailPage() {
         {fetchError && <p className="text-xs text-red-400 text-center">{fetchError}</p>}
         <button
           onClick={() => router.back()}
-          className="text-violet-600 dark:text-violet-400 text-sm font-medium"
+          className="text-emerald-600 dark:text-emerald-400 text-sm font-medium"
         >
           Go back
         </button>
@@ -307,7 +307,7 @@ export default function JobDetailPage() {
       <div className="page-enter min-h-dvh bg-gray-50 dark:bg-slate-950">
         {/* Top nav */}
         <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
-          <div className="flex items-center justify-between px-5 header-safe-top pb-4">
+          <div className="flex items-center justify-between px-5 pt-6 pb-4">
             <button
               onClick={() => router.push('/dashboard/jobs')}
               className="flex items-center gap-1 text-gray-600 dark:text-gray-400 font-medium text-sm"
@@ -414,13 +414,13 @@ export default function JobDetailPage() {
                   />
                   <defs>
                     <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#8b5cf6" />
-                      <stop offset="100%" stopColor="#3b82f6" />
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#059669" />
                     </linearGradient>
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-violet-500" />
+                  <Zap className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
             </div>
@@ -479,14 +479,14 @@ export default function JobDetailPage() {
                     href={job.apply_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block mt-3 text-violet-600 dark:text-violet-400 font-medium hover:underline"
+                    className="inline-block mt-3 text-emerald-600 dark:text-emerald-400 font-medium hover:underline"
                   >
                     Read full description on Naukri →
                   </a>
                 </div>
               ) : (
                 <div
-                  className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-a:text-violet-600 prose-ul:pl-4 prose-li:my-0.5"
+                  className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-a:text-emerald-600 prose-ul:pl-4 prose-li:my-0.5"
                   dangerouslySetInnerHTML={{
                     __html: job.description.length > 3000
                       ? `${job.description.slice(0, 3000)}…`
@@ -519,7 +519,7 @@ export default function JobDetailPage() {
                 </span>
               )}
               {isEasyApply && (
-                <span className="tag-pill bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
+                <span className="tag-pill bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                   ⚡ {job.apply_type}
                 </span>
               )}
@@ -533,7 +533,7 @@ export default function JobDetailPage() {
         </div>
 
         {/* Apply CTA */}
-        <div className="px-5 pb-28">
+        <div className="px-5 pb-6">
           {/* Dead link warning (auto-detected) */}
           {linkDead && !linkReported && (
             <div className="mb-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
@@ -560,7 +560,7 @@ export default function JobDetailPage() {
               </div>
               <button
                 onClick={() => setShowPreApply(true)}
-                className="w-full py-2.5 text-sm text-violet-600 dark:text-violet-400 font-medium"
+                className="w-full py-2.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium"
               >
                 Reopen Pilot Kit
               </button>
