@@ -20,7 +20,7 @@ export async function GET(_request, { params }) {
     const { data: match, error } = await supabase
       .from('recruiter_matches')
       .select(`
-        id, relevance_score, status, outreach_status, match_reasons,
+        id, relevance_score, status, match_reasons,
         outreach_draft, pilot_recommendation, outreach_channel, scheduled_at,
         recruiters!inner (
           id, name, title, current_company, type,
@@ -48,7 +48,6 @@ export async function GET(_request, { params }) {
         id: match.id,
         relevance_score: match.relevance_score,
         status: match.status,
-        outreach_status: match.outreach_status,
         pilot_recommendation: match.pilot_recommendation,
         outreach_channel: match.outreach_channel,
         scheduled_at: match.scheduled_at,
