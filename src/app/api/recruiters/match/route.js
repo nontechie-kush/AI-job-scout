@@ -196,7 +196,7 @@ export async function GET(request) {
       `)
       .eq('user_id', user.id)
       .order('relevance_score', { ascending: false })
-      .limit(30);
+      .limit(100);
 
     if (error) throw error;
 
