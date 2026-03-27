@@ -11,7 +11,7 @@
  *   Seniority match (25)
  *   Response rate bonus (15)
  *
- * Returns top 30 matches ordered by relevance_score DESC.
+ * Returns top 100 matches ordered by relevance_score DESC.
  */
 
 import { NextResponse } from 'next/server';
@@ -158,9 +158,9 @@ export async function GET(request) {
       }
     }
 
-    // Sort by score, take top 30
+    // Sort by score, take top 100
     scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, 30);
+    const top = scored.slice(0, 100);
 
     if (!top.length) {
       return NextResponse.json({ matches: [] });
