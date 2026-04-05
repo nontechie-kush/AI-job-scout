@@ -26,6 +26,21 @@ import { createClient } from '@/lib/supabase/client';
 import useStore from '@/store/useStore';
 import PushPrompt from '@/components/PushPrompt';
 
+// Normalize legacy lowercase location keys to canonical values (matching save-preferences LOCATION_MAP)
+const LOCATION_NORMALIZE = {
+  india: 'India', usa: 'United States', canada: 'Canada', uk: 'United Kingdom',
+  europe: 'Europe', thailand: 'Thailand', china: 'China', anywhere: 'Anywhere',
+};
+function normalizeLocations(locs) {
+  const seen = new Set();
+  const result = [];
+  for (const loc of locs) {
+    const normalized = LOCATION_NORMALIZE[loc] || loc;
+    if (!seen.has(normalized)) { seen.add(normalized); result.push(normalized); }
+  }
+  return result;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function Toggle({ on, onChange, disabled }) {
@@ -149,7 +164,7 @@ export default function ProfilePage() {
           pilot_mode: json.user.pilot_mode || 'steady',
           notif_cadence: json.user.notif_cadence || 'every_4h',
           target_roles: json.user.target_roles || [],
-          locations: json.user.locations || [],
+          locations: normalizeLocations(json.user.locations || []),
           remote_pref: json.user.remote_pref || 'open',
           salary_min: json.user.salary_min || '',
           salary_max: json.user.salary_max || '',
@@ -362,8 +377,8 @@ export default function ProfilePage() {
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Location</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {['india', 'usa', 'canada', 'uk', 'europe', 'thailand', 'china', 'anywhere'].map((loc) => {
-                const labels = { india: 'India', usa: 'USA', canada: 'Canada', uk: 'UK', europe: 'Europe', thailand: 'Thailand', china: 'China', anywhere: 'Anywhere' };
+              {['India', 'United States', 'Canada', 'United Kingdom', 'Europe', 'Thailand', 'China', 'Anywhere'].map((loc) => {
+                const labels = { 'India': 'India', 'United States': 'USA', 'Canada': 'Canada', 'United Kingdom': 'UK', 'Europe': 'Europe', 'Thailand': 'Thailand', 'China': 'China', 'Anywhere': 'Anywhere' };
                 const active = prefs.locations.includes(loc);
                 return (
                   <button key={loc} onClick={() => toggleArray('locations', loc)}

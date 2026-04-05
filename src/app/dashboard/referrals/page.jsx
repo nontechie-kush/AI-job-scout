@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, Clock, ChevronRight, Users, Bell, RefreshCw,
+  Send, Clock, ChevronRight, Bell, RefreshCw,
   Zap, Sparkles, CheckSquare, Square, X, Edit2, AlertTriangle,
   Chrome, CheckCircle2,
 } from 'lucide-react';
@@ -31,7 +31,7 @@ import { createClient } from '@/lib/supabase/client';
 
 const MAX_BATCH = 15;
 const NOTE_MAX = 300;
-const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID || ''; // set after publish
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID || 'kphfbkfdffodecfioadmbdogmmkgdbaj';
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ function isMobileBrowser() {
   return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-const CHROME_STORE_URL = `https://chromewebstore.google.com/detail/${EXTENSION_ID || 'kphfbkfdffodecfioadmbdogmmkgdbaj'}`;
+const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/careerpilot-%E2%80%94-job-search/kphfbkfdffodecfioadmbdogmmkgdbaj';
 
 // ── Automation status helpers ─────────────────────────────────────────────────
 
@@ -138,7 +138,7 @@ const STATUS_COLOR = {
 
 // ── RecruiterCard ─────────────────────────────────────────────────────────────
 
-function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSelect, automationStatus, onEnterSelection }) {
+function RecruiterCard({ match, selectionMode, selected, onToggleSelect, automationStatus, onEnterSelection }) {
   const isMessaged = match.status === 'messaged';
   const isReplied  = match.status === 'replied';
   const canSelect  = selectionMode && !isMessaged && !isReplied && linkedinHandle(match.linkedin_url);
@@ -226,12 +226,15 @@ function RecruiterCard({ match, onOutreach, selectionMode, selected, onToggleSel
                 </div>
               ) : (
                 <>
-                  <button
-                    onClick={() => onOutreach(match)}
-                    className="flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors active:scale-95"
-                  >
-                    <Send className="w-3.5 h-3.5" />Send DM
-                  </button>
+                  {linkedinHandle(match.linkedin_url) ? (
+                    <button
+                      onClick={() => onEnterSelection?.(match.id)}
+                      className="flex items-center gap-1.5 bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors active:scale-95"
+                      title="Start outreach — connect, then DM/email fallback"
+                    >
+                      <Send className="w-3.5 h-3.5" />Outreach
+                    </button>
+                  ) : null}
                   <Link
                     href={`/dashboard/referrals/${match.id}`}
                     className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs"
@@ -363,12 +366,52 @@ function CapsuleCard({ item, onOutreach, isSent }) {
 
 // ── ReviewSheet ───────────────────────────────────────────────────────────────
 
+// Try to push fresh tokens to the extension and verify it responds
+async function pushTokenAndVerify() {
+  if (!EXTENSION_ID || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+    return { ok: false, reason: 'no_runtime' };
+  }
+  try {
+    const sb = createClient();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) {
+      return { ok: false, reason: 'no_session' };
+    }
+
+    // Send PILOT_SET_TOKEN and wait for response (3s timeout — service worker needs time to wake)
+    const delivered = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 3000);
+      chrome.runtime.sendMessage(EXTENSION_ID, {
+        type: 'PILOT_SET_TOKEN',
+        token: session.access_token,
+        refresh_token: session.refresh_token || '',
+      }, (response) => {
+        clearTimeout(timeout);
+        if (chrome.runtime?.lastError) {
+          console.warn('[CareerPilot] Token push failed:', chrome.runtime.lastError.message);
+          resolve(false);
+        } else {
+          console.log('[CareerPilot] Token push delivered:', response);
+          resolve(true);
+        }
+      });
+    });
+
+    return { ok: delivered, session, reason: delivered ? null : 'no_response' };
+  } catch (err) {
+    console.warn('[CareerPilot] Token push error:', err.message);
+    return { ok: false, reason: 'error' };
+  }
+}
+
 function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
   const [notes, setNotes] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [launched, setLaunched] = useState(false);
   const [extensionInstalled, setExtensionInstalled] = useState(isExtensionInstalled());
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [connectionIssue, setConnectionIssue] = useState(false);
   const [polling, setPolling] = useState(false);
   const pollRef = useRef(null);
   const isMobile = isMobileBrowser();
@@ -402,7 +445,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
             const res = await fetch('/api/recruiters/outreach', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ match_id: match.id }),
+              body: JSON.stringify({ match_id: match.id, mode: 'connect_only' }),
             });
             const json = await res.json();
             if (!res.ok || !json.connection_note) {
@@ -438,7 +481,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
     fetch('/api/recruiters/outreach', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ match_id: match.id }),
+      body: JSON.stringify({ match_id: match.id, mode: 'connect_only' }),
     }).then(async res => {
       const json = await res.json();
       if (!res.ok || !json.connection_note) {
@@ -453,6 +496,7 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
 
   async function handleStart() {
     setStarting(true);
+    setConnectionIssue(false);
 
     const jobs = selectedMatches.map(match => ({
       match_id:        match.id,
@@ -463,26 +507,35 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
     })).filter(j => j.linkedin_handle);
 
     try {
-      // Queue jobs in DB
+      // Queue jobs in DB first — extension polls every 15s and will pick these up
       await fetch('/api/outreach/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobs }),
+        body: JSON.stringify({ jobs, source: 'extension' }),
       });
 
-      // Signal extension to start — it reads auth from cookies directly
-      try {
-        if (EXTENSION_ID && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      // Best-effort: push fresh token + start signal to extension
+      // If this fails, extension will still pick up jobs via alarm polling
+      const preflight = await pushTokenAndVerify();
+      if (preflight.ok) {
+        try {
           chrome.runtime.sendMessage(EXTENSION_ID, {
             type: 'PILOT_START_AUTOMATION',
+            token: preflight.session?.access_token || '',
+            refresh_token: preflight.session?.refresh_token || '',
           }, () => { void chrome.runtime?.lastError; });
-        }
-      } catch {
-        // Extension not installed — jobs are queued in DB, extension will poll next cycle
+        } catch {}
+      } else {
+        console.warn('[CareerPilot] Extension push failed — jobs queued, extension will pick up via polling');
+        setConnectionIssue(true);
       }
 
-      onStartAutomation(jobs);
-      onClose();
+      onStartAutomation(jobs, !preflight.ok);
+      setLaunched(true);
+      setTimeout(() => {
+        onClose();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 1500);
     } catch (err) {
       console.error(err);
       setStarting(false);
@@ -502,15 +555,33 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="w-full bg-white dark:bg-slate-900 rounded-t-2xl max-h-[90dvh] flex flex-col"
+        className="w-full bg-white dark:bg-slate-900 rounded-t-2xl max-h-[90dvh] flex flex-col relative"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
       >
+        {/* Launched confirmation overlay */}
+        {launched && (
+          <div className="absolute inset-0 z-10 bg-white dark:bg-slate-900 rounded-t-2xl flex flex-col items-center justify-center gap-4 px-8">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', damping: 12, stiffness: 200 }}
+              className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center"
+            >
+              <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+            </motion.div>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">Pilot is on it.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+              {selectedMatches.length} connect request{selectedMatches.length !== 1 ? 's' : ''} queued. Check the progress bar above.
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 dark:border-slate-800">
           <div>
-            <h2 className="font-bold text-gray-900 dark:text-white text-base">Review before sending</h2>
+            <h2 className="font-bold text-gray-900 dark:text-white text-base">Review connection requests</h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-              {selectedMatches.length} connection request{selectedMatches.length !== 1 ? 's' : ''} · Edit notes before Pilot sends
+              {selectedMatches.length} LinkedIn connect{selectedMatches.length !== 1 ? 's' : ''} · Edit notes before Pilot sends
             </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
@@ -520,6 +591,14 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
 
         {/* Notes list */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Channel explainer */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-100 dark:border-blue-800/40">
+            <p className="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+              <strong>Connect</strong> = connection request with your note (200 char limit on LinkedIn).
+              If connects max out, Pilot will offer to switch to <strong>DMs</strong> or <strong>email</strong> instead.
+            </p>
+          </div>
+
           {selectedMatches.map((match, i) => {
               const noteData = notes[match.id];
               const note = noteData?.connection_note ?? '';
@@ -618,10 +697,9 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 flex gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-              CareerPilot automates this using your own Chrome browser and your LinkedIn session.
-              We never store your LinkedIn password or credentials.
-              Keep outreach genuine — LinkedIn may restrict accounts that spam.
-              Make sure you&apos;re signed into the right LinkedIn account.
+              <strong>What happens:</strong> Pilot opens LinkedIn in your Chrome browser and sends connection requests with the notes above.
+              We never store your LinkedIn password.
+              LinkedIn may restrict accounts that send too many — keep it genuine.
             </p>
           </div>
         </div>
@@ -701,9 +779,9 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
               className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {starting ? (
-                <><div className="w-4 h-4 spinner" />Starting…</>
+                <><div className="w-4 h-4 spinner" />Connecting to extension…</>
               ) : (
-                <>Start Automation — {selectedMatches.length} message{selectedMatches.length !== 1 ? 's' : ''}</>
+                <>Send Connects — {selectedMatches.length} request{selectedMatches.length !== 1 ? 's' : ''}</>
               )}
             </button>
           )}
@@ -715,11 +793,26 @@ function ReviewSheet({ selectedMatches, onClose, onStartAutomation }) {
 
 // ── AutomationProgressBanner ──────────────────────────────────────────────────
 
-function AutomationProgressBanner({ statuses, onDismiss }) {
+function AutomationProgressBanner({ statuses, onDismiss, extensionWarning }) {
+  const [confirmStop, setConfirmStop] = useState(false);
   const total   = Object.keys(statuses).length;
-  const sent    = Object.values(statuses).filter(s => s === 'sent' || s === 'dm_sent').length;
-  const failed  = Object.values(statuses).filter(s => ['failed', 'limit_hit', 'interrupted', 'cancelled', 'restricted', 'account_restricted'].includes(s)).length;
-  const running = Object.values(statuses).some(s => s === 'pending' || s === 'processing');
+  const vals    = Object.values(statuses);
+  const connected = vals.filter(s => s === 'sent').length;
+  const dmSent   = vals.filter(s => s === 'dm_sent').length;
+  const emailSent = vals.filter(s => s === 'email_sent').length;
+  const sent    = connected + dmSent + emailSent;
+  const deferred = vals.filter(s => s === 'deferred').length;
+  const failed  = vals.filter(s => ['failed', 'limit_hit', 'interrupted', 'cancelled', 'account_restricted'].includes(s)).length;
+  const running = vals.some(s => s === 'pending' || s === 'processing');
+  const inCascade = vals.some(s => ['connect_limit_hit', 'dm_pending_review', 'dm_approved', 'dm_limit_hit', 'email_pending_review', 'email_ready'].includes(s));
+
+  const handleXClick = () => {
+    if (running) {
+      setConfirmStop(true);
+    } else {
+      onDismiss();
+    }
+  };
 
   return (
     <motion.div
@@ -736,17 +829,50 @@ function AutomationProgressBanner({ statuses, onDismiss }) {
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             )}
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
-              {running ? 'Pilot is sending…' : 'Automation complete'}
+              {running ? 'Pilot is sending…' : inCascade ? 'Waiting for your input…' : 'Automation complete'}
             </p>
           </div>
-          {!running && (
-            <button onClick={onDismiss} className="p-1">
-              <X className="w-4 h-4 text-gray-400" />
-            </button>
-          )}
+          <button onClick={handleXClick} className="p-1" title={running ? 'Stop automation' : 'Dismiss'}>
+            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+          </button>
         </div>
+
+        {/* Stop confirmation */}
+        {confirmStop && (
+          <div className="mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg p-3">
+            <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1">Stop automation?</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">
+              {total - sent - failed} request{total - sent - failed !== 1 ? 's' : ''} still pending. You&apos;ll need to restart the flow to send them.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={onDismiss}
+                className="flex-1 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
+              >
+                Stop
+              </button>
+              <button
+                onClick={() => setConfirmStop(false)}
+                className="flex-1 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-200 text-xs font-semibold"
+              >
+                Keep running
+              </button>
+            </div>
+          </div>
+        )}
+
         <p className="text-xs text-gray-600 dark:text-gray-300">
-          {sent} sent · {failed} failed · {total - sent - failed} remaining
+          {running || inCascade ? (
+            <>{sent} sent · {failed > 0 ? `${failed} failed · ` : ''}{total - sent - failed} remaining</>
+          ) : (
+            <>
+              {connected > 0 && <>{connected} connected</>}
+              {dmSent > 0 && <>{connected > 0 ? ' · ' : ''}{dmSent} DMs sent</>}
+              {emailSent > 0 && <>{(connected + dmSent) > 0 ? ' · ' : ''}{emailSent} emailed</>}
+              {deferred > 0 && <>{sent > 0 ? ' · ' : ''}{deferred} deferred</>}
+              {failed > 0 && <>{(sent + deferred) > 0 ? ' · ' : ''}{failed} failed</>}
+            </>
+          )}
         </p>
         {/* Progress bar */}
         <div className="mt-2 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -755,6 +881,14 @@ function AutomationProgressBanner({ statuses, onDismiss }) {
             style={{ width: `${(sent / total) * 100}%` }}
           />
         </div>
+
+        {/* Extension warning */}
+        {extensionWarning && running && sent === 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+            Extension didn&apos;t respond instantly — jobs are queued. It should pick them up within 15 seconds.
+            If nothing happens, try refreshing this page.
+          </p>
+        )}
       </div>
     </motion.div>
   );
@@ -778,6 +912,7 @@ export default function ReferralsPage() {
   const [reviewOpen, setReviewOpen]         = useState(false);
   const [automationStatus, setAutomationStatus] = useState({}); // matchId → status string
   const [showProgress, setShowProgress]     = useState(false);
+  const [extensionWarning, setExtensionWarning] = useState(false); // extension didn't respond but jobs are queued
   const pollRef = useRef(null); // interval ref for cleanup
 
   // Cascade state
@@ -894,7 +1029,8 @@ export default function ReferralsPage() {
     setSelectedIds(new Set());
   }
 
-  function handleStartAutomation(jobs) {
+  function handleStartAutomation(jobs, extensionUnreachable = false) {
+    if (extensionUnreachable) setExtensionWarning(true);
     // Initialise status for each queued job
     const queuedMatchIds = new Set(jobs.map(j => j.match_id));
     const initial = {};
@@ -1001,7 +1137,7 @@ export default function ReferralsPage() {
                       onClick={() => { setSelectionMode(true); setTab('targets'); }}
                       className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition-transform"
                     >
-                      <Users className="w-3.5 h-3.5" />Batch Send
+                      <Send className="w-3.5 h-3.5" />Batch Outreach
                     </button>
                   )}
                   <button onClick={loadMatches} className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
@@ -1021,7 +1157,7 @@ export default function ReferralsPage() {
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex-1">
                 {selectedIds.size === 0
-                  ? 'Tap cards to select — Pilot will draft connection notes for each'
+                  ? 'Tap cards to select — Pilot will send connection requests with a note'
                   : `${selectedIds.size} selected${atBatchLimit ? ` (max ${MAX_BATCH})` : ''}`}
               </p>
               {selectableTargets.length > 0 && selectedIds.size < selectableTargets.length && (
@@ -1065,7 +1201,16 @@ export default function ReferralsPage() {
           {showProgress && Object.keys(automationStatus).length > 0 && (
             <AutomationProgressBanner
               statuses={automationStatus}
-              onDismiss={() => setShowProgress(false)}
+              extensionWarning={extensionWarning}
+              onDismiss={() => {
+                setShowProgress(false);
+                // Tell extension to stop polling
+                try {
+                  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                    chrome.runtime.sendMessage(EXTENSION_ID, { type: 'PILOT_STOP_AUTOMATION' });
+                  }
+                } catch {}
+              }}
             />
           )}
         </AnimatePresence>
@@ -1219,7 +1364,7 @@ export default function ReferralsPage() {
                 className="btn-gradient w-full py-4 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-xl"
               >
                 <Send className="w-4 h-4" />
-                Review &amp; Send to {selectedIds.size} {selectedIds.size === 1 ? 'person' : 'people'}
+                Review &amp; Connect with {selectedIds.size} {selectedIds.size === 1 ? 'person' : 'people'}
               </button>
             </div>
           </motion.div>

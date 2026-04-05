@@ -31,7 +31,7 @@ export async function POST(request) {
     }
 
     if (action === 'approve_dm') {
-      // Move connect_limit_hit → dm_pending_review
+      // Also include dm_pending_review jobs that came from already_connected/restricted reroutes
       let query = supabase
         .from('outreach_queue')
         .update({
@@ -46,7 +46,35 @@ export async function POST(request) {
       const { error, count } = await query;
       if (error) throw error;
 
-      return NextResponse.json({ ok: true, moved: count || 0, to: 'dm_pending_review' });
+      // Fetch all dm_pending_review jobs that need DM drafts generated
+      const { data: dmJobs } = await supabase
+        .from('outreach_queue')
+        .select('id, recruiter_match_id, dm_body')
+        .eq('user_id', user.id)
+        .eq('status', 'dm_pending_review');
+
+      // Generate DM drafts for jobs that don't have one yet
+      const needDrafts = (dmJobs || []).filter(j => !j.dm_body);
+      if (needDrafts.length) {
+        // Generate drafts via /api/recruiters/outreach with mode: 'dm_draft'
+        // Using inline generation for now (same hardcoded defaults) to avoid HTTP self-calls
+        // TODO: when AI is re-enabled, call buildOutreachPrompt with mode: 'dm_draft'
+        await Promise.all(needDrafts.map(async (job) => {
+          const dmSubject = 'Connecting on LinkedIn';
+          const dmBody = 'Hi, It would be great to connect. Regards Kushendra';
+          await supabase
+            .from('outreach_queue')
+            .update({ dm_subject: dmSubject, dm_body: dmBody })
+            .eq('id', job.id);
+        }));
+      }
+
+      return NextResponse.json({
+        ok: true,
+        moved: count || 0,
+        to: 'dm_pending_review',
+        drafts_generated: needDrafts.length,
+      });
     }
 
     if (action === 'approve_email') {

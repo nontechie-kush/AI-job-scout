@@ -53,15 +53,18 @@ export async function POST(request) {
     const user = await getAuthUser(supabase, request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { job_id, status, result_detail } = await request.json();
+    const { job_id, status, result_detail, debug_log } = await request.json();
+    if (debug_log?.length) {
+      console.log(`[outreach/result] ${job_id} status=${status}\n${debug_log.join('\n')}`);
+    }
     if (!job_id || !status) {
       return NextResponse.json({ error: 'job_id and status required' }, { status: 400 });
     }
 
-    // Fetch the job (verify ownership + get method)
+    // Fetch the job (verify ownership + get method + batch_id for request logging)
     const { data: job, error: jobError } = await supabase
       .from('outreach_queue')
-      .select('id, recruiter_match_id, status, outreach_method')
+      .select('id, recruiter_match_id, status, outreach_method, batch_id')
       .eq('id', job_id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -91,6 +94,59 @@ export async function POST(request) {
       .update(matchUpdate)
       .eq('id', job.recruiter_match_id)
       .eq('user_id', user.id);
+
+    // ── UPDATE AUTOMATION REQUEST LOG ──
+    if (job.batch_id) {
+      try {
+        const { data: ar } = await supabase
+          .from('automation_requests')
+          .select('profile_results, sent_count, failed_count, failure_buckets, total_profiles')
+          .eq('id', job.batch_id)
+          .maybeSingle();
+
+        if (ar) {
+          const pr = ar.profile_results || {};
+          pr[job.recruiter_match_id] = {
+            status,
+            detail: result_detail || null,
+            completed_at: new Date().toISOString(),
+          };
+
+          const isSuccess = status === 'sent' || status === 'dm_sent';
+          const isFailure = !isSuccess && TERMINAL_STATUSES.has(status);
+          const newSent = ar.sent_count + (isSuccess ? 1 : 0);
+          const newFailed = ar.failed_count + (isFailure ? 1 : 0);
+
+          const fb = ar.failure_buckets || {};
+          if (isFailure) {
+            fb[status] = (fb[status] || 0) + 1;
+          }
+
+          const completedCount = Object.keys(pr).length;
+          let reqStatus = 'in_progress';
+          if (completedCount >= ar.total_profiles) {
+            reqStatus = newFailed > 0 ? 'partially_completed' : 'completed';
+          }
+          if (status === 'account_restricted') {
+            reqStatus = 'cancelled';
+          }
+
+          await supabase
+            .from('automation_requests')
+            .update({
+              profile_results: pr,
+              sent_count: newSent,
+              failed_count: newFailed,
+              failure_buckets: fb,
+              status: reqStatus,
+              completed_at: reqStatus !== 'in_progress' ? new Date().toISOString() : null,
+            })
+            .eq('id', job.batch_id);
+        }
+      } catch (arErr) {
+        console.error('[automation_requests] update failed:', arErr.message);
+      }
+    }
 
     // ── CASCADE LOGIC ──
 
@@ -132,6 +188,18 @@ export async function POST(request) {
         .eq('id', job_id);
     }
 
+    // Restricted (connect failed) → reroute to DM review as fallback
+    if (status === 'restricted' && (job.outreach_method === 'connect' || !job.outreach_method)) {
+      await supabase
+        .from('outreach_queue')
+        .update({
+          status: 'dm_pending_review',
+          outreach_method: 'dm',
+          result_detail: 'rerouted_restricted',
+        })
+        .eq('id', job_id);
+    }
+
     // Account restricted → cancel everything (safety first)
     if (status === 'account_restricted') {
       await supabase
@@ -143,7 +211,7 @@ export async function POST(request) {
 
     // Return cascade info so extension/frontend knows what happened
     let cascade = null;
-    if (status === 'limit_hit' || status === 'already_connected') {
+    if (status === 'limit_hit' || status === 'already_connected' || status === 'restricted') {
       const { count } = await supabase
         .from('outreach_queue')
         .select('*', { count: 'exact', head: true })

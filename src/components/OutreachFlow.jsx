@@ -191,7 +191,7 @@ export default function OutreachFlow({ referral, onClose, onSent, onConfirmSend 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Your message
+                      LinkedIn DM
                     </label>
                     {!loadingDraft && (
                       <span className="text-xs text-gray-400">{message.length} chars</span>

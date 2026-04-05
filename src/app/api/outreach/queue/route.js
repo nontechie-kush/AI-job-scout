@@ -5,7 +5,11 @@
  * Creates outreach_queue jobs for the selected recruiter matches.
  * Extension polls /api/outreach/pending to pick them up.
  *
- * Body: { jobs: [{ match_id, linkedin_handle, connection_note, dm_subject, dm_body, outreach_method? }] }
+ * Body: {
+ *   jobs: [{ match_id, linkedin_handle, connection_note, dm_subject, dm_body, outreach_method? }],
+ *   source?: 'mobile' | 'extension',
+ *   script_version?: string
+ * }
  * Returns: { queued, skipped, batch_id, positions }
  */
 
@@ -23,7 +27,8 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { jobs } = await request.json();
+    const body = await request.json();
+    const { jobs, source, script_version } = body;
     if (!Array.isArray(jobs) || jobs.length === 0) {
       return NextResponse.json({ error: 'jobs array required' }, { status: 400 });
     }
@@ -82,6 +87,23 @@ export async function POST(request) {
 
     const { error } = await supabase.from('outreach_queue').insert(toInsert);
     if (error) throw error;
+
+    // Log this automation request
+    const profileIds = toInsert.map(j => j.recruiter_match_id);
+    await supabase.from('automation_requests').insert({
+      id: batchId,
+      user_id: user.id,
+      user_email: user.email || '',
+      source: source || 'unknown',
+      script_version: script_version || '',
+      profile_ids: profileIds,
+      profile_results: {},
+      total_profiles: toInsert.length,
+      sent_count: 0,
+      failed_count: 0,
+      failure_buckets: {},
+      status: 'in_progress',
+    }).then(() => {}).catch(e => console.error('[automation_requests] insert failed:', e.message));
 
     return NextResponse.json({
       queued: toInsert.length,

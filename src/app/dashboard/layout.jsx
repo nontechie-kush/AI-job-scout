@@ -17,14 +17,15 @@ const navItems = [
   { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 
-const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID;
+const EXTENSION_ID = process.env.NEXT_PUBLIC_EXTENSION_ID || 'kphfbkfdffodecfioadmbdogmmkgdbaj';
 
-// Secondary token push to extension via onAuthStateChange.
-// The extension reads cookies directly (primary), this is a bonus signal.
+// Push fresh tokens to extension on every dashboard load.
+// This is the primary reliability mechanism — even if the extension's stored
+// tokens expire, opening the dashboard heals them immediately.
 function pushTokenToExtension(supabase) {
   if (!EXTENSION_ID || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+  const sendToken = (session) => {
     if (!session?.access_token) return;
     try {
       chrome.runtime.sendMessage(EXTENSION_ID, {
@@ -33,7 +34,14 @@ function pushTokenToExtension(supabase) {
         refresh_token: session.refresh_token || '',
       }, () => { void chrome.runtime?.lastError; });
     } catch { /* extension not installed */ }
-    subscription.unsubscribe();
+  };
+
+  // Push immediately with current session
+  supabase.auth.getSession().then(({ data }) => sendToken(data?.session));
+
+  // Also push on any auth state change (login, token refresh, etc.)
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    sendToken(session);
   });
 
   return subscription;

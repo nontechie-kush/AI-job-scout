@@ -2,12 +2,12 @@
  * POST /api/recruiters/outreach
  *
  * Generates (or returns cached) Claude-drafted outreach for a recruiter match.
- * Returns three formats used by the automation flow:
- *   connection_note  — ≤200 chars for LinkedIn connect request
- *   dm_subject       — subject if falling back to DM
- *   dm_body          — full message body
  *
- * Body: { match_id }
+ * Body: { match_id, mode? }
+ *   mode: 'connect_only' (default) — only generate connection_note (saves AI credits)
+ *         'dm_draft'               — only generate dm_subject + dm_body (called at cascade time)
+ *         'all'                    — generate all three (legacy)
+ *
  * Returns: { connection_note, dm_subject, dm_body, cached }
  */
 
@@ -27,7 +27,7 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { match_id } = await request.json();
+    const { match_id, mode = 'connect_only' } = await request.json();
     if (!match_id) return NextResponse.json({ error: 'match_id is required' }, { status: 400 });
 
     // Fetch match + recruiter
@@ -47,33 +47,50 @@ export async function POST(request) {
     if (matchError) throw new Error(`Match query failed: ${matchError.message}`);
     if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
 
-    // Return cached draft if available (parse stored JSON)
+    // Check cached draft
+    let cached = null;
     if (match.outreach_draft) {
-      try {
-        const cached = JSON.parse(match.outreach_draft);
-        if (cached.connection_note) {
-          return NextResponse.json({ ...cached, cached: true });
-        }
-      } catch {
-        // Old format (plain string) — regenerate below
+      try { cached = JSON.parse(match.outreach_draft); } catch { /* old format */ }
+    }
+
+    // Return cached if it already has what we need
+    if (cached) {
+      const hasNote = !!cached.connection_note;
+      const hasDm = !!cached.dm_body;
+      if (mode === 'connect_only' && hasNote) {
+        return NextResponse.json({ connection_note: cached.connection_note, dm_subject: '', dm_body: '', cached: true });
+      }
+      if (mode === 'dm_draft' && hasDm) {
+        return NextResponse.json({ connection_note: cached.connection_note || '', dm_subject: cached.dm_subject || '', dm_body: cached.dm_body, cached: true });
+      }
+      if (mode === 'all' && hasNote && hasDm) {
+        return NextResponse.json({ ...cached, cached: true });
       }
     }
 
     // TODO: re-enable Claude-generated messages when ready.
-    // Using a fixed default message for now to avoid API costs during testing.
-    const connection_note = 'Hi, It would be great to connect. Regards Kushendra';
-    const dm_subject = 'Connecting on LinkedIn';
-    const dm_body = 'Hi, It would be great to connect. Regards Kushendra';
+    // Using fixed defaults for now to avoid API costs during testing.
+    const genNote = 'Hi, It would be great to connect. Regards Kushendra';
+    const genDmSubject = 'Connecting on LinkedIn';
+    const genDmBody = 'Hi, It would be great to connect. Regards Kushendra';
 
-    // Enforce 200 char hard limit on connection_note
-    const safeNote = connection_note.slice(0, 200);
+    // Build result based on mode
+    let result;
+    if (mode === 'connect_only') {
+      const safeNote = genNote.slice(0, 200);
+      result = { connection_note: safeNote, dm_subject: '', dm_body: '' };
+    } else if (mode === 'dm_draft') {
+      result = { connection_note: cached?.connection_note || '', dm_subject: genDmSubject, dm_body: genDmBody };
+    } else {
+      const safeNote = genNote.slice(0, 200);
+      result = { connection_note: safeNote, dm_subject: genDmSubject, dm_body: genDmBody };
+    }
 
-    const result = { connection_note: safeNote, dm_subject: dm_subject || '', dm_body };
-
-    // Cache as JSON string in outreach_draft column
+    // Merge with existing cache and store
+    const merged = { ...(cached || {}), ...result };
     await supabase
       .from('recruiter_matches')
-      .update({ outreach_draft: JSON.stringify(result) })
+      .update({ outreach_draft: JSON.stringify(merged) })
       .eq('id', match_id)
       .eq('user_id', user.id);
 

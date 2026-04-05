@@ -3,13 +3,18 @@
 /**
  * DismissSheet — bottom sheet reason picker for "Not for me"
  *
+ * Uses createPortal to render at document.body level — bypasses
+ * CSS transform on .page-enter which breaks fixed positioning.
+ *
  * Props:
  *   matchId    — the match ID to dismiss
  *   onDismiss  — (matchId, reason?) → void — called when user picks a reason
  *   onClose    — called when user closes without picking
  */
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
 const REASONS = [
@@ -23,7 +28,12 @@ const REASONS = [
 ];
 
 export default function DismissSheet({ matchId, onDismiss, onClose }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex flex-col justify-end">
       {/* Backdrop */}
       <motion.div
@@ -36,7 +46,7 @@ export default function DismissSheet({ matchId, onDismiss, onClose }) {
 
       {/* Sheet */}
       <motion.div
-        className="relative bg-white dark:bg-slate-900 rounded-t-2xl px-5 pt-5"
+        className="relative z-10 bg-white dark:bg-slate-900 rounded-t-2xl px-5 pt-5"
         style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom, 32px))' }}
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
@@ -75,6 +85,7 @@ export default function DismissSheet({ matchId, onDismiss, onClose }) {
           Skip without a reason
         </button>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

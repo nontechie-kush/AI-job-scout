@@ -300,6 +300,116 @@ function DeferredScreen({ count, onClose }) {
   );
 }
 
+// ── Screen: DM Choice (Review & Edit Each vs Send All) ──────────────────────
+
+function DMChoiceScreen({ jobs, onReviewEach, onSendAll, onDefer, loading }) {
+  return (
+    <div className="space-y-5 py-2">
+      <div className="flex flex-col items-center text-center gap-3">
+        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+          <MessageSquare className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            {jobs.length} {jobs.length === 1 ? 'DM' : 'DMs'} ready
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 leading-relaxed">
+            Pilot drafted messages for each recruiter.
+            Review them one by one, or send all at once.
+          </p>
+        </div>
+      </div>
+
+      {/* Preview first message */}
+      {jobs[0]?.dm_body && (
+        <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-3.5 border border-gray-200 dark:border-slate-700">
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-7 h-7 rounded-full ${jobs[0].avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-semibold text-[10px]`}>
+              {jobs[0].avatar || jobs[0].name?.[0] || '?'}
+            </div>
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{jobs[0].name}</p>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-3">
+            {jobs[0].dm_body}
+          </p>
+          {jobs.length > 1 && (
+            <p className="text-[10px] text-gray-400 mt-2">+{jobs.length - 1} more</p>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        <button
+          onClick={onReviewEach}
+          disabled={loading}
+          className="w-full py-3.5 rounded-2xl bg-[#0077b5] hover:bg-[#006097] text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
+        >
+          <ChevronRight className="w-4 h-4" />
+          Review &amp; edit each
+        </button>
+        <button
+          onClick={onSendAll}
+          disabled={loading}
+          className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
+        >
+          <Send className="w-4 h-4" />
+          {loading ? 'Approving…' : 'Send all'}
+        </button>
+        <button
+          onClick={onDefer}
+          disabled={loading}
+          className="w-full py-2.5 rounded-2xl bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-30 active:scale-[0.97] transition-all"
+        >
+          <Clock className="w-4 h-4" />
+          Skip for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Screen: Email Choice (Review & Edit Each vs Send All) ───────────────────
+
+function EmailChoiceScreen({ jobs, onReviewEach, onSendAll, loading }) {
+  return (
+    <div className="space-y-5 py-2">
+      <div className="flex flex-col items-center text-center gap-3">
+        <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+          <Mail className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            {jobs.length} {jobs.length === 1 ? 'email' : 'emails'} ready
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 leading-relaxed">
+            Cold emails drafted from your Gmail.
+            Review each one, or send all at once.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        <button
+          onClick={onReviewEach}
+          disabled={loading}
+          className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
+        >
+          <ChevronRight className="w-4 h-4" />
+          Review &amp; edit each
+        </button>
+        <button
+          onClick={onSendAll}
+          disabled={loading}
+          className="w-full py-3 rounded-2xl bg-[#0077b5] hover:bg-[#006097] text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
+        >
+          <Send className="w-4 h-4" />
+          {loading ? 'Sending…' : 'Send all'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Screen: Review Cards (DM or Email) ───────────────────────────────────────
 
 function ReviewCardsScreen({ jobs, type, onDone, onClose }) {
@@ -462,14 +572,18 @@ export default function CascadeConsentSheet({ cascade, jobs, onClose, onRefresh 
     if (cascade.connect_limit_hit > 0) {
       setScreen('connect_limit');
     } else if (cascade.dm_pending_review > 0) {
-      setScreen('dm_review');
-      // Filter jobs that need DM review
-      setDmJobs((jobs || []).filter(j => j.status === 'dm_pending_review'));
+      const pending = (jobs || []).filter(j => j.status === 'dm_pending_review');
+      setDmJobs(pending);
+      // Show choice screen if drafts are ready, otherwise wait
+      const hasDrafts = pending.length > 0 && pending.some(j => j.dm_body);
+      setScreen(hasDrafts ? 'dm_choice' : 'dm_review');
     } else if (cascade.dm_limit_hit > 0) {
       setScreen('dm_limit');
     } else if (cascade.email_pending_review > 0) {
-      setScreen('email_review');
-      setEmailJobs((jobs || []).filter(j => j.status === 'email_pending_review'));
+      const pending = (jobs || []).filter(j => j.status === 'email_pending_review');
+      setEmailJobs(pending);
+      const hasDrafts = pending.length > 0 && pending.some(j => j.email_body);
+      setScreen(hasDrafts ? 'email_choice' : 'email_review');
     } else {
       setScreen(null);
     }
@@ -485,11 +599,57 @@ export default function CascadeConsentSheet({ cascade, jobs, onClose, onRefresh 
       });
       const json = await res.json();
       if (json.ok) {
-        // Refresh to get updated jobs for DM review
+        // Refresh to get updated jobs with DM drafts, then show choice screen
         onRefresh?.();
       }
     } catch (err) {
       console.error('Switch to DM failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendAllDMs = async () => {
+    setLoading(true);
+    try {
+      const approvals = dmJobs.map(j => ({
+        job_id: j.id,
+        approved: true,
+        dm_subject: j.dm_subject || '',
+        dm_body: j.dm_body || '',
+      }));
+      await fetch('/api/outreach/approve-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvals }),
+      });
+      onRefresh?.();
+      onClose?.();
+    } catch (err) {
+      console.error('Send all DMs failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendAllEmails = async () => {
+    setLoading(true);
+    try {
+      const approvals = emailJobs.map(j => ({
+        job_id: j.id,
+        approved: true,
+        email_subject: j.email_subject || j.dm_subject || '',
+        email_body: j.email_body || j.dm_body || '',
+      }));
+      await fetch('/api/outreach/approve-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvals }),
+      });
+      onRefresh?.();
+      onClose?.();
+    } catch (err) {
+      console.error('Send all emails failed:', err);
     } finally {
       setLoading(false);
     }
@@ -547,8 +707,10 @@ export default function CascadeConsentSheet({ cascade, jobs, onClose, onRefresh 
 
   const title = {
     connect_limit: 'Outreach Update',
+    dm_choice: 'DM Automation',
     dm_review: 'Review DMs',
     dm_limit: 'Outreach Update',
+    email_choice: 'Email Automation',
     email_review: 'Review Emails',
     deferred: 'Parked',
   }[screen];
@@ -598,6 +760,18 @@ export default function CascadeConsentSheet({ cascade, jobs, onClose, onRefresh 
               </motion.div>
             )}
 
+            {screen === 'dm_choice' && (
+              <motion.div key="dmc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <DMChoiceScreen
+                  jobs={dmJobs}
+                  onReviewEach={() => setScreen('dm_review')}
+                  onSendAll={handleSendAllDMs}
+                  onDefer={handleDefer}
+                  loading={loading}
+                />
+              </motion.div>
+            )}
+
             {screen === 'dm_review' && (
               <motion.div key="dmr" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <ReviewCardsScreen
@@ -615,6 +789,17 @@ export default function CascadeConsentSheet({ cascade, jobs, onClose, onRefresh 
                   count={cascade?.dm_limit_hit || 0}
                   onSwitchToEmail={handleSwitchToEmail}
                   onDefer={handleDefer}
+                  loading={loading}
+                />
+              </motion.div>
+            )}
+
+            {screen === 'email_choice' && (
+              <motion.div key="ec" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <EmailChoiceScreen
+                  jobs={emailJobs}
+                  onReviewEach={() => setScreen('email_review')}
+                  onSendAll={handleSendAllEmails}
                   loading={loading}
                 />
               </motion.div>

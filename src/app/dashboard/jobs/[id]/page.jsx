@@ -161,6 +161,7 @@ export default function JobDetailPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [saved, setSaved] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [postApplyAction, setPostApplyAction] = useState(null); // null | 'applied' | 'later' | 'resume'
   const [fetchError, setFetchError] = useState(null);
   const [linkDead, setLinkDead] = useState(false);       // auto-detected dead link
   const [linkReportPending, setLinkReportPending] = useState(false); // awaiting confirm
@@ -184,6 +185,8 @@ export default function JobDetailPage() {
         setMatch(data.match);
         setSaved(data.match.status === 'saved');
         setApplied(data.match.status === 'applied');
+        // If already confirmed applied from a previous session, skip the picker
+        if (data.match.status === 'applied') setPostApplyAction('applied');
 
         // Background link check — non-blocking, sets warning if 404/410
         if (data.match.jobs?.apply_url) {
@@ -309,7 +312,7 @@ export default function JobDetailPage() {
         <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
           <div className="flex items-center justify-between px-5 pt-6 pb-4">
             <button
-              onClick={() => router.push('/dashboard/jobs')}
+              onClick={() => router.back()}
               className="flex items-center gap-1 text-gray-600 dark:text-gray-400 font-medium text-sm"
             >
               <ChevronLeft className="w-5 h-5" /> Jobs
@@ -552,17 +555,76 @@ export default function JobDetailPage() {
             </div>
           )}
 
-          {applied ? (
+          {applied && !postApplyAction ? (
+            <div className="space-y-2">
+              <p className="text-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">
+                Did you finish applying?
+              </p>
+              <button
+                onClick={() => {
+                  setPostApplyAction('applied');
+                  // Keep status as 'applied' in DB — already set
+                }}
+                className="w-full py-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-semibold text-sm flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Yes — tracking in pipeline
+              </button>
+              <button
+                onClick={() => {
+                  setPostApplyAction('resume');
+                  setShowPreApply(true);
+                }}
+                className="w-full py-3.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 font-semibold text-sm flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Resume applying — open Pilot Kit
+              </button>
+              <button
+                onClick={async () => {
+                  setPostApplyAction('later');
+                  await fetch('/api/jobs/matches', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ match_id: id, status: 'saved' }),
+                  });
+                }}
+                className="w-full py-3.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 font-medium text-sm flex items-center justify-center gap-2"
+              >
+                <Bookmark className="w-4 h-4" />
+                Apply later — save for now
+              </button>
+              <button
+                onClick={() => setShowDismiss(true)}
+                className="w-full py-2 text-xs text-gray-400 dark:text-gray-500"
+              >
+                Not relevant
+              </button>
+            </div>
+          ) : postApplyAction === 'applied' ? (
             <div className="space-y-2">
               <div className="w-full py-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
                 <CheckCircle2 className="w-5 h-5" />
-                Opened — tracking in pipeline
+                Applied — tracking in pipeline
               </div>
               <button
                 onClick={() => setShowPreApply(true)}
                 className="w-full py-2.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium"
               >
                 Reopen Pilot Kit
+              </button>
+            </div>
+          ) : postApplyAction === 'later' ? (
+            <div className="space-y-2">
+              <div className="w-full py-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-2 text-blue-700 dark:text-blue-400 font-semibold text-sm">
+                <Bookmark className="w-5 h-5" />
+                Saved — come back when ready
+              </div>
+              <button
+                onClick={handleApply}
+                className="w-full py-2.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium"
+              >
+                Ready to apply now?
               </button>
             </div>
           ) : laptopReminderSaved ? (

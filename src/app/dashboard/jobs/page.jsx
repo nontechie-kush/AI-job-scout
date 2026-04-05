@@ -323,9 +323,11 @@ function JobsPage() {
 
       </AnimatePresence>
 
-      {dismissTarget && (
-        <DismissSheet matchId={dismissTarget} onDismiss={handleDismiss} onClose={() => setDismissTarget(null)} />
-      )}
+      <AnimatePresence>
+        {dismissTarget && (
+          <DismissSheet matchId={dismissTarget} onDismiss={handleDismiss} onClose={() => setDismissTarget(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
