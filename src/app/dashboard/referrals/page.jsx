@@ -961,14 +961,19 @@ export default function ReferralsPage() {
       if (!res.ok) return;
       const json = await res.json();
 
+      // Update banner statuses so progress banner stays in sync
+      if (json.statuses) setAutomationStatus(json.statuses);
+
       if (json.cascade) {
         setCascadeData(json.cascade);
-        // Auto-show cascade sheet if there are actionable cascade states
+        // Auto-show cascade sheet only AFTER batch is done (no pending/processing jobs left)
+        const vals = Object.values(json.statuses || {});
+        const stillRunning = vals.some(s => s === 'pending' || s === 'processing');
         const hasActionable = (json.cascade.connect_limit_hit > 0) ||
           (json.cascade.dm_pending_review > 0) ||
           (json.cascade.dm_limit_hit > 0) ||
           (json.cascade.email_pending_review > 0);
-        if (hasActionable && !showCascade) {
+        if (hasActionable && !showCascade && !stillRunning) {
           // Fetch job details for cascade review cards
           try {
             const supabase = createClient();
@@ -1215,8 +1220,8 @@ export default function ReferralsPage() {
           )}
         </AnimatePresence>
 
-        {/* Cascade action banner — re-open cascade sheet */}
-        {!showCascade && cascadeData && (cascadeData.connect_limit_hit > 0 || cascadeData.dm_pending_review > 0 || cascadeData.dm_limit_hit > 0) && (
+        {/* Cascade action banner — re-open cascade sheet (only after batch finishes) */}
+        {!showCascade && cascadeData && !Object.values(automationStatus).some(s => s === 'pending' || s === 'processing') && (cascadeData.connect_limit_hit > 0 || cascadeData.dm_pending_review > 0 || cascadeData.dm_limit_hit > 0) && (
           <div className="mx-5 mb-3">
             <button
               onClick={() => setShowCascade(true)}

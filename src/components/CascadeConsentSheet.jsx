@@ -117,6 +117,11 @@ function SwipeableCard({
           </label>
           <span className="text-[10px] text-gray-400">{body.length} chars</span>
         </div>
+        {!job.dm_body && !job.email_body && type === 'dm' && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">
+            Couldn&apos;t generate an AI draft — please type your message below.
+          </p>
+        )}
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -314,8 +319,9 @@ function DMChoiceScreen({ jobs, onReviewEach, onSendAll, onDefer, loading }) {
             {jobs.length} {jobs.length === 1 ? 'DM' : 'DMs'} ready
           </h3>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5 leading-relaxed">
-            Pilot drafted messages for each recruiter.
-            Review them one by one, or send all at once.
+            {jobs.some(j => j.dm_body)
+              ? 'Pilot drafted messages for each recruiter. Review them one by one, or send all at once.'
+              : 'Connection failed for these profiles. Review and type a DM for each one.'}
           </p>
         </div>
       </div>
@@ -347,14 +353,16 @@ function DMChoiceScreen({ jobs, onReviewEach, onSendAll, onDefer, loading }) {
           <ChevronRight className="w-4 h-4" />
           Review &amp; edit each
         </button>
-        <button
-          onClick={onSendAll}
-          disabled={loading}
-          className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
-        >
-          <Send className="w-4 h-4" />
-          {loading ? 'Approving…' : 'Send all'}
-        </button>
+        {jobs.some(j => j.dm_body) && (
+          <button
+            onClick={onSendAll}
+            disabled={loading}
+            className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-colors active:scale-[0.98]"
+          >
+            <Send className="w-4 h-4" />
+            {loading ? 'Approving…' : 'Send all'}
+          </button>
+        )}
         <button
           onClick={onDefer}
           disabled={loading}
