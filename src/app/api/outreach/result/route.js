@@ -7,6 +7,7 @@
  * CASCADING LOGIC:
  * - limit_hit on connect → remaining pending jobs become 'connect_limit_hit' (not cancelled)
  * - already_connected → that job becomes 'dm_pending_review' (reroute to DM)
+ * - Connect failures (failed, restricted, profile_not_found, already_pending, captcha) → reroute to DM
  * - dm_limit_hit → remaining dm jobs become 'dm_limit_hit'
  * - account_restricted → cancel everything (safety)
  *
@@ -188,14 +189,15 @@ export async function POST(request) {
         .eq('id', job_id);
     }
 
-    // Restricted (connect failed) → reroute to DM review as fallback
-    if (status === 'restricted' && (job.outreach_method === 'connect' || !job.outreach_method)) {
+    // Connect failed (restricted, failed, profile_not_found, already_pending, captcha) → reroute to DM
+    const CONNECT_FAIL_CASCADE = new Set(['restricted', 'failed', 'profile_not_found', 'already_pending', 'captcha']);
+    if (CONNECT_FAIL_CASCADE.has(status) && (job.outreach_method === 'connect' || !job.outreach_method)) {
       await supabase
         .from('outreach_queue')
         .update({
           status: 'dm_pending_review',
           outreach_method: 'dm',
-          result_detail: 'rerouted_restricted',
+          result_detail: `rerouted_${status}`,
         })
         .eq('id', job_id);
     }
@@ -211,7 +213,7 @@ export async function POST(request) {
 
     // Return cascade info so extension/frontend knows what happened
     let cascade = null;
-    if (status === 'limit_hit' || status === 'already_connected' || status === 'restricted') {
+    if (status === 'limit_hit' || status === 'already_connected' || CONNECT_FAIL_CASCADE.has(status)) {
       const { count } = await supabase
         .from('outreach_queue')
         .select('*', { count: 'exact', head: true })
