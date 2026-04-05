@@ -21,7 +21,8 @@ import { buildCandidateSummary, makeProfileHash, scoreBatch } from '@/lib/ai/mat
 
 export const maxDuration = 300;
 
-const INITIAL_BATCH = 10; // score up to this many jobs at signup — fits Vercel Hobby 10s limit
+const INITIAL_BATCH = 10;  // score up to this many jobs at signup — fits Vercel Hobby 10s limit
+const REFRESH_BATCH = 100; // user-initiated "find more jobs" — larger pool, skip already-scored
 const JOB_SELECT = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at';
 
 // Stopwords that don't carry job function signal
@@ -47,21 +48,24 @@ export async function POST(request) {
     const authHeader = request.headers.get('authorization');
     const isServiceCall = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
+    let mode = 'initial';
     if (isServiceCall) {
       const body = await request.json().catch(() => ({}));
       userId = body.user_id;
+      mode = body.mode || 'initial';
       if (!userId) return NextResponse.json({ error: 'user_id required' }, { status: 400 });
     } else {
       const supabase = await createClientFromRequest(request);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       userId = user.id;
+      const body = await request.json().catch(() => ({}));
+      mode = body.mode || 'initial';
     }
 
-    // Await the full match — maxDuration=60 ensures Vercel doesn't kill it early
-    await runInitialMatch(userId);
+    const scored = await runInitialMatch(userId, mode === 'refresh' ? REFRESH_BATCH : INITIAL_BATCH);
 
-    return NextResponse.json({ status: 'matching_done' });
+    return NextResponse.json({ status: 'matching_done', scored: scored || 0 });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -153,7 +157,7 @@ async function fetchRelevantJobs(supabase, roleKeywords, limit, remotePref, user
 
 // ── Core matching function ────────────────────────────────────────────────────
 
-async function runInitialMatch(userId) {
+async function runInitialMatch(userId, maxJobs = INITIAL_BATCH) {
   const { createServiceClient } = await import('@/lib/supabase/server');
   const supabase = createServiceClient();
 
@@ -180,7 +184,7 @@ async function runInitialMatch(userId) {
   const roleKeywords = buildRoleKeywords(userRow.target_roles);
 
   // Fetch role-relevant jobs from existing DB, filtered by user's remote_pref + location
-  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH, userRow.remote_pref, userRow.locations);
+  const jobs = await fetchRelevantJobs(supabase, roleKeywords, maxJobs, userRow.remote_pref, userRow.locations);
 
   // India users: always include recent Naukri jobs in the scoring pool.
   // fetchRelevantJobs may return 60 keyword-matched Greenhouse/Lever jobs and stop —
@@ -207,11 +211,19 @@ async function runInitialMatch(userId) {
     }
   }
 
-  const jobsToScore = jobs.slice(0, INITIAL_BATCH);
-  if (!jobsToScore.length) return;
+  // Skip jobs already scored for this profile version
+  const { data: existingMatches } = await supabase
+    .from('job_matches')
+    .select('job_id')
+    .eq('user_id', userId)
+    .eq('profile_hash', profileHash);
+  const matchedIds = new Set((existingMatches || []).map((r) => r.job_id));
 
-  // Step 3: score in batches of 10
-  const BATCH = 10;
+  const jobsToScore = jobs.filter((j) => !matchedIds.has(j.id)).slice(0, maxJobs);
+  if (!jobsToScore.length) return 0;
+
+  // Score in batches of 50
+  const BATCH = 50;
   const matchRecords = [];
 
   for (let i = 0; i < jobsToScore.length; i += BATCH) {
@@ -241,4 +253,5 @@ async function runInitialMatch(userId) {
 
   const goodMatches = matchRecords.filter((r) => r.match_score >= 40).length;
   console.log(`[match/trigger] scored ${matchRecords.length} jobs, ${goodMatches} passed intent gate (${roleKeywords.join(', ')})`);
+  return matchRecords.length;
 }

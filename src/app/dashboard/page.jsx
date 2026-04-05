@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ChevronRight, TrendingUp, ArrowRight, Users, Laptop } from 'lucide-react';
+import { ChevronRight, TrendingUp, ArrowRight, Users, Laptop, RefreshCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useJobs } from '@/hooks/useJobs';
 import { usePipeline } from '@/hooks/usePipeline';
@@ -206,6 +206,31 @@ export default function HomePage() {
   const [laptopReminders, setLaptopReminders] = useState([]);
   const [isDesktop, setIsDesktop] = useState(false);
   const [showUpdateSearch, setShowUpdateSearch] = useState(false);
+  const [refreshing2, setRefreshing2] = useState(false);
+  const [refreshResult, setRefreshResult] = useState(null);
+
+  const handleFindMore = async () => {
+    setRefreshing2(true);
+    setRefreshResult(null);
+    try {
+      const res = await fetch('/api/jobs/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'refresh' }),
+      });
+      const json = await res.json();
+      if (json.scored > 0) {
+        setRefreshResult(`${json.scored} new jobs scored`);
+        refresh();
+      } else {
+        setRefreshResult('No new jobs found — check back later');
+      }
+    } catch {
+      setRefreshResult('Something went wrong — try again');
+    } finally {
+      setRefreshing2(false);
+    }
+  };
 
   // Detect desktop + fetch laptop reminders
   useEffect(() => {
@@ -380,6 +405,23 @@ export default function HomePage() {
             onUpdateSearch={() => setShowUpdateSearch(true)}
           />
         </motion.section>
+
+        {/* ── 1b. Find more jobs CTA ── */}
+        {!jobsLoading && total > 0 && (
+          <motion.section variants={item}>
+            <button
+              onClick={handleFindMore}
+              disabled={refreshing2}
+              className="w-full py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-emerald-700 dark:text-emerald-300 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing2 ? 'animate-spin' : ''}`} />
+              {refreshing2 ? 'Scanning for new jobs…' : 'Find more jobs'}
+            </button>
+            {refreshResult && (
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">{refreshResult}</p>
+            )}
+          </motion.section>
+        )}
 
         {/* ── 2. Jobs / Referral pivot ── */}
         <motion.section variants={item}>
