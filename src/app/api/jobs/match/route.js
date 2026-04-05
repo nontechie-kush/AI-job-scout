@@ -22,7 +22,7 @@ import { buildCandidateSummary, makeProfileHash, scoreBatch } from '@/lib/ai/mat
 export const maxDuration = 300;
 
 const INITIAL_BATCH = 10;  // score up to this many jobs at signup — fits Vercel Hobby 10s limit
-const REFRESH_BATCH = 100; // user-initiated "find more jobs" — larger pool, skip already-scored
+const REFRESH_BATCH = 50;  // user-initiated "find more jobs" — 1 Haiku call, skip already-scored
 const JOB_SELECT = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at';
 
 // Stopwords that don't carry job function signal
@@ -176,7 +176,7 @@ async function runInitialMatch(userId, maxJobs = INITIAL_BATCH) {
       .single(),
   ]);
 
-  if (!profile?.parsed_json || !userRow) return;
+  if (!profile?.parsed_json || !userRow) return 0;
 
   const candidate   = buildCandidateSummary(profile, userRow);
   const profileHash = makeProfileHash(profile.parsed_json);
@@ -248,7 +248,8 @@ async function runInitialMatch(userId, maxJobs = INITIAL_BATCH) {
   }
 
   if (matchRecords.length) {
-    await supabase.from('job_matches').upsert(matchRecords, { onConflict: 'user_id,job_id' });
+    const { error: upsertErr } = await supabase.from('job_matches').upsert(matchRecords, { onConflict: 'user_id,job_id' });
+    if (upsertErr) console.error('[match/trigger] upsert error:', upsertErr.message);
   }
 
   const goodMatches = matchRecords.filter((r) => r.match_score >= 40).length;

@@ -219,14 +219,16 @@ export default function HomePage() {
         body: JSON.stringify({ mode: 'refresh' }),
       });
       const json = await res.json();
-      if (json.scored > 0) {
+      if (!res.ok) {
+        setRefreshResult(json.error || 'Hit a wall — try again');
+      } else if (json.scored > 0) {
         setRefreshResult(`${json.scored} new jobs scored`);
         refresh();
       } else {
-        setRefreshResult('No new jobs found — check back later');
+        setRefreshResult('All current jobs already scored — new jobs arrive daily');
       }
     } catch {
-      setRefreshResult('Something went wrong — try again');
+      setRefreshResult('Hit a wall — try again');
     } finally {
       setRefreshing2(false);
     }
