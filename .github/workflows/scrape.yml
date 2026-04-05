@@ -2,7 +2,7 @@ name: Scrape Jobs
 
 on:
   schedule:
-    - cron: '0 0,6,12,18 * * *'
+    - cron: '0 1 * * *'  # Once daily at 1:00 UTC (6:30 AM IST)
   workflow_dispatch:
 
 jobs:

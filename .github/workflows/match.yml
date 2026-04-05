@@ -2,21 +2,14 @@ name: Match Jobs
 
 on:
   schedule:
-    - cron: '0 1,7,13,19 * * *'
+    - cron: '0 2 * * *'  # Once daily at 2:00 UTC (7:30 AM IST), 1h after scrape
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Scrape Jobs']
-    types: [completed]
 
 jobs:
   match:
     name: Score jobs for all users
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
-    if: >
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout

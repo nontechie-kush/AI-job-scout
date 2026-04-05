@@ -96,12 +96,32 @@ function buildRoleKeywords(targetRoles = []) {
 }
 
 /**
+ * Location hard filter: jobs in user's locations → any work style;
+ * jobs outside user's locations → only remote.
+ *
+ * "India" user seeing on-site USA jobs was the bug this fixes.
+ */
+function applyLocationFilter(jobs, userLocations) {
+  if (!userLocations?.length) return jobs;
+  const locs = userLocations.map((l) => l.toLowerCase());
+
+  return jobs.filter((job) => {
+    if (job.remote_type === 'remote') return true;
+    const jobLoc = (job.location || '').toLowerCase();
+    return locs.some((loc) => jobLoc.includes(loc));
+  });
+}
+
+/**
  * Query jobs whose title contains any of the role keywords.
- * Filters by remote_type to match user's work style preference.
+ * Filters by remote_type to match user's work style preference,
+ * then applies location hard filter.
  * Falls back to most-recent jobs if keywords yield < 10 results.
  */
-async function fetchRelevantJobs(supabase, roleKeywords, limit, remotePref) {
+async function fetchRelevantJobs(supabase, roleKeywords, limit, remotePref, userLocations) {
   const remoteFilter = REMOTE_FILTERS[remotePref] || REMOTE_FILTERS.open;
+  // Fetch extra to account for location filtering
+  const fetchLimit = limit * 3;
 
   if (roleKeywords.length > 0) {
     const orFilter = roleKeywords.map((w) => `title.ilike.%${w}%`).join(',');
@@ -112,22 +132,23 @@ async function fetchRelevantJobs(supabase, roleKeywords, limit, remotePref) {
       .in('remote_type', remoteFilter)
       .or(orFilter)
       .order('posted_at', { ascending: false, nullsFirst: false })
-      .limit(limit);
+      .limit(fetchLimit);
 
-    if (data?.length >= 10) return data;
-    console.log(`[match/trigger] ${data?.length ?? 0} role-relevant jobs in DB (${roleKeywords.join(', ')}, remote_pref=${remotePref})`);
+    const filtered = applyLocationFilter(data || [], userLocations);
+    if (filtered.length >= 10) return filtered.slice(0, limit);
+    console.log(`[match/trigger] ${filtered.length} role-relevant jobs after location filter (${roleKeywords.join(', ')}, remote_pref=${remotePref})`);
   }
 
-  // Generic fallback — still respects remote_pref
+  // Generic fallback — still respects remote_pref + location filter
   const { data } = await supabase
     .from('jobs')
     .select(JOB_SELECT)
     .eq('is_active', true)
     .in('remote_type', remoteFilter)
     .order('posted_at', { ascending: false, nullsFirst: false })
-    .limit(limit);
+    .limit(fetchLimit);
 
-  return data || [];
+  return applyLocationFilter(data || [], userLocations).slice(0, limit);
 }
 
 // ── Core matching function ────────────────────────────────────────────────────
@@ -158,8 +179,8 @@ async function runInitialMatch(userId) {
   // Only use explicit target_roles for keyword search — not CV content
   const roleKeywords = buildRoleKeywords(userRow.target_roles);
 
-  // Fetch role-relevant jobs from existing DB, filtered by user's remote_pref
-  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH, userRow.remote_pref);
+  // Fetch role-relevant jobs from existing DB, filtered by user's remote_pref + location
+  const jobs = await fetchRelevantJobs(supabase, roleKeywords, INITIAL_BATCH, userRow.remote_pref, userRow.locations);
 
   // India users: always include recent Naukri jobs in the scoring pool.
   // fetchRelevantJobs may return 60 keyword-matched Greenhouse/Lever jobs and stop —

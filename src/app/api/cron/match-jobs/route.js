@@ -18,9 +18,10 @@ import { buildCandidateSummary, makeProfileHash, scoreBatch } from '@/lib/ai/mat
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-const BATCH_SIZE = 10;        // jobs per Claude call
+const BATCH_SIZE = 50;         // jobs per Claude call
 const MAX_JOBS_PER_USER = 300; // unmatched jobs to process per run (keyword-filtered pool)
 const MAX_USERS_PER_RUN = 10;  // users per cron invocation
+const INACTIVE_DAYS = 2;       // skip users inactive longer than this
 
 // Schema: remote_pref IN ('remote_only','hybrid','onsite_ok','open')
 const REMOTE_FILTERS = {
@@ -49,6 +50,21 @@ function buildRoleKeywords(targetRoles = []) {
   return [...words].slice(0, 5);
 }
 
+/**
+ * Location hard filter: jobs in user's locations → any work style;
+ * jobs outside user's locations → only remote.
+ */
+function applyLocationFilter(jobs, userLocations) {
+  if (!userLocations?.length) return jobs;
+  const locs = userLocations.map((l) => l.toLowerCase());
+
+  return jobs.filter((job) => {
+    if (job.remote_type === 'remote') return true;
+    const jobLoc = (job.location || '').toLowerCase();
+    return locs.some((loc) => jobLoc.includes(loc));
+  });
+}
+
 export async function GET(request) {
   const authHeader = request.headers.get('authorization');
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -71,7 +87,19 @@ export async function GET(request) {
     return NextResponse.json({ message: 'No active users to match', duration_ms: Date.now() - startedAt });
   }
 
-  for (const user of users) {
+  // Filter out inactive users (no activity in last INACTIVE_DAYS)
+  const cutoff = new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const activeUsers = users.filter(u => u.last_active_at && u.last_active_at >= cutoff);
+  const skippedCount = users.length - activeUsers.length;
+  if (skippedCount > 0) {
+    console.log(`[match-jobs] skipping ${skippedCount} inactive users (no activity in ${INACTIVE_DAYS}d)`);
+  }
+
+  if (!activeUsers.length) {
+    return NextResponse.json({ message: 'No active users to match', skipped_inactive: skippedCount, duration_ms: Date.now() - startedAt });
+  }
+
+  for (const user of activeUsers) {
     try {
       // Get latest profile
       const { data: profile } = await supabase
@@ -104,6 +132,8 @@ export async function GET(request) {
       const JOB_SELECT = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at';
       const fetchLimit = MAX_JOBS_PER_USER + matchedIds.size;
 
+      // Fetch extra to account for location filtering
+      const locationFetchLimit = fetchLimit * 3;
       let jobs = [];
       if (roleKeywords.length > 0) {
         const orFilter = roleKeywords.map((w) => `title.ilike.%${w}%`).join(',');
@@ -114,8 +144,8 @@ export async function GET(request) {
           .in('remote_type', remoteFilter)
           .or(orFilter)
           .order('posted_at', { ascending: false, nullsFirst: false })
-          .limit(fetchLimit);
-        jobs = data || [];
+          .limit(locationFetchLimit);
+        jobs = applyLocationFilter(data || [], user.locations);
       }
 
       // Fallback: if no keywords or too few results, fetch most recent
@@ -126,8 +156,8 @@ export async function GET(request) {
           .eq('is_active', true)
           .in('remote_type', remoteFilter)
           .order('posted_at', { ascending: false, nullsFirst: false })
-          .limit(fetchLimit);
-        jobs = data || [];
+          .limit(locationFetchLimit);
+        jobs = applyLocationFilter(data || [], user.locations);
       }
 
       const unmatched = jobs
@@ -183,6 +213,7 @@ export async function GET(request) {
   return NextResponse.json({
     duration_ms: Date.now() - startedAt,
     users_processed: Object.keys(results).length,
+    skipped_inactive: skippedCount,
     total_scored: totalScored,
     results,
   });

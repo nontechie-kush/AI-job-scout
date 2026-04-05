@@ -43,8 +43,9 @@ const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KE
 
 // ── Constants (mirrors match-jobs/route.js) ───────────────────────────────────
 
-const BATCH_SIZE        = 10;   // jobs per Claude call
+const BATCH_SIZE        = 50;   // jobs per Claude call
 const MAX_JOBS_PER_USER = 300;  // unmatched jobs to process per user
+const INACTIVE_DAYS     = 2;    // skip users inactive longer than this
 const JOB_SELECT = 'id, title, company, company_domain, location, remote_type, company_stage, department, description, apply_url, apply_type, salary_min, salary_max, salary_currency, posted_at';
 
 const REMOTE_FILTERS = {
@@ -95,13 +96,26 @@ if (!users?.length) {
   process.exit(0);
 }
 
-console.log(`[run-matcher] processing ${users.length} users...`);
+// Filter out inactive users (no activity in last INACTIVE_DAYS)
+const cutoff = new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+const activeUsers = users.filter(u => u.last_active_at && u.last_active_at >= cutoff);
+const skippedCount = users.length - activeUsers.length;
+if (skippedCount > 0) {
+  console.log(`[run-matcher] skipping ${skippedCount} inactive users (no activity in ${INACTIVE_DAYS}d)`);
+}
+
+if (!activeUsers.length) {
+  console.log('[run-matcher] no active users to match');
+  process.exit(0);
+}
+
+console.log(`[run-matcher] processing ${activeUsers.length} active users...`);
 
 let totalScored = 0;
 let totalErrors = 0;
 const results = {};
 
-for (const user of users) {
+for (const user of activeUsers) {
   try {
     const { data: profile } = await supabase
       .from('profiles')
