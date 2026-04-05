@@ -199,7 +199,7 @@ function HeroSection() {
 
 // ── Trust Strip ──────────────────────────────────────────────
 const portals = [
-  'LinkedIn', 'Greenhouse', 'Lever', 'Naukri', 'Wellfound',
+  'Greenhouse', 'Lever', 'Naukri', 'Wellfound',
   'Remotive', 'YC Jobs', 'Cutshort', 'Ashby', 'Hirect',
   'Arc', 'IIMJobs', 'Instahyre', 'TopStartups',
 ];
@@ -207,9 +207,7 @@ const portals = [
 const recruiterProfiles = [
   'VP Sales, Google', 'Talent Acquisition, Amazon', 'CPO, Razorpay',
   'Director - Product, Netflix', 'CTO, Zerodha', 'Tech Recruiter, Microsoft',
-  'Hiring Manager, Flipkart', 'Business Head, Reliance', 'VP Engineering, Meta',
-  'Talent Partner, Sequoia', 'Director - Hiring, Adani Group', 'CTO, CRED',
-  'Head of People, Swiggy', 'Tech Recruiter, Apple', 'CPO, PhonePe',
+  'Hiring Manager, Flipkart', 'Business Head, Reliance',
 ];
 
 function TrustStrip() {
@@ -233,9 +231,9 @@ function TrustStrip() {
           ))}
         </div>
 
-        {/* Curating recruiters */}
+        {/* Curating connections */}
         <p className={`text-center text-[11px] font-medium uppercase tracking-widest mb-3 ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-          Curating recruiters
+          Curating connections
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           {recruiterProfiles.map((profile) => (
