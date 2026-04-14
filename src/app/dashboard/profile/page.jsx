@@ -25,6 +25,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import useStore from '@/store/useStore';
 import PushPrompt from '@/components/PushPrompt';
+import ResumeTailorSheet from '@/components/ResumeTailorSheet';
 
 // Normalize legacy lowercase location keys to canonical values (matching save-preferences LOCATION_MAP)
 const LOCATION_NORMALIZE = {
@@ -152,6 +153,7 @@ export default function ProfilePage() {
   // Local editable preferences state
   const [prefs, setPrefs] = useState(null);
   const [prefsDirty, setPrefsDirty] = useState(false);
+  const [showResumeTailor, setShowResumeTailor] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -354,13 +356,22 @@ export default function ProfilePage() {
                 Parsed {new Date(profile.parsed_at).toLocaleDateString()} · {profile.source}
               </p>
             )}
-            <button
-              onClick={() => router.push('/onboarding')}
-              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-              Update resume / portfolio
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setShowResumeTailor(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Edit resume
+              </button>
+              <button
+                onClick={() => router.push('/onboarding')}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                Re-upload
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -671,6 +682,15 @@ export default function ProfilePage() {
             loadProfile();
           }} />
         </div>
+      )}
+
+      {/* Resume tailor sheet */}
+      {showResumeTailor && (
+        <ResumeTailorSheet
+          match={null}
+          onClose={() => setShowResumeTailor(false)}
+          entryPoint="profile_page"
+        />
       )}
     </div>
   );

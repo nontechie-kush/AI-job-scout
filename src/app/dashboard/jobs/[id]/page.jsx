@@ -10,6 +10,8 @@ import {
 import DismissSheet from '@/components/DismissSheet';
 import PreApplySheet from '@/components/PreApplySheet';
 import LaptopReminderSheet from '@/components/LaptopReminderSheet';
+import ResumeNudge from '@/components/ResumeNudge';
+import ResumeTailorSheet from '@/components/ResumeTailorSheet';
 
 // ── Utilities ──────────────────────────────────────────────────
 
@@ -166,6 +168,7 @@ export default function JobDetailPage() {
   const [linkDead, setLinkDead] = useState(false);       // auto-detected dead link
   const [linkReportPending, setLinkReportPending] = useState(false); // awaiting confirm
   const [linkReported, setLinkReported] = useState(false); // user confirmed + reported
+  const [showResumeTailor, setShowResumeTailor] = useState(false);
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 1024);
@@ -454,6 +457,12 @@ export default function JobDetailPage() {
             )}
           </div>
 
+          {/* Resume strength nudge */}
+          <ResumeNudge
+            matchId={id}
+            onTailor={() => setShowResumeTailor(true)}
+          />
+
           {/* Culture panel — shows skeleton while loading */}
           {intelligence === undefined ? (
             <div className="card p-4 animate-pulse">
@@ -673,6 +682,15 @@ export default function JobDetailPage() {
           match={match}
           onClose={() => setShowPreApply(false)}
           onApplied={handleApplied}
+        />
+      )}
+
+      {/* Resume tailor sheet */}
+      {showResumeTailor && (
+        <ResumeTailorSheet
+          match={match}
+          onClose={() => setShowResumeTailor(false)}
+          entryPoint="job_page"
         />
       )}
 

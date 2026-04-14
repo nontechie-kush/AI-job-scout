@@ -16,6 +16,7 @@ import { createClientFromRequest } from '@/lib/supabase/server';
 import Anthropic from '@anthropic-ai/sdk';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
+import { buildResumeStructurePrompt } from '@/lib/ai/prompts/resume-structure';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -146,6 +147,32 @@ export async function POST(request) {
       console.error('[parse-profile] DB save failed:', saveError.message);
       throw new Error(`Profile save failed: ${saveError.message}`);
     }
+
+    // Generate structured_resume in the background (non-blocking)
+    // This populates the editable resume document for the Resume Tailor Service
+    (async () => {
+      try {
+        const { system: structSys, user: structUser } = buildResumeStructurePrompt(textToParse);
+        const structMsg = await anthropic.messages.create({
+          model: 'claude-opus-4-6',
+          max_tokens: 4000,
+          temperature: 0.3,
+          system: structSys,
+          messages: [{ role: 'user', content: structUser }],
+        });
+        const structRaw = structMsg.content[0].text
+          .trim()
+          .replace(/^```(?:json)?\n?/, '')
+          .replace(/\n?```$/, '');
+        const structuredResume = JSON.parse(structRaw);
+        await supabase
+          .from('profiles')
+          .update({ structured_resume: structuredResume })
+          .eq('user_id', user.id);
+      } catch (e) {
+        console.error('[parse-profile] structured_resume generation failed:', e.message);
+      }
+    })();
 
     return NextResponse.json(parsed);
   } catch (err) {
