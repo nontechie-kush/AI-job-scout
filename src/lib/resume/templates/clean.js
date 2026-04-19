@@ -6,12 +6,7 @@
  */
 
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
-
-// Register a clean professional font
-Font.register({
-  family: 'Helvetica',
-});
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: {
@@ -173,16 +168,16 @@ export function CleanResumeTemplate({ resume, name }) {
         )}
 
         {/* Summary */}
-        {resume.summary && (
-          <>
+        {resume.summary ? (
+          <View>
             <Text style={styles.sectionTitle}>Summary</Text>
             <Text style={styles.summary}>{resume.summary}</Text>
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Experience */}
-        {experience.length > 0 && (
-          <>
+        {experience.length > 0 ? (
+          <View>
             <Text style={styles.sectionTitle}>Experience</Text>
             {experience.map((exp) => (
               <View key={exp.id} style={styles.entrySpacing}>
@@ -193,11 +188,11 @@ export function CleanResumeTemplate({ resume, name }) {
                   </View>
                   <View>
                     <Text style={styles.expDates}>
-                      {exp.start_date} – {exp.end_date || 'Present'}
+                      {`${exp.start_date} – ${exp.end_date || 'Present'}`}
                     </Text>
-                    {exp.location && (
+                    {exp.location ? (
                       <Text style={styles.expLocation}>{exp.location}</Text>
-                    )}
+                    ) : null}
                   </View>
                 </View>
                 {(exp.bullets || []).map((bullet) => (
@@ -205,12 +200,12 @@ export function CleanResumeTemplate({ resume, name }) {
                 ))}
               </View>
             ))}
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Education */}
-        {education.length > 0 && (
-          <>
+        {education.length > 0 ? (
+          <View>
             <Text style={styles.sectionTitle}>Education</Text>
             {education.map((edu) => (
               <View key={edu.id} style={styles.eduRow}>
@@ -218,46 +213,43 @@ export function CleanResumeTemplate({ resume, name }) {
                   <Text style={styles.eduDegree}>{edu.degree}</Text>
                   <Text style={styles.eduInstitution}>{edu.institution}</Text>
                 </View>
-                {edu.year && <Text style={styles.eduYear}>{edu.year}</Text>}
+                {edu.year ? <Text style={styles.eduYear}>{edu.year}</Text> : null}
               </View>
             ))}
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Skills */}
         {(skills.technical?.length || skills.domain?.length || skills.tools?.length) ? (
-          <>
+          <View>
             <Text style={styles.sectionTitle}>Skills</Text>
-            {skills.technical?.length > 0 && (
+            {skills.technical?.length > 0 ? (
               <View style={styles.skillLine}>
                 <Text style={styles.skillText}>
-                  <Text style={styles.skillCategory}>Technical: </Text>
-                  {skills.technical.join(', ')}
+                  {`Technical: ${skills.technical.join(', ')}`}
                 </Text>
               </View>
-            )}
-            {skills.domain?.length > 0 && (
+            ) : null}
+            {skills.domain?.length > 0 ? (
               <View style={styles.skillLine}>
                 <Text style={styles.skillText}>
-                  <Text style={styles.skillCategory}>Domain: </Text>
-                  {skills.domain.join(', ')}
+                  {`Domain: ${skills.domain.join(', ')}`}
                 </Text>
               </View>
-            )}
-            {skills.tools?.length > 0 && (
+            ) : null}
+            {skills.tools?.length > 0 ? (
               <View style={styles.skillLine}>
                 <Text style={styles.skillText}>
-                  <Text style={styles.skillCategory}>Tools: </Text>
-                  {skills.tools.join(', ')}
+                  {`Tools: ${skills.tools.join(', ')}`}
                 </Text>
               </View>
-            )}
-          </>
+            ) : null}
+          </View>
         ) : null}
 
         {/* Projects */}
-        {projects.length > 0 && (
-          <>
+        {projects.length > 0 ? (
+          <View>
             <Text style={styles.sectionTitle}>Projects</Text>
             {projects.map((proj) => (
               <View key={proj.id} style={styles.entrySpacing}>
@@ -267,18 +259,18 @@ export function CleanResumeTemplate({ resume, name }) {
                 ))}
               </View>
             ))}
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Certifications */}
-        {certifications.length > 0 && (
-          <>
+        {certifications.length > 0 ? (
+          <View>
             <Text style={styles.sectionTitle}>Certifications</Text>
             {certifications.map((cert, i) => (
-              <Text key={i} style={styles.certText}>• {cert}</Text>
+              <Text key={i} style={styles.certText}>{`• ${cert}`}</Text>
             ))}
-          </>
-        )}
+          </View>
+        ) : null}
       </Page>
     </Document>
   );

@@ -1,76 +1,31 @@
 /**
  * POST /api/ai/resume-generate-pdf
  *
- * Body: { tailored_resume_id: string, template?: 'clean' }
+ * Body: { tailored_resume_id: string }
  *
- * Generates a PDF from the tailored resume and uploads to Supabase Storage.
- * Returns: { pdf_url: string }
+ * Pipeline:
+ *   1. Load tailored_resumes row + profile (original_html, parsed_json, structured_resume).
+ *   2. If profile lacks original_html, fall back to jsonToFallbackHtml (clean generic template).
+ *   3. Ask Claude to merge tailored_version content into the original HTML, preserving design + page count.
+ *   4. POST resulting HTML to self-hosted pdf-service /html-to-pdf.
+ *   5. Upload PDF buffer to Supabase Storage, return signed URL.
  */
 
 import { NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service-client';
-import React from 'react';
-import { renderToBuffer } from '@react-pdf/renderer';
-import { CleanResumeTemplate } from '@/lib/resume/templates/clean';
+import { htmlToPdf } from '@/lib/pdf-service';
+import { jsonToFallbackHtml, pdfToVisionHtml } from '@/lib/ai/vision-to-html';
+import { buildResumeHtmlTailorPrompt } from '@/lib/ai/prompts/resume-html-tailor';
 
-// Coerce any value into a plain string. Handles objects, arrays, null, numbers.
-// @react-pdf/renderer throws React error #31 if a non-string is passed as a
-// <Text> child, so every field we render must be flattened to a string first.
-function coerceString(v) {
-  if (v == null) return '';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (Array.isArray(v)) return v.map(coerceString).filter(Boolean).join(', ');
-  if (typeof v === 'object') {
-    // Common shapes: {name, issuer}, {first, last}, {text}
-    if (v.text) return coerceString(v.text);
-    if (v.name) return coerceString(v.name);
-    if (v.first || v.last) return [v.first, v.last].filter(Boolean).join(' ');
-    // Last resort — stringify but strip noise
-    try { return JSON.stringify(v); } catch { return ''; }
-  }
-  return '';
-}
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Walk the structured resume and ensure every field the template reads is a string.
-function sanitizeResume(resume) {
-  if (!resume || typeof resume !== 'object') return {};
-  return {
-    summary: coerceString(resume.summary),
-    experience: (resume.experience || []).map((exp, i) => ({
-      id: exp.id || `exp_${i}`,
-      title: coerceString(exp.title),
-      company: coerceString(exp.company),
-      start_date: coerceString(exp.start_date),
-      end_date: coerceString(exp.end_date),
-      location: coerceString(exp.location),
-      bullets: (exp.bullets || []).map((b, j) => ({
-        id: b.id || `b_${i}_${j}`,
-        text: coerceString(b.text ?? b),
-      })),
-    })),
-    education: (resume.education || []).map((edu, i) => ({
-      id: edu.id || `edu_${i}`,
-      degree: coerceString(edu.degree),
-      institution: coerceString(edu.institution),
-      year: coerceString(edu.year),
-    })),
-    skills: {
-      technical: (resume.skills?.technical || []).map(coerceString).filter(Boolean),
-      domain: (resume.skills?.domain || []).map(coerceString).filter(Boolean),
-      tools: (resume.skills?.tools || []).map(coerceString).filter(Boolean),
-    },
-    projects: (resume.projects || []).map((p, i) => ({
-      id: p.id || `proj_${i}`,
-      name: coerceString(p.name),
-      bullets: (p.bullets || []).map((b, j) => ({
-        id: b.id || `pb_${i}_${j}`,
-        text: coerceString(b.text ?? b),
-      })),
-    })),
-    certifications: (resume.certifications || []).map(coerceString).filter(Boolean),
-  };
+function stripFences(html) {
+  return html
+    .replace(/^\s*```(?:html)?\s*\n/i, '')
+    .replace(/\n```\s*$/, '')
+    .trim();
 }
 
 export async function POST(request) {
@@ -86,17 +41,16 @@ export async function POST(request) {
       return NextResponse.json({ error: 'tailored_resume_id required' }, { status: 400 });
     }
 
-    // Fetch the tailored resume + user profile for name
     const [{ data: tailored }, { data: profileRow }] = await Promise.all([
       supabase
         .from('tailored_resumes')
-        .select('id, tailored_version')
+        .select('id, tailored_version, match_id')
         .eq('id', tailored_resume_id)
         .eq('user_id', user.id)
         .single(),
       supabase
         .from('profiles')
-        .select('parsed_json')
+        .select('parsed_json, structured_resume, original_html, original_page_count, original_pdf_path')
         .eq('user_id', user.id)
         .order('parsed_at', { ascending: false })
         .maybeSingle(),
@@ -106,48 +60,102 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Tailored resume not found' }, { status: 404 });
     }
 
-    const resumeData = sanitizeResume(tailored.tailored_version);
-    const userName = coerceString(profileRow?.parsed_json?.name);
-
-    // Render PDF to buffer
-    let pdfBuffer;
-    try {
-      pdfBuffer = await renderToBuffer(
-        React.createElement(CleanResumeTemplate, {
-          resume: resumeData,
-          name: userName,
-        })
-      );
-    } catch (renderErr) {
-      console.error('[resume-generate-pdf] render error:', renderErr);
-      console.error('[resume-generate-pdf] resume shape:', JSON.stringify(resumeData)?.slice(0, 2000));
-      throw new Error(`PDF render failed: ${renderErr.message}`);
+    let jobContext = { title: '', company: '', description: '' };
+    if (tailored.match_id) {
+      const { data: matchRow } = await supabase
+        .from('job_matches')
+        .select('jobs(title, company, description)')
+        .eq('id', tailored.match_id)
+        .maybeSingle();
+      if (matchRow?.jobs) {
+        jobContext = {
+          title: matchRow.jobs.title || '',
+          company: matchRow.jobs.company || '',
+          description: (matchRow.jobs.description || '').slice(0, 3000),
+        };
+      }
     }
 
-    // Upload to Supabase Storage (use service client for storage access)
+    let originalHtml = profileRow?.original_html || null;
+    let pageCount = profileRow?.original_page_count || 1;
+
+    // Lazy backfill: if no original_html but we have the original PDF in Storage,
+    // run vision now so future calls are fast.
+    if (!originalHtml && profileRow?.original_pdf_path) {
+      try {
+        const serviceClient = createServiceClient();
+        const { data: pdfBlob } = await serviceClient.storage
+          .from('resumes')
+          .download(profileRow.original_pdf_path);
+        if (pdfBlob) {
+          const buffer = Buffer.from(await pdfBlob.arrayBuffer());
+          const visionResult = await pdfToVisionHtml(buffer);
+          originalHtml = visionResult.html;
+          pageCount = visionResult.pageCount;
+          await supabase
+            .from('profiles')
+            .update({
+              original_html: originalHtml,
+              original_page_count: pageCount,
+            })
+            .eq('user_id', user.id);
+        }
+      } catch (e) {
+        console.error('[resume-generate-pdf] lazy vision backfill failed:', e.message);
+      }
+    }
+
+    // Final fallback: build a clean generic template from parsed JSON.
+    if (!originalHtml) {
+      const fallback = await jsonToFallbackHtml(
+        profileRow?.parsed_json || {},
+        profileRow?.structured_resume || tailored.tailored_version
+      );
+      originalHtml = fallback.html;
+      pageCount = fallback.pageCount;
+    }
+
+    // Ask Claude to apply tailored content to the original HTML design.
+    const { system, user: userPrompt } = buildResumeHtmlTailorPrompt({
+      originalHtml,
+      pageCount,
+      tailoredVersion: tailored.tailored_version,
+      jobContext,
+    });
+
+    const tailorMsg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 16000,
+      system,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const finalHtml = stripFences(tailorMsg.content[0].text);
+
+    if (!finalHtml.toLowerCase().includes('<!doctype')) {
+      console.error('[resume-generate-pdf] tailor returned malformed HTML:', finalHtml.slice(0, 200));
+      return NextResponse.json({ error: 'Resume render failed. Try again.' }, { status: 500 });
+    }
+
+    const pdfBuffer = await htmlToPdf(finalHtml, { format: 'Letter' });
+
     const serviceClient = createServiceClient();
     const storagePath = `${user.id}/resume-${tailored_resume_id}.pdf`;
-
     const { error: uploadError } = await serviceClient.storage
       .from('resumes')
       .upload(storagePath, pdfBuffer, {
         contentType: 'application/pdf',
         upsert: true,
       });
-
     if (uploadError) {
-      console.error('[resume-generate-pdf] upload error:', uploadError);
       throw new Error(`PDF upload failed: ${uploadError.message}`);
     }
 
-    // Get signed URL (valid for 7 days)
     const { data: signedUrlData } = await serviceClient.storage
       .from('resumes')
       .createSignedUrl(storagePath, 7 * 24 * 60 * 60);
-
     const pdfUrl = signedUrlData?.signedUrl;
 
-    // Update the tailored_resumes record
     await supabase
       .from('tailored_resumes')
       .update({
@@ -160,6 +168,6 @@ export async function POST(request) {
     return NextResponse.json({ pdf_url: pdfUrl });
   } catch (err) {
     console.error('[resume-generate-pdf]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Generation failed' }, { status: 500 });
   }
 }

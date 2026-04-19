@@ -13,10 +13,12 @@
 
 import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service-client';
 import Anthropic from '@anthropic-ai/sdk';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { buildResumeStructurePrompt } from '@/lib/ai/prompts/resume-structure';
+import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -63,6 +65,7 @@ export async function POST(request) {
     const formData = await request.formData();
     const type = formData.get('type');
     let textToParse = '';
+    let pdfBufferForVision = null; // captured for background vision-to-html
 
     if (type === 'pdf' || type === 'docx') {
       const file = formData.get('file');
@@ -81,6 +84,7 @@ export async function POST(request) {
       } else {
         const pdfData = await pdfParse(buffer);
         textToParse = pdfData.text;
+        pdfBufferForVision = buffer;
       }
     } else if (type === 'website') {
       const url = formData.get('url');
@@ -173,6 +177,39 @@ export async function POST(request) {
         console.error('[parse-profile] structured_resume generation failed:', e.message);
       }
     })();
+
+    // Background: capture vision HTML for tailor flow (only if PDF was uploaded)
+    // Stores original PDF in Supabase Storage + semantic HTML in profiles row.
+    // Tailor flow reads original_html, applies edits, re-renders via pdf-service.
+    if (pdfBufferForVision) {
+      (async () => {
+        try {
+          const serviceClient = createServiceClient();
+          const pdfPath = `originals/${user.id}/cv.pdf`;
+          const { error: uploadErr } = await serviceClient.storage
+            .from('resumes')
+            .upload(pdfPath, pdfBufferForVision, {
+              contentType: 'application/pdf',
+              upsert: true,
+            });
+          if (uploadErr) {
+            console.error('[parse-profile] PDF storage upload failed:', uploadErr.message);
+          }
+
+          const { html, pageCount } = await pdfToVisionHtml(pdfBufferForVision);
+          await supabase
+            .from('profiles')
+            .update({
+              original_html: html,
+              original_page_count: pageCount,
+              original_pdf_path: pdfPath,
+            })
+            .eq('user_id', user.id);
+        } catch (e) {
+          console.error('[parse-profile] vision capture failed:', e.message);
+        }
+      })();
+    }
 
     return NextResponse.json(parsed);
   } catch (err) {
