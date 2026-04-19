@@ -630,9 +630,9 @@ export default function ResumeTailorSheet({ match, onClose, entryPoint = 'job_pa
               tailoredResumeId={tailoredResumeId}
               coverage={memoryResult?.coverage || []}
               gaps={memoryResult?.gaps || []}
-              onDone={(accepted) => {
+              onDone={async (accepted) => {
                 if (accepted?.length) setChanges((prev) => [...prev, ...accepted]);
-                setStage('review');
+                await handleMoveToReview();
               }}
               onSwitchToChat={() => setStage('chat')}
             />
@@ -645,9 +645,9 @@ export default function ResumeTailorSheet({ match, onClose, entryPoint = 'job_pa
                 onChangesProposed={(proposedChanges) => {
                   setChanges((prev) => [...prev, ...proposedChanges]);
                 }}
-                onFinalized={(convId) => {
+                onFinalized={async (convId) => {
                   if (convId) setConversationId(convId);
-                  setStage('review');
+                  await handleMoveToReview();
                 }}
               />
             </div>
