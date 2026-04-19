@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { buildResumeStructurePrompt } from '@/lib/ai/prompts/resume-structure';
+import { atomizeResume } from '@/lib/ai/atomize-resume';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -71,6 +72,16 @@ export async function POST(request) {
       .from('profiles')
       .update({ structured_resume: structuredResume })
       .eq('id', profile.id);
+
+    // Fire-and-forget atomization for Resume Tailor v2 knowledge base.
+    // Don't block the response — UI doesn't need atoms to render the structured resume.
+    atomizeResume({
+      supabase,
+      userId: user.id,
+      profile: { ...profile, structured_resume: structuredResume },
+    })
+      .then((r) => console.log('[resume-structure] atomization result:', r))
+      .catch((e) => console.error('[resume-structure] atomization failed:', e.message));
 
     return NextResponse.json({ structured_resume: structuredResume });
   } catch (err) {

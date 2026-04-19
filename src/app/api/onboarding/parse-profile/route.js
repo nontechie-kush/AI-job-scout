@@ -18,6 +18,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { buildResumeStructurePrompt } from '@/lib/ai/prompts/resume-structure';
+import { atomizeResume } from '@/lib/ai/atomize-resume';
 import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -173,8 +174,24 @@ export async function POST(request) {
           .from('profiles')
           .update({ structured_resume: structuredResume })
           .eq('user_id', user.id);
+
+        // Atomize into user_experience_memory for Resume Tailor v2 knowledge base.
+        // Re-fetch profile to get the id + knowledge_base_version we need.
+        const { data: freshProfile } = await supabase
+          .from('profiles')
+          .select('id, structured_resume, knowledge_base_version')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (freshProfile) {
+          const atomResult = await atomizeResume({
+            supabase,
+            userId: user.id,
+            profile: freshProfile,
+          });
+          console.log('[parse-profile] atomization result:', atomResult);
+        }
       } catch (e) {
-        console.error('[parse-profile] structured_resume generation failed:', e.message);
+        console.error('[parse-profile] structured_resume + atomization failed:', e.message);
       }
     })();
 
