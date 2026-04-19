@@ -467,21 +467,27 @@ export default function ResumeTailorSheet({ match, onClose, entryPoint = 'job_pa
   }
 
   async function handleMoveToReview() {
-    // Fetch latest tailored_version from DB (includes all accepted changes)
+    // Read the canonical tailored_version + accepted-change log from the DB
+    // so the review screen reflects exactly what's been persisted, not the
+    // stale client snapshot.
     if (tailoredResumeId) {
       try {
-        const res = await fetch('/api/ai/resume-tailor-init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            match_id: matchId,
-            structured_resume: tailoredVersion,
-          }),
-        });
-        // The init endpoint returns existing record if it exists
-        // But we need to fetch the actual updated tailored_version
-        // Let's fetch it directly
-      } catch {}
+        const res = await fetch(
+          `/api/ai/resume-conversation?tailored_resume_id=${encodeURIComponent(tailoredResumeId)}`,
+          { cache: 'no-store' }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tailored_version) {
+            setTailoredVersion(data.tailored_version);
+          }
+          if (Array.isArray(data.accepted_changes)) {
+            setChanges(data.accepted_changes);
+          }
+        }
+      } catch (e) {
+        console.error('[ResumeTailorSheet] review fetch failed:', e);
+      }
     }
     setStage('review');
   }

@@ -18,7 +18,7 @@ import {
   Send, Loader2, Check, X, ArrowRight, FileText,
 } from 'lucide-react';
 
-function DiffCard({ change, onAccept, onReject }) {
+function DiffCard({ change, onAccept, onReject, pending }) {
   return (
     <div className="mt-2 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
       {change.before && (
@@ -36,14 +36,16 @@ function DiffCard({ change, onAccept, onReject }) {
       <div className="flex border-t border-gray-200 dark:border-slate-700">
         <button
           onClick={() => onAccept(change)}
-          className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+          disabled={pending}
+          className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
         >
-          <Check className="w-3.5 h-3.5" /> Accept
+          {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Accept
         </button>
         <div className="w-px bg-gray-200 dark:bg-slate-700" />
         <button
           onClick={() => onReject(change)}
-          className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+          disabled={pending}
+          className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
         >
           <X className="w-3.5 h-3.5" /> Skip
         </button>
@@ -58,8 +60,10 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [started, setStarted] = useState(false);
+  const [rehydrating, setRehydrating] = useState(true);
   const [acceptedChanges, setAcceptedChanges] = useState([]);
   const [handledChangeIds, setHandledChangeIds] = useState(new Set());
+  const [acceptingId, setAcceptingId] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -70,12 +74,46 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
     }
   }, [messages, loading]);
 
-  // Start conversation automatically
+  // On mount: try to rehydrate an existing conversation for this tailored
+  // resume. If one exists, restore messages + accepted-change ids so the user
+  // doesn't lose context after backing out or closing by mistake.
   useEffect(() => {
-    if (!started && tailoredResumeId) {
+    if (!tailoredResumeId || started) return;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/ai/resume-conversation?tailored_resume_id=${encodeURIComponent(tailoredResumeId)}`,
+          { cache: 'no-store' }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.conversation_id && Array.isArray(data.messages) && data.messages.length > 0) {
+            setConversationId(data.conversation_id);
+            setMessages(data.messages);
+            const acceptedIds = new Set(data.accepted_change_ids || []);
+            setHandledChangeIds(acceptedIds);
+            // Reconstruct acceptedChanges from messages so the "Done" CTA appears
+            // and the count is correct after rehydrate.
+            const accepted = [];
+            for (const m of data.messages) {
+              for (const ch of m.proposed_changes || []) {
+                if (acceptedIds.has(ch.id)) accepted.push(ch);
+              }
+            }
+            setAcceptedChanges(accepted);
+            setStarted(true);
+            setRehydrating(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('[ResumeChat] rehydrate failed:', e);
+      }
+      setRehydrating(false);
       setStarted(true);
       sendMessage('Start');
-    }
+    })();
   }, [tailoredResumeId]);
 
   async function sendMessage(text) {
@@ -130,18 +168,28 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
     }
   }
 
-  function handleAcceptChange(change) {
-    setAcceptedChanges((prev) => [...prev, change]);
-    setHandledChangeIds((prev) => new Set([...prev, change.id]));
-    // Apply the change immediately via API
-    fetch('/api/ai/resume-apply-changes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tailored_resume_id: tailoredResumeId,
-        accepted_changes: [change],
-      }),
-    });
+  async function handleAcceptChange(change) {
+    if (acceptingId) return;
+    setAcceptingId(change.id);
+    try {
+      const res = await fetch('/api/ai/resume-apply-changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tailored_resume_id: tailoredResumeId,
+          accepted_changes: [change],
+        }),
+      });
+      if (!res.ok) {
+        throw new Error('apply-changes failed');
+      }
+      setAcceptedChanges((prev) => [...prev, change]);
+      setHandledChangeIds((prev) => new Set([...prev, change.id]));
+    } catch (e) {
+      console.error('[ResumeChat] accept failed:', e);
+    } finally {
+      setAcceptingId(null);
+    }
   }
 
   function handleRejectChange(change) {
@@ -160,6 +208,11 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
       >
+        {rehydrating && messages.length === 0 && (
+          <div className="flex items-center justify-center py-6 text-xs text-gray-500 dark:text-gray-400 gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Picking up where you left off…
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div
@@ -192,6 +245,7 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
                       change={change}
                       onAccept={handleAcceptChange}
                       onReject={handleRejectChange}
+                      pending={acceptingId === change.id}
                     />
                   )
                 ))}
@@ -223,10 +277,19 @@ export default function ResumeChat({ tailoredResumeId, onChangesProposed, onFina
         <div className="px-4 py-2 border-t border-gray-100 dark:border-slate-800">
           <button
             onClick={() => onFinalized?.(conversationId)}
-            className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
+            disabled={!!acceptingId}
+            className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors disabled:opacity-60"
           >
-            <FileText className="w-4 h-4" />
-            Done — Review &amp; Generate Resume ({acceptedChanges.length} change{acceptedChanges.length !== 1 ? 's' : ''})
+            {acceptingId ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Saving change…
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4" />
+                Done — Review &amp; Generate Resume ({acceptedChanges.length} change{acceptedChanges.length !== 1 ? 's' : ''})
+              </>
+            )}
           </button>
         </div>
       )}
