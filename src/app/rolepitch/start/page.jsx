@@ -262,6 +262,41 @@ function StepUpload({ onNext, dir }) {
 }
 
 // ── Step 2: Vault ──────────────────────────────────────────────────────────────
+const NUGGET_STYLE = {
+  achievement: { label: 'achievement', color: 'var(--green)', bg: 'var(--green-dim)', border: 'oklch(0.72 0.17 155 / 0.2)' },
+  skill_usage:  { label: 'skill',       color: 'var(--accent)', bg: 'var(--accent-dim)', border: 'oklch(0.50 0.19 248 / 0.2)' },
+  context:      { label: 'context',     color: 'var(--text-muted)', bg: 'var(--surface2)', border: 'var(--border)' },
+  metric:       { label: 'metric',      color: 'var(--amber)', bg: 'var(--amber-dim)', border: 'oklch(0.60 0.16 80 / 0.2)' },
+};
+
+function nuggetStyle(type) {
+  return NUGGET_STYLE[type] || NUGGET_STYLE.context;
+}
+
+function countByType(vault) {
+  const counts = {};
+  for (const role of vault) {
+    for (const a of role.achievements) {
+      const t = a.nugget_type || 'context';
+      counts[t] = (counts[t] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function VaultSummary({ counts }) {
+  const order = [['achievement', 'achievements'], ['skill_usage', 'skills'], ['metric', 'metrics'], ['context', 'context']];
+  const parts = order.filter(([k]) => counts[k]).map(([k, label]) => {
+    const s = nuggetStyle(k);
+    return (
+      <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '3px 8px', borderRadius: 5 }}>
+        {counts[k]} {label}
+      </span>
+    );
+  });
+  return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>{parts}</div>;
+}
+
 function StepVault({ onNext, onBack, dir }) {
   const [vault, setVault] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -312,9 +347,10 @@ function StepVault({ onNext, onBack, dir }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ fontSize: 'clamp(22px,2.5vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 6 }}>
-              We found <span style={{ color: 'var(--green)' }}>{total} achievements</span> across {vault.length} roles
+              We found <span style={{ color: 'var(--green)' }}>{total} highlights</span> across {vault.length} roles
             </h2>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Review and edit before we tailor your resume</p>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 4 }}>Review and edit before we tailor your resume</p>
+            <VaultSummary counts={countByType(vault)} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="rp-btn-ghost" onClick={onBack} style={{ fontSize: 13, padding: '9px 18px' }}>← Back</button>
@@ -343,8 +379,9 @@ function StepVault({ onNext, onBack, dir }) {
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: 13, lineHeight: 1.6, color: on ? 'var(--text)' : 'var(--text-muted)', marginBottom: 8 }}>{ach.text}</p>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {ach.metrics.map(m => <span key={m} style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600, color: 'var(--green)', background: 'var(--green-dim)', border: '1px solid oklch(0.72 0.17 155 / 0.2)', padding: '2px 8px', borderRadius: 4 }}>{m}</span>)}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {(() => { const s = nuggetStyle(ach.nugget_type); return <span style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.03em' }}>{s.label}</span>; })()}
+                        {ach.metrics.map(m => <span key={m} style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600, color: 'var(--amber)', background: 'var(--amber-dim)', border: '1px solid oklch(0.60 0.16 80 / 0.2)', padding: '2px 8px', borderRadius: 4 }}>{m}</span>)}
                         {ach.tags.map(t => <span key={t} style={{ fontSize: 10, color: 'var(--text-faint)', background: 'var(--surface2)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 4 }}>{t}</span>)}
                       </div>
                     </div>
