@@ -32,6 +32,7 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { ensureJobCluster } from '@/lib/ai/ensure-job-cluster';
+import { ensureJdCluster } from '@/lib/ai/ensure-jd-cluster';
 import { buildResumeStoryBriefPrompt } from '@/lib/ai/prompts/resume-story-brief';
 import { buildResumeSelectAtomsPrompt } from '@/lib/ai/prompts/resume-select-atoms';
 import { buildResumeComposePrompt } from '@/lib/ai/prompts/resume-compose';
@@ -195,25 +196,48 @@ export async function POST(request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { match_id } = await request.json();
-    if (!match_id) {
-      return NextResponse.json({ error: 'match_id required' }, { status: 400 });
+    const body = await request.json();
+    const { match_id, jd_id } = body;
+
+    if (!match_id && !jd_id) {
+      return NextResponse.json({ error: 'match_id or jd_id required' }, { status: 400 });
     }
 
-    // ── 1. Resolve match → job → cluster ────────────────────────────
-    const { data: match } = await supabase
-      .from('job_matches')
-      .select('id, jobs ( id, title, company, description, cluster_id, seniority_band, cluster_confidence )')
-      .eq('id', match_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // ── 1. Resolve job source → cluster ─────────────────────────────
+    // Two paths: CareerPilot (match_id → job_matches → jobs)
+    //            RolePitch   (jd_id   → job_descriptions)
+    let job;
+    let cluster;
+    const anchorId = jd_id || match_id; // used as the FK in tailored_resumes
 
-    if (!match?.jobs) {
-      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    if (jd_id) {
+      const { data: jd } = await supabase
+        .from('job_descriptions')
+        .select('id, title, company, description, cluster_id, seniority_band, cluster_confidence')
+        .eq('id', jd_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!jd) {
+        return NextResponse.json({ error: 'Job description not found' }, { status: 404 });
+      }
+      job = { id: jd.id, title: jd.title, company: jd.company, description: jd.description };
+      cluster = await ensureJdCluster(supabase, jd.id);
+    } else {
+      const { data: match } = await supabase
+        .from('job_matches')
+        .select('id, jobs ( id, title, company, description, cluster_id, seniority_band, cluster_confidence )')
+        .eq('id', match_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!match?.jobs) {
+        return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+      }
+      job = match.jobs;
+      cluster = await ensureJobCluster(supabase, job.id);
     }
-    const job = match.jobs;
 
-    const cluster = await ensureJobCluster(supabase, job.id);
     if (!cluster) {
       return NextResponse.json({ error: 'Cluster classification failed' }, { status: 500 });
     }
@@ -263,12 +287,12 @@ export async function POST(request) {
 
     if (reuseRow) {
       // Find or create a tailored_resumes row for THIS match, reusing the prior version.
-      const { data: existing } = await supabase
+      const trQuery = supabase
         .from('tailored_resumes')
         .select('id')
-        .eq('user_id', user.id)
-        .eq('match_id', match_id)
-        .maybeSingle();
+        .eq('user_id', user.id);
+      if (jd_id) trQuery.eq('jd_id', jd_id); else trQuery.eq('match_id', match_id);
+      const { data: existing } = await trQuery.maybeSingle();
 
       let tailoredId = existing?.id;
       if (!tailoredId) {
@@ -276,7 +300,7 @@ export async function POST(request) {
           .from('tailored_resumes')
           .insert({
             user_id: user.id,
-            match_id,
+            ...(jd_id ? { jd_id } : { match_id }),
             base_version: profile.structured_resume,
             tailored_version: reuseRow.tailored_version,
             story_brief_id: reuseRow.story_brief_id,
@@ -387,7 +411,7 @@ export async function POST(request) {
               key_themes: parsed.key_themes,
               caliber_signals: parsed.caliber_signals,
               knowledge_base_version: kbv,
-              source_match_ids: [match_id],
+              source_match_ids: match_id ? [match_id] : [],
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'user_id,cluster_id,seniority_band' },
@@ -510,12 +534,12 @@ export async function POST(request) {
 
     const allSelectedAtomIds = cleanedSelections.flatMap((s) => s.atom_ids);
 
-    const { data: existing } = await supabase
+    const freshQuery = supabase
       .from('tailored_resumes')
       .select('id')
-      .eq('user_id', user.id)
-      .eq('match_id', match_id)
-      .maybeSingle();
+      .eq('user_id', user.id);
+    if (jd_id) freshQuery.eq('jd_id', jd_id); else freshQuery.eq('match_id', match_id);
+    const { data: existing } = await freshQuery.maybeSingle();
 
     let tailoredId = existing?.id;
     if (!tailoredId) {
@@ -523,7 +547,7 @@ export async function POST(request) {
         .from('tailored_resumes')
         .insert({
           user_id: user.id,
-          match_id,
+          ...(jd_id ? { jd_id } : { match_id }),
           base_version: profile.structured_resume,
           tailored_version: stitched,
           story_brief_id: brief.id,

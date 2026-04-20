@@ -20,6 +20,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { buildResumeSelectAtomsPrompt } from '@/lib/ai/prompts/resume-select-atoms';
 import { buildResumeComposePrompt } from '@/lib/ai/prompts/resume-compose';
+import { ensureJdCluster } from '@/lib/ai/ensure-jd-cluster';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -107,9 +108,9 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { match_id, tailored_resume_id, answers } = await request.json();
-    if (!match_id || !tailored_resume_id || !Array.isArray(answers) || !answers.length) {
-      return NextResponse.json({ error: 'match_id, tailored_resume_id, answers required' }, { status: 400 });
+    const { match_id, jd_id, tailored_resume_id, answers } = await request.json();
+    if ((!match_id && !jd_id) || !tailored_resume_id || !Array.isArray(answers) || !answers.length) {
+      return NextResponse.json({ error: 'match_id or jd_id, tailored_resume_id, answers required' }, { status: 400 });
     }
 
     // ── 1. Load context ─────────────────────────────────────────────
@@ -201,14 +202,19 @@ If the answer is vague or doesn't add a real fact, output: {"skip": true}`,
     const validIds = new Set(allAtoms.map((a) => a.id));
     const atomsById = new Map(allAtoms.map((a) => [a.id, a]));
 
-    // Load cluster from the match (needed for selection prompt)
-    const { data: matchRow } = await supabase
-      .from('job_matches')
-      .select('jobs(cluster_id, seniority_band, cluster_confidence)')
-      .eq('id', match_id).eq('user_id', user.id).maybeSingle();
-    const cluster = matchRow?.jobs
-      ? { cluster_id: matchRow.jobs.cluster_id, seniority_band: matchRow.jobs.seniority_band, cluster_confidence: matchRow.jobs.cluster_confidence }
-      : null;
+    // Load cluster from either job_descriptions (RolePitch) or job_matches (CareerPilot)
+    let cluster = null;
+    if (jd_id) {
+      cluster = await ensureJdCluster(supabase, jd_id);
+    } else {
+      const { data: matchRow } = await supabase
+        .from('job_matches')
+        .select('jobs(cluster_id, seniority_band, cluster_confidence)')
+        .eq('id', match_id).eq('user_id', user.id).maybeSingle();
+      cluster = matchRow?.jobs
+        ? { cluster_id: matchRow.jobs.cluster_id, seniority_band: matchRow.jobs.seniority_band, cluster_confidence: matchRow.jobs.cluster_confidence }
+        : null;
+    }
 
     const { system: selSys, user: selUser } = buildResumeSelectAtomsPrompt({ brief, cluster, atoms: allAtoms });
     const selMsg = await anthropic.messages.create({

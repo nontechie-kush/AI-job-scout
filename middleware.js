@@ -10,8 +10,23 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 
+const ROLEPITCH_HOSTS = ['rolepitch.com', 'www.rolepitch.com'];
+
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
+  const host = request.headers.get('host') || '';
+  const isRolePitch = ROLEPITCH_HOSTS.some(h => host === h || host.startsWith(h));
+
+  // ── RolePitch hostname routing ──────────────────────────────────
+  // rolepitch.com/ → rewrite to /rolepitch
+  // rolepitch.com/start → rewrite to /rolepitch/start
+  // rolepitch.com/api/* → pass through without rewriting
+  if (isRolePitch && !pathname.startsWith('/api') && !pathname.startsWith('/auth')) {
+    const rpPath = pathname === '/' ? '/rolepitch' : `/rolepitch${pathname}`;
+    const url = request.nextUrl.clone();
+    url.pathname = rpPath;
+    return NextResponse.rewrite(url);
+  }
 
   // ── Protect cron endpoints ──────────────────────────────────────
   if (pathname.startsWith('/api/cron')) {
