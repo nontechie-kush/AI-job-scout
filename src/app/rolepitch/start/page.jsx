@@ -950,7 +950,9 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
 
   const handleGoogleSignup = () => {
     const { tailoredResumeId } = loadSession();
-    router.push(`/auth/signup?redirect=/rolepitch/start&step=6&tr=${tailoredResumeId || ''}&source=rolepitch`);
+    const qs = new URLSearchParams({ step: '6', source: 'rolepitch' });
+    if (tailoredResumeId) qs.set('tr', tailoredResumeId);
+    router.push(`/rolepitch/auth?${qs.toString()}`);
   };
 
   const handleEmailSignup = () => {
