@@ -322,7 +322,7 @@ function StepVault({ onNext, onBack, dir }) {
           </div>
         </div>
       </div>
-      <div className="rp-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 32px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="rp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {vault.map((role, ri) => (
           <div key={ri} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -606,7 +606,7 @@ function StepResult({ onNext, onBack, dir }) {
         </div>
       </div>
 
-      <div className="rp-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 32px 32px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'start' }}>
+      <div className="rp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px 32px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'start' }}>
         {/* Score panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 200, flexShrink: 0 }}>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
