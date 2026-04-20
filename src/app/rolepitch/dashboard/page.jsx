@@ -103,17 +103,18 @@ export default function RolePitchDashboard() {
   const handleDownload = async (resumeId) => {
     setDownloading(resumeId);
     try {
-      const res = await fetch(`/api/resume/download?tailored_resume_id=${resumeId}`);
-      if (!res.ok) throw new Error('Download failed');
+      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`);
+      if (!res.ok) throw new Error('failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `rolepitch-resume-${resumeId.slice(0, 8)}.pdf`;
+      a.download = `rolepitch-${resumeId.slice(0, 8)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Download not available yet — check back soon.');
+      // PDF not yet available — navigate to detail page instead
+      router.push(`/rolepitch/resume/${resumeId}`);
     }
     setDownloading(null);
   };
@@ -208,7 +209,7 @@ export default function RolePitchDashboard() {
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                       <button
                         className="rp-btn-ghost"
-                        onClick={() => router.push(`/rolepitch/start?tr=${r.id}&step=4`)}
+                        onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
                         style={{ fontSize: 12, padding: '7px 14px' }}
                       >
                         View
