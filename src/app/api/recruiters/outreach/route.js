@@ -30,19 +30,33 @@ export async function POST(request) {
     const { match_id, mode = 'connect_only' } = await request.json();
     if (!match_id) return NextResponse.json({ error: 'match_id is required' }, { status: 400 });
 
-    // Fetch match + recruiter
-    const { data: match, error: matchError } = await supabase
-      .from('recruiter_matches')
-      .select(`
-        id, outreach_draft, user_id,
-        recruiters!inner (
-          id, name, title, current_company, specialization,
-          geography, placements_at, response_rate, linkedin_url
-        )
-      `)
-      .eq('id', match_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Fetch match + recruiter + user profile + prefs in parallel
+    const [{ data: match, error: matchError }, { data: profileRow }, { data: userRow }] = await Promise.all([
+      supabase
+        .from('recruiter_matches')
+        .select(`
+          id, outreach_draft, user_id,
+          recruiters!inner (
+            id, name, title, current_company, specialization,
+            geography, placements_at, response_rate, linkedin_url
+          )
+        `)
+        .eq('id', match_id)
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('parsed_json')
+        .eq('user_id', user.id)
+        .order('parsed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('users')
+        .select('target_roles, pilot_mode')
+        .eq('id', user.id)
+        .maybeSingle(),
+    ]);
 
     if (matchError) throw new Error(`Match query failed: ${matchError.message}`);
     if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
@@ -68,22 +82,35 @@ export async function POST(request) {
       }
     }
 
-    // TODO: re-enable Claude-generated messages when ready.
-    // Using fixed defaults for now to avoid API costs during testing.
-    const genNote = 'Hi, It would be great to connect. Regards Kushendra';
-    const genDmSubject = 'Connecting on LinkedIn';
-    const genDmBody = 'Hi, It would be great to connect. Regards Kushendra';
+    // Generate with Claude Haiku
+    const prompt = buildOutreachPrompt(
+      profileRow || {},
+      userRow || {},
+      match.recruiters,
+      userRow?.pilot_mode || 'steady',
+    );
+
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      temperature: 0.5,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    let generated = { connection_note: '', dm_subject: '', dm_body: '' };
+    try {
+      const raw = msg.content[0].text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+      generated = JSON.parse(raw);
+    } catch { /* use empty fallback */ }
 
     // Build result based on mode
     let result;
     if (mode === 'connect_only') {
-      const safeNote = genNote.slice(0, 200);
-      result = { connection_note: safeNote, dm_subject: '', dm_body: '' };
+      result = { connection_note: (generated.connection_note || '').slice(0, 200), dm_subject: '', dm_body: '' };
     } else if (mode === 'dm_draft') {
-      result = { connection_note: cached?.connection_note || '', dm_subject: genDmSubject, dm_body: genDmBody };
+      result = { connection_note: cached?.connection_note || '', dm_subject: generated.dm_subject || '', dm_body: generated.dm_body || '' };
     } else {
-      const safeNote = genNote.slice(0, 200);
-      result = { connection_note: safeNote, dm_subject: genDmSubject, dm_body: genDmBody };
+      result = { connection_note: (generated.connection_note || '').slice(0, 200), dm_subject: generated.dm_subject || '', dm_body: generated.dm_body || '' };
     }
 
     // Merge with existing cache and store

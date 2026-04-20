@@ -43,6 +43,29 @@ function SwipeableCard({
     type === 'email' ? (job.email_body || job.dm_body || '') : (job.dm_body || '')
   );
   const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  // Auto-generate DM draft if missing when card becomes active
+  useEffect(() => {
+    if (!isActive || type !== 'dm' || body || !job.recruiter_match_id) return;
+    let cancelled = false;
+    setGenerating(true);
+    fetch('/api/recruiters/outreach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ match_id: job.recruiter_match_id, mode: 'dm_draft' }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!cancelled && data?.dm_body) {
+          setBody(data.dm_body);
+          setSubject(data.dm_subject || '');
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setGenerating(false); });
+    return () => { cancelled = true; };
+  }, [isActive, type, body, job.recruiter_match_id]);
 
   const handleCopyAndOpen = async () => {
     const fullText = subject ? `${subject}\n\n${body}` : body;
@@ -117,7 +140,12 @@ function SwipeableCard({
           </label>
           <span className="text-[10px] text-gray-400">{body.length} chars</span>
         </div>
-        {!job.dm_body && !job.email_body && type === 'dm' && (
+        {generating && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1 animate-pulse">
+            Drafting message with Pilot…
+          </p>
+        )}
+        {!generating && !body && type === 'dm' && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">
             Couldn&apos;t generate an AI draft — please type your message below.
           </p>

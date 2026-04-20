@@ -728,6 +728,7 @@ function StepGapQuestions({ onNext, onBack, dir }) {
   const inputRef = useRef();
   const scrollRef = useRef();
   const collectedAnswers = useRef([]);             // [{question, answer}]
+  const followupPending = useRef(false);           // true when waiting for follow-up reply
 
   useEffect(() => {
     const { tailoredResumeId } = loadSession();
@@ -757,48 +758,59 @@ function StepGapQuestions({ onNext, onBack, dir }) {
     if (!loadingQ && !done) setTimeout(() => inputRef.current?.focus(), 100);
   }, [current, loadingQ, done]);
 
-  const sendAnswer = useCallback(async (text) => {
-    if (!text.trim() && text !== '__skip__') return;
-    const answer = text === '__skip__' ? 'Skip' : text.trim();
-    const q = questions[current];
-
-    // Add user bubble
-    setThread(t => [...t, { role: 'user', text: answer === 'Skip' ? '(skipped)' : answer }]);
-    setDraft('');
-    collectedAnswers.current.push({ question: q.question, answer });
-
-    const nextIdx = current + 1;
-
+  const advanceToNext = useCallback((nextIdx) => {
     if (nextIdx < questions.length) {
-      // Small delay before next question appears
       setTimeout(() => {
         setThread(t => [...t, { role: 'pilot', text: questions[nextIdx].question, tip: questions[nextIdx].tip }]);
         setCurrent(nextIdx);
       }, 380);
     } else {
-      // All questions answered — submit and move on
       setTimeout(() => {
-        setThread(t => [...t, { role: 'pilot', text: "Got it. Improving your resume now…", tip: null }]);
+        setThread(t => [...t, { role: 'pilot', text: "Got it. Running the final pass now…", tip: null }]);
         setDone(true);
       }, 380);
-
-      setSubmitting(true);
       const { tailoredResumeId, jdId } = loadSession();
-      try {
-        await fetch('/api/ai/resume-tailor-v2/refine', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jd_id: jdId,
-            tailored_resume_id: tailoredResumeId,
-            answers: collectedAnswers.current,
-          }),
-        });
-      } catch { /* non-blocking */ }
-      setSubmitting(false);
-      setTimeout(onNext, 1200);
+      setSubmitting(true);
+      fetch('/api/ai/resume-tailor-v2/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jd_id: jdId, tailored_resume_id: tailoredResumeId, answers: collectedAnswers.current }),
+      }).catch(() => {}).finally(() => { setSubmitting(false); setTimeout(onNext, 1200); });
     }
-  }, [current, questions, onNext]);
+  }, [questions, onNext]);
+
+  const sendAnswer = useCallback(async (text) => {
+    if (!text.trim() && text !== '__skip__') return;
+    const isSkip = text === '__skip__';
+    const answer = isSkip ? 'Skip' : text.trim();
+    const q = questions[current];
+
+    setThread(t => [...t, { role: 'user', text: isSkip ? '(skipped)' : answer }]);
+    setDraft('');
+    collectedAnswers.current.push({ question: q.question, answer });
+
+    if (isSkip) { advanceToNext(current + 1); return; }
+
+    // Ask Haiku if answer is rich enough or needs a follow-up
+    try {
+      const res = await fetch('/api/rolepitch/chat-followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q.question, answer, tip: q.tip }),
+      });
+      const data = await res.json();
+      if (data.action === 'followup' && data.followup && !followupPending.current) {
+        followupPending.current = true;
+        setTimeout(() => {
+          setThread(t => [...t, { role: 'pilot', text: data.followup, tip: null, isFollowup: true }]);
+        }, 380);
+        return;
+      }
+    } catch { /* on error, just advance */ }
+
+    followupPending.current = false;
+    advanceToNext(current + 1);
+  }, [current, questions, advanceToNext]);
 
   const handleKey = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAnswer(draft); }
@@ -977,6 +989,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
           Download PDF
         </button>
         <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={onTailorAnother}>Tailor another role →</button>
+        <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/rolepitch/dashboard')}>View all my pitches →</button>
         <button onClick={onHome} style={{ fontSize: 12, border: 'none', color: 'var(--text-faint)', background: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--sans)' }}>← Back to Home</button>
       </div>
 
@@ -1048,8 +1061,21 @@ export default function RolePitchStart() {
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
     document.documentElement.setAttribute('data-rp-theme', theme);
+
+    // On return from OAuth, URL may carry ?step=N&tr=UUID
+    const params = new URLSearchParams(window.location.search);
+    const urlStep = parseInt(params.get('step') || '', 10);
+    const urlTr = params.get('tr');
+    if (urlTr) saveSession({ tailoredResumeId: urlTr });
+
     const session = loadSession();
-    if (session.step) setStep(session.step);
+    const startStep = !isNaN(urlStep) ? urlStep : (session.step || 0);
+    setStep(startStep);
+
+    // Clean URL without reloading
+    if (params.has('step') || params.has('tr') || params.has('source')) {
+      window.history.replaceState({}, '', '/rolepitch/start');
+    }
   }, []);
 
   const go = useCallback((n) => {

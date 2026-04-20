@@ -53,8 +53,14 @@ export async function GET(request) {
         .eq('id', user?.id)
         .single();
 
-      const destination = userRow?.onboarding_completed ? next : '/onboarding';
-      // Update the redirect URL (cookies are already bound to redirectResponse)
+      // RolePitch flow: source=rolepitch in next param → return to rolepitch start
+      const isRolePitch = next.includes('source=rolepitch') || next.startsWith('/rolepitch');
+      let destination;
+      if (isRolePitch) {
+        destination = next.startsWith('/') ? next : '/rolepitch/start';
+      } else {
+        destination = userRow?.onboarding_completed ? next : '/onboarding';
+      }
       redirectResponse.headers.set('location', `${origin}${destination}`);
       return redirectResponse;
     }

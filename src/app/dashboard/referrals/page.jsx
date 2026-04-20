@@ -919,6 +919,7 @@ export default function ReferralsPage() {
   const [cascadeData, setCascadeData]       = useState(null); // { connect_limit_hit: N, ... }
   const [cascadeJobs, setCascadeJobs]       = useState([]); // jobs needing review
   const [showCascade, setShowCascade]       = useState(false);
+  const cascadeDismissedRef = useRef(false); // user manually closed — don't auto-reopen
   const cascadePollRef = useRef(null);
 
   const loadMatches = useCallback(async () => {
@@ -973,7 +974,7 @@ export default function ReferralsPage() {
           (json.cascade.dm_pending_review > 0) ||
           (json.cascade.dm_limit_hit > 0) ||
           (json.cascade.email_pending_review > 0);
-        if (hasActionable && !showCascade && !stillRunning) {
+        if (hasActionable && !showCascade && !stillRunning && !cascadeDismissedRef.current) {
           // Fetch job details for cascade review cards
           try {
             const supabase = createClient();
@@ -1017,6 +1018,7 @@ export default function ReferralsPage() {
   useEffect(() => () => { if (cascadePollRef.current) clearInterval(cascadePollRef.current); }, []);
 
   const handleCascadeRefresh = () => {
+    cascadeDismissedRef.current = false; // user took action — allow auto-open for next cascade
     checkCascade();
     loadMatches();
   };
@@ -1406,7 +1408,7 @@ export default function ReferralsPage() {
           <CascadeConsentSheet
             cascade={cascadeData}
             jobs={cascadeJobs}
-            onClose={() => setShowCascade(false)}
+            onClose={() => { cascadeDismissedRef.current = true; setShowCascade(false); }}
             onRefresh={handleCascadeRefresh}
           />
         )}

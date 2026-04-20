@@ -209,10 +209,23 @@ function SignupInner() {
     }
 
     setLoading(true);
+    // Preserve the redirect destination (e.g. rolepitch flow) through OAuth round-trip
+    const redirectParam = searchParams.get('redirect') || '';
+    const stepParam = searchParams.get('step') || '';
+    const trParam = searchParams.get('tr') || '';
+    const sourceParam = searchParams.get('source') || '';
+    let nextUrl = '/dashboard';
+    if (redirectParam) {
+      const qs = new URLSearchParams();
+      if (stepParam) qs.set('step', stepParam);
+      if (trParam) qs.set('tr', trParam);
+      if (sourceParam) qs.set('source', sourceParam);
+      nextUrl = redirectParam + (qs.toString() ? '?' + qs.toString() : '');
+    }
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(nextUrl)}`,
         scopes: 'email profile',
       },
     });

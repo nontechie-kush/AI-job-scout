@@ -15,7 +15,11 @@
  */
 
 import { NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClientFromRequest } from '@/lib/supabase/server';
+import { buildOutreachPrompt } from '@/lib/ai/prompts/draft-outreach';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const dynamic = 'force-dynamic';
 
@@ -56,14 +60,39 @@ export async function POST(request) {
       // Generate DM drafts for jobs that don't have one yet
       const needDrafts = (dmJobs || []).filter(j => !j.dm_body);
       if (needDrafts.length) {
-        // Generate drafts via /api/recruiters/outreach with mode: 'dm_draft'
-        // Using inline generation for now (same hardcoded defaults) to avoid HTTP self-calls
-        // TODO: when AI is re-enabled, call buildOutreachPrompt with mode: 'dm_draft'
+        // Load profile + prefs once for all drafts
+        const [{ data: profileRow }, { data: userRow }] = await Promise.all([
+          supabase.from('profiles').select('parsed_json').eq('user_id', user.id)
+            .order('parsed_at', { ascending: false }).limit(1).maybeSingle(),
+          supabase.from('users').select('target_roles, pilot_mode').eq('id', user.id).maybeSingle(),
+        ]);
+
+        // Fetch recruiter data for each job
+        const matchIds = needDrafts.map(j => j.recruiter_match_id);
+        const { data: matchRows } = await supabase
+          .from('recruiter_matches')
+          .select('id, recruiters(name, title, current_company, specialization, placements_at)')
+          .in('id', matchIds);
+        const matchMap = new Map((matchRows || []).map(m => [m.id, m.recruiters]));
+
         await Promise.all(needDrafts.map(async (job) => {
-          const dmSubject = 'Connecting on LinkedIn';
-          const dmBody = 'Hi, It would be great to connect. Regards Kushendra';
-          await supabase
-            .from('outreach_queue')
+          const recruiter = matchMap.get(job.recruiter_match_id) || {};
+          let dmSubject = '', dmBody = '';
+          try {
+            const prompt = buildOutreachPrompt(profileRow || {}, userRow || {}, recruiter, userRow?.pilot_mode || 'steady');
+            const msg = await anthropic.messages.create({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 600,
+              temperature: 0.5,
+              messages: [{ role: 'user', content: prompt }],
+            });
+            const raw = msg.content[0].text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+            const parsed = JSON.parse(raw);
+            dmSubject = parsed.dm_subject || '';
+            dmBody = parsed.dm_body || '';
+          } catch { /* leave empty — user can type manually */ }
+
+          await supabase.from('outreach_queue')
             .update({ dm_subject: dmSubject, dm_body: dmBody })
             .eq('id', job.id);
         }));
