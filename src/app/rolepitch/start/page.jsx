@@ -710,87 +710,198 @@ function StepResult({ onNext, onBack, dir }) {
   );
 }
 
-// ── Step 6: Gap Questions ─────────────────────────────────────────────────────
+// ── Step 6: Chat Gap Questions ────────────────────────────────────────────────
+const DEFAULT_QUESTIONS = [
+  { question: 'Do you have experience working directly with enterprise or B2B customers?', tip: 'e.g. customer calls, QBRs, pilots, contracts' },
+  { question: 'Have you worked on payment systems or financial infrastructure?', tip: 'e.g. routing, fraud, settlement, compliance' },
+  { question: 'Have you led a product through a 0→1 launch at scale?', tip: 'More than 10K users at launch' },
+];
+
 function StepGapQuestions({ onNext, onBack, dir }) {
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loadingQ, setLoadingQ] = useState(true);
+  const [current, setCurrent] = useState(0);       // which question we're on
+  const [draft, setDraft] = useState('');           // current text input
+  const [thread, setThread] = useState([]);         // [{role:'pilot'|'user', text}]
   const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const inputRef = useRef();
+  const scrollRef = useRef();
+  const collectedAnswers = useRef([]);             // [{question, answer}]
 
   useEffect(() => {
     const { tailoredResumeId } = loadSession();
-    if (!tailoredResumeId) { setLoading(false); return; }
+    if (!tailoredResumeId) { setLoadingQ(false); return; }
     fetch(`/api/rolepitch/result?tailored_resume_id=${tailoredResumeId}`)
       .then(r => r.json())
-      .then(data => { setQuestions(data.gap_questions || []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(data => {
+        const qs = data.gap_questions?.length ? data.gap_questions : DEFAULT_QUESTIONS;
+        setQuestions(qs);
+        setThread([{ role: 'pilot', text: qs[0].question, tip: qs[0].tip }]);
+        setLoadingQ(false);
+      })
+      .catch(() => {
+        setQuestions(DEFAULT_QUESTIONS);
+        setThread([{ role: 'pilot', text: DEFAULT_QUESTIONS[0].question, tip: DEFAULT_QUESTIONS[0].tip }]);
+        setLoadingQ(false);
+      });
   }, []);
 
-  const submit = useCallback(async () => {
-    const { tailoredResumeId, jdId } = loadSession();
-    if (!tailoredResumeId || !questions.length) { onNext(); return; }
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [thread]);
 
-    setSubmitting(true);
-    try {
-      const formattedAnswers = questions.map((q, i) => ({
-        question: q.question,
-        answer: answers[i] || 'No',
-      }));
+  // Focus input when question appears
+  useEffect(() => {
+    if (!loadingQ && !done) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [current, loadingQ, done]);
 
-      await fetch('/api/ai/resume-tailor-v2/refine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jd_id: jdId,
-          tailored_resume_id: tailoredResumeId,
-          answers: formattedAnswers,
-        }),
-      });
-    } catch {
-      // Non-blocking — proceed even if refine fails
+  const sendAnswer = useCallback(async (text) => {
+    if (!text.trim() && text !== '__skip__') return;
+    const answer = text === '__skip__' ? 'Skip' : text.trim();
+    const q = questions[current];
+
+    // Add user bubble
+    setThread(t => [...t, { role: 'user', text: answer === 'Skip' ? '(skipped)' : answer }]);
+    setDraft('');
+    collectedAnswers.current.push({ question: q.question, answer });
+
+    const nextIdx = current + 1;
+
+    if (nextIdx < questions.length) {
+      // Small delay before next question appears
+      setTimeout(() => {
+        setThread(t => [...t, { role: 'pilot', text: questions[nextIdx].question, tip: questions[nextIdx].tip }]);
+        setCurrent(nextIdx);
+      }, 380);
+    } else {
+      // All questions answered — submit and move on
+      setTimeout(() => {
+        setThread(t => [...t, { role: 'pilot', text: "Got it. Improving your resume now…", tip: null }]);
+        setDone(true);
+      }, 380);
+
+      setSubmitting(true);
+      const { tailoredResumeId, jdId } = loadSession();
+      try {
+        await fetch('/api/ai/resume-tailor-v2/refine', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jd_id: jdId,
+            tailored_resume_id: tailoredResumeId,
+            answers: collectedAnswers.current,
+          }),
+        });
+      } catch { /* non-blocking */ }
+      setSubmitting(false);
+      setTimeout(onNext, 1200);
     }
-    setSubmitting(false);
-    onNext();
-  }, [answers, questions, onNext]);
+  }, [current, questions, onNext]);
 
-  const defaultQuestions = [
-    { question: 'Do you have experience working directly with enterprise B2B customers?', tip: 'e.g. customer calls, QBRs, pilots' },
-    { question: 'Have you worked on payment systems or financial infrastructure?', tip: 'e.g. routing, fraud, settlement' },
-    { question: 'Have you led a product through a 0→1 launch at scale?', tip: 'More than 10K users at launch' },
-  ];
-
-  const displayQuestions = loading ? [] : (questions.length ? questions : defaultQuestions);
+  const handleKey = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAnswer(draft); }
+  }, [draft, sendAnswer]);
 
   return (
-    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 28 }}>
-      <div style={{ textAlign: 'center', maxWidth: 520 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--amber)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 6 of 7</div>
-        <h2 style={{ fontSize: 'clamp(22px,2.5vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 8 }}>A few quick questions</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.6 }}>Your answers help push your match score higher</p>
-      </div>
-      <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '20px 32px 0', flexShrink: 0 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--amber)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Step 6 of 7</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ fontSize: 'clamp(18px,2vw,24px)', fontWeight: 600, letterSpacing: '-0.03em' }}>Fill in the gaps</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Your answers are atomized into your vault to improve the score</p>
           </div>
-        ) : displayQuestions.map((q, i) => (
-          <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px' }}>
-            <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, marginBottom: 4 }}>{q.question}</p>
-            {q.tip && <p style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 12 }}>{q.tip}</p>}
-            <div style={{ display: 'flex', gap: 8 }}>
-              {['Yes', 'No', 'Partially'].map(opt => (
-                <button key={opt} onClick={() => setAnswers(a => ({ ...a, [i]: opt }))} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${answers[i] === opt ? 'var(--accent)' : 'var(--border)'}`, background: answers[i] === opt ? 'var(--accent-dim)' : 'transparent', color: answers[i] === opt ? 'var(--accent)' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)', transition: 'all 0.15s' }}>{opt}</button>
-              ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {questions.length > 0 && !done && (
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{Math.min(current + 1, questions.length)}/{questions.length}</span>
+            )}
+            <button className="rp-btn-ghost" onClick={onBack} style={{ fontSize: 13, padding: '7px 14px' }}>← Back</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Chat thread */}
+      <div ref={scrollRef} className="rp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {loadingQ ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border)', animation: `rp-pulse2 1.2s ease ${i*0.2}s infinite` }} />)}
+            </div>
+          </div>
+        ) : thread.map((msg, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-end', animation: 'rp-fadeUp 0.3s ease both' }}>
+            {msg.role === 'pilot' && (
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 2 }}>
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" /></svg>
+              </div>
+            )}
+            <div style={{ maxWidth: '72%' }}>
+              <div style={{
+                background: msg.role === 'pilot' ? 'var(--surface)' : 'var(--accent)',
+                color: msg.role === 'pilot' ? 'var(--text)' : 'white',
+                border: msg.role === 'pilot' ? '1px solid var(--border)' : 'none',
+                borderRadius: msg.role === 'pilot' ? '14px 14px 14px 4px' : '14px 14px 4px 14px',
+                padding: '11px 15px',
+                fontSize: 14,
+                lineHeight: 1.55,
+                fontStyle: msg.text === '(skipped)' ? 'italic' : 'normal',
+                opacity: msg.text === '(skipped)' ? 0.6 : 1,
+              }}>
+                {msg.text}
+              </div>
+              {msg.tip && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 5, paddingLeft: 4 }}>{msg.tip}</div>}
             </div>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-          <button className="rp-btn-ghost" onClick={onBack} disabled={submitting} style={{ flex: '0 0 auto' }}>← Back</button>
-          <button className="rp-btn-primary" onClick={submit} disabled={submitting} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            {submitting ? <><div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />Improving…</> : 'Improve my score →'}
-          </button>
-        </div>
+
+        {submitting && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>Improving your resume…</div>
+          </div>
+        )}
       </div>
+
+      {/* Input bar */}
+      {!done && !loadingQ && (
+        <div style={{ padding: '12px 32px 24px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <textarea
+              ref={inputRef}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Type your answer… (Enter to send)"
+              rows={2}
+              style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 14, padding: '11px 14px', outline: 'none', resize: 'none', lineHeight: 1.5 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button onClick={() => sendAnswer(draft)} disabled={!draft.trim()} style={{ width: 40, height: 40, borderRadius: 9, border: 'none', background: draft.trim() ? 'var(--accent)' : 'var(--border)', cursor: draft.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <button onClick={() => sendAnswer('__skip__')} title="Skip this question" style={{ width: 40, height: 40, borderRadius: 9, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M8 3l3 3.5-3 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M11 2v9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Press Enter to send · answers are saved to your vault</div>
+        </div>
+      )}
+
+      {/* Hidden submit area — just show skip all if user wants out */}
+      {!done && !loadingQ && (
+        <div style={{ padding: '0 32px 16px', flexShrink: 0 }}>
+          <button onClick={onNext} style={{ fontSize: 12, color: 'var(--text-faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0 }}>Skip all and continue →</button>
+        </div>
+      )}
     </div>
   );
 }
