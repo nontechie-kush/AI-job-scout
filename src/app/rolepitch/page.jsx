@@ -471,7 +471,7 @@ function Differentiator() {
 
 function Pricing({ onGetStarted }) {
   const plans = [
-    { name: 'Free', price: null, sub: 'Get started', features: ['2 role pitches', 'Basic vault', 'PDF download'], cta: 'Start free', highlight: false },
+    { name: 'Free', price: null, sub: 'Get started', features: ['10 role pitches', 'Full memory vault', 'PDF download'], cta: 'Start free', highlight: false },
     { name: 'Pro', price: '₹999', period: '/month', sub: 'Most popular', features: ['Unlimited pitches', 'Full career vault', 'Score delta + gap questions', 'Priority generation'], cta: 'Start Pro', highlight: true },
     { name: 'Lifetime', price: '₹5,999', period: 'once', sub: 'Best value', features: ['Everything in Pro', 'Forever access', 'All future features', 'No recurring charges'], cta: 'Get Lifetime', highlight: false },
   ];

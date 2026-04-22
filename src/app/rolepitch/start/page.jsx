@@ -1178,7 +1178,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
         {signedUp && (
           <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="var(--accent)" strokeWidth="1.3" /><path d="M2 12c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" /></svg>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Signed in · <strong style={{ color: 'var(--text)' }}>Vault saved</strong> · 1 of 2 free pitches used</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Signed in · <strong style={{ color: 'var(--text)' }}>Vault saved</strong> · 10 free pitches included</span>
           </div>
         )}
 
@@ -1220,7 +1220,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
             <button onClick={handleEmailSignup} disabled={!email} style={{ width: '100%', padding: 12, borderRadius: 9, border: 'none', cursor: email ? 'pointer' : 'not-allowed', background: email ? 'var(--accent)' : 'var(--border)', color: 'white', fontSize: 14, fontWeight: 600, fontFamily: 'var(--sans)', opacity: email ? 1 : 0.5 }}>
               {loading ? 'Creating account…' : 'Create free account'}
             </button>
-            <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', marginTop: 14 }}>2 free pitches. No credit card required.</p>
+            <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', marginTop: 14 }}>10 free pitches. No credit card required.</p>
           </div>
         </div>
       )}
@@ -1230,7 +1230,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
         <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16, padding: '36px 32px', maxWidth: 400, width: '100%', boxShadow: '0 24px 64px oklch(0 0 0 / 0.2)' }}>
             <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>You&apos;ve used 2 free pitches</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>You&apos;ve used 10 free pitches</div>
               <h3 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 8 }}>Unlock unlimited tailoring</h3>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>Unlimited role tailoring. Full career vault. Faster generation.</p>
             </div>
