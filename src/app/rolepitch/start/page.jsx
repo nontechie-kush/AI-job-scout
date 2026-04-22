@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 const CSS_VARS = `
   :root {
@@ -51,8 +52,8 @@ const CSS_VARS = `
   @keyframes rp-pulse2 { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   @keyframes rp-slideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
   @keyframes rp-slideInLeft { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: translateX(0); } }
-  .rp-anim-in { animation: rp-slideIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }
-  .rp-anim-in-left { animation: rp-slideInLeft 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+  .rp-anim-in { animation: rp-slideIn 0.35s cubic-bezier(0.22,1,0.36,1) both; min-height: 0; }
+  .rp-anim-in-left { animation: rp-slideInLeft 0.35s cubic-bezier(0.22,1,0.36,1) both; min-height: 0; }
   .rp-fade-up { animation: rp-fadeUp 0.4s ease both; }
   .rp-btn-primary {
     background: var(--accent); color: white; border: none; cursor: pointer;
@@ -140,7 +141,7 @@ function StepUpload({ onNext, dir }) {
       form.append('type', 'pdf');
       form.append('file', file);
 
-      const res = await fetch('/api/onboarding/parse-profile', { method: 'POST', body: form });
+      const res = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
       clearInterval(stepTimer);
 
       if (!res.ok) {
@@ -149,8 +150,9 @@ function StepUpload({ onNext, dir }) {
       }
 
       const data = await res.json();
-      saveSession({ profileId: data.profile_id, parsedName: data.name });
-      setParseResult(data);
+      const parsed = data.parsed || data;
+      saveSession({ parsedName: parsed.name, parsedResume: parsed });
+      setParseResult(parsed);
       setPhase('done');
     } catch (err) {
       clearInterval(stepTimer);
@@ -173,12 +175,13 @@ function StepUpload({ onNext, dir }) {
       form.append('type', 'paste');
       form.append('text', `Kushendra Suryavanshi\nSenior Product Manager\n\nExperience:\nRazorpay (2024–Present) — Senior Product Manager\n• Led cross-functional team of 12 to redesign payment infrastructure, reducing latency by 40%\n• Launched RazorpayX Business Banking to 8,000+ SMEs in 3 months\n\nMeesho (2022–2024) — Product Manager\n• Owned seller onboarding v2 — reduced time-to-first-sale from 11 days to 3.5 days\n• Built A/B testing framework used by 6 product teams, improving experiment velocity by 60%\n• Drove supplier NPS from 34 to 61\n\nFlipkart (2020–2022) — Associate Product Manager\n• Redesigned checkout flow, increasing conversion by 32%\n• Shipped address autofill using ML signals, reducing manual input by 70%`);
 
-      const res = await fetch('/api/onboarding/parse-profile', { method: 'POST', body: form });
+      const res = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
       clearInterval(stepTimer);
       if (!res.ok) throw new Error('Parse failed');
       const data = await res.json();
-      saveSession({ profileId: data.profile_id, parsedName: data.name });
-      setParseResult(data);
+      const parsed = data.parsed || data;
+      saveSession({ parsedName: parsed.name, parsedResume: parsed });
+      setParseResult(parsed);
       setPhase('done');
     } catch (err) {
       clearInterval(stepTimer);
@@ -273,61 +276,51 @@ function nuggetStyle(type) {
   return NUGGET_STYLE[type] || NUGGET_STYLE.context;
 }
 
-function countByType(vault) {
-  const counts = {};
-  for (const role of vault) {
-    for (const a of role.achievements) {
-      const t = a.nugget_type || 'context';
-      counts[t] = (counts[t] || 0) + 1;
-    }
-  }
-  return counts;
-}
-
-function VaultSummary({ counts }) {
-  const order = [['achievement', 'achievements'], ['skill_usage', 'skills'], ['metric', 'metrics'], ['context', 'context']];
-  const parts = order.filter(([k]) => counts[k]).map(([k, label]) => {
-    const s = nuggetStyle(k);
-    return (
-      <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '3px 8px', borderRadius: 5 }}>
-        {counts[k]} {label}
-      </span>
-    );
-  });
-  return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>{parts}</div>;
-}
+const BULLET_TYPE_STYLE = {
+  achievement: { label: 'Achievement', color: 'oklch(0.55 0.18 248)', bg: 'oklch(0.55 0.18 248 / 0.1)', border: 'oklch(0.55 0.18 248 / 0.2)' },
+  metric:      { label: 'Metric',      color: 'oklch(0.50 0.17 155)', bg: 'oklch(0.50 0.17 155 / 0.1)', border: 'oklch(0.50 0.17 155 / 0.2)' },
+  skill:       { label: 'Skill',       color: 'oklch(0.55 0.16 80)',  bg: 'oklch(0.55 0.16 80 / 0.1)',  border: 'oklch(0.55 0.16 80 / 0.2)' },
+  context:     { label: 'Context',     color: 'var(--text-faint)',    bg: 'var(--surface2)',             border: 'var(--border)' },
+};
 
 function StepVault({ onNext, onBack, dir }) {
   const [vault, setVault] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(new Set());
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({});
+  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch('/api/rolepitch/vault')
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        setVault(data.vault || []);
-        setTotal(data.total || 0);
-        // Select all by default
-        const allIds = (data.vault || []).flatMap(g => g.achievements.map(a => a.id));
-        setSelected(new Set(allIds));
-        setLoading(false);
-      })
-      .catch(err => { setError(err.message); setLoading(false); });
-  }, []);
+    const session = loadSession();
+    const parsed = session.parsedResume;
+    if (!parsed) { setError('Resume not found — go back and upload again'); setLoading(false); return; }
 
-  const toggle = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const built = (parsed.experience || []).map((role) => ({
+      company: role.company || 'Unknown Company',
+      role: role.title || 'Unknown Role',
+      period: [role.start_date, role.end_date].filter(Boolean).map(d => d.slice(0, 4)).join(' – ') || '',
+      bullets: (role.bullets || []).map(b => ({
+        text: typeof b === 'string' ? b : b.text,
+        type: (typeof b === 'string' ? 'achievement' : b.type) || 'achievement',
+      })),
+    })).filter(r => r.bullets.length > 0);
+
+    const bulletCount = built.reduce((s, r) => s + r.bullets.length, 0);
+    const typeCounts = {};
+    built.forEach(role => role.bullets.forEach(b => {
+      typeCounts[b.type] = (typeCounts[b.type] || 0) + 1;
+    }));
+
+    setVault(built);
+    setTotal(bulletCount);
+    setCounts(typeCounts);
+    setLoading(false);
+  }, []);
 
   if (loading) return (
     <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
-        <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Loading your vault…</span>
-      </div>
+      <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
     </div>
   );
 
@@ -341,63 +334,73 @@ function StepVault({ onNext, onBack, dir }) {
   );
 
   return (
-    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '28px 32px 0', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Step 2 of 7</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h2 style={{ fontSize: 'clamp(22px,2.5vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 6 }}>
-              We found <span style={{ color: 'var(--green)' }}>{total} highlights</span> across {vault.length} roles
-            </h2>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 4 }}>Review and edit before we tailor your resume</p>
-            <VaultSummary counts={countByType(vault)} />
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="rp-btn-ghost" onClick={onBack} style={{ fontSize: 13, padding: '9px 18px' }}>← Back</button>
-            <button className="rp-btn-primary" onClick={onNext} style={{ padding: '9px 22px', fontSize: 14 }}>Looks good →</button>
-          </div>
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', gap: 24 }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', maxWidth: 480 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 2 of 7</div>
+        <h2 style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 8 }}>
+          We found <span style={{ color: 'var(--green)' }}>{total} highlights</span> across {vault.length} roles
+        </h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.6 }}>Click any role to review. We&apos;ll use these to tailor your resume.</p>
+        {/* Type pills */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 12 }}>
+          {Object.entries(counts).map(([type, n]) => {
+            const s = BULLET_TYPE_STYLE[type] || BULLET_TYPE_STYLE.context;
+            return <span key={type} style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '3px 10px', borderRadius: 5 }}>{n} {s.label}s</span>;
+          })}
         </div>
       </div>
-      <div className="rp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {vault.map((role, ri) => (
-          <div key={ri} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontWeight: 600, fontSize: 15 }}>{role.company}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 10 }}>{role.role}</span>
-              </div>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{role.period}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {role.achievements.map((ach) => {
-                const on = selected.has(ach.id);
-                return (
-                  <div key={ach.id} onClick={() => toggle(ach.id)}
-                    style={{ padding: '14px 18px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)', background: on ? 'transparent' : 'oklch(0 0 0 / 0.03)', display: 'flex', gap: 12, alignItems: 'flex-start', transition: 'background 0.15s' }}>
-                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border)'}`, background: on ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                      {on && <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 5l2.5 2.5 4.5-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 13, lineHeight: 1.6, color: on ? 'var(--text)' : 'var(--text-muted)', marginBottom: 8 }}>{ach.text}</p>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {(() => { const s = nuggetStyle(ach.nugget_type); return <span style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.03em' }}>{s.label}</span>; })()}
-                        {ach.metrics.map(m => <span key={m} style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600, color: 'var(--amber)', background: 'var(--amber-dim)', border: '1px solid oklch(0.60 0.16 80 / 0.2)', padding: '2px 8px', borderRadius: 4 }}>{m}</span>)}
-                        {ach.tags.map(t => <span key={t} style={{ fontSize: 10, color: 'var(--text-faint)', background: 'var(--surface2)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 4 }}>{t}</span>)}
+
+      {/* Accordion role list */}
+      <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {vault.map((role, i) => {
+          const open = expanded === i;
+          return (
+            <div key={i} style={{ background: 'var(--surface)', border: `1px solid ${open ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+              {/* Row header — always visible */}
+              <button onClick={() => setExpanded(open ? null : i)} style={{ width: '100%', padding: '13px 18px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'var(--sans)', textAlign: 'left' }}>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{role.company}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{role.role}{role.period ? ` · ${role.period}` : ''}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', padding: '2px 8px', borderRadius: 4 }}>{role.bullets.length}</span>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>
+                    <path d="M3 5l4 4 4-4" stroke="var(--text-faint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              </button>
+
+              {/* Expanded bullets */}
+              {open && (
+                <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '8px 0' }}>
+                  {role.bullets.map((b, bi) => {
+                    const s = BULLET_TYPE_STYLE[b.type] || BULLET_TYPE_STYLE.context;
+                    return (
+                      <div key={bi} style={{ padding: '9px 18px', display: 'flex', gap: 10, alignItems: 'flex-start', borderBottom: bi < role.bullets.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.bg, border: `1px solid ${s.border}`, padding: '2px 6px', borderRadius: 4, flexShrink: 0, marginTop: 2 }}>{s.label}</span>
+                        <span style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>{b.text}</span>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 10, width: '100%', maxWidth: 560 }}>
+        <button className="rp-btn-ghost" onClick={onBack} style={{ flex: '0 0 auto' }}>← Back</button>
+        <button className="rp-btn-primary" onClick={onNext} style={{ flex: 1, fontSize: 15 }}>Looks good →</button>
       </div>
     </div>
   );
 }
 
 // ── Step 3: Job Input ─────────────────────────────────────────────────────────
-function StepJobInput({ onNext, onBack, dir }) {
+function StepJobInput({ onNext, onBack, dir, returning = false }) {
   const [url, setUrl] = useState('');
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState('url');
@@ -424,14 +427,22 @@ function StepJobInput({ onNext, onBack, dir }) {
       const data = await res.json();
 
       if (data.source === 'needs_paste') {
-        setError("Couldn't read that URL — paste the job description below");
+        setError(data.reason || "Couldn't read that URL — paste the job description below");
         setMode('paste');
         setLoading(false);
         return;
       }
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to save job');
 
-      saveSession({ jdId: data.jd_id, jdTitle: data.title, jdCompany: data.company });
+      // Save JD to session (jdId may be null for guest users — full JD stored inline)
+      saveSession({
+        jdId: data.jd_id || null,
+        jdTitle: data.title,
+        jdCompany: data.company,
+        jdDescription: data.description,
+        tailoredResumeId: null,
+        tailoredResult: null,
+      });
       onNext();
     } catch (err) {
       setError(err.message);
@@ -442,7 +453,7 @@ function StepJobInput({ onNext, onBack, dir }) {
   return (
     <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 28 }}>
       <div style={{ textAlign: 'center', maxWidth: 480 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 3 of 7</div>
+        {!returning && <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 3 of 7</div>}
         <h2 style={{ fontSize: 'clamp(24px,3vw,34px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 10 }}>Which role are you applying for?</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Paste the job link and we&apos;ll handle the rest</p>
       </div>
@@ -490,11 +501,12 @@ function StepProcessing({ onNext, dir }) {
 
   useEffect(() => {
     const session = loadSession();
-    const { jdId, tailoredResumeId } = session;
-    if (!jdId) { setError('No job found — go back and enter a job URL'); return; }
+    const { jdId, jdTitle, jdCompany, jdDescription, tailoredResult, parsedResume } = session;
 
-    // Already tailored for this JD — skip API call, go straight to result
-    if (tailoredResumeId) {
+    if (!jdDescription && !jdId) { setError('No job found — go back and enter a job URL'); return; }
+
+    // Already tailored — skip API call
+    if (tailoredResult) {
       setCur(STEPS.length - 1);
       setDone(true);
       setTimeout(onNext, 400);
@@ -508,16 +520,20 @@ function StepProcessing({ onNext, dir }) {
       setCur(stepIdx);
     }, 900);
 
-    fetch('/api/ai/resume-tailor-v2', {
+    // Use stateless tailor route (works pre-login, uses parsed resume from session)
+    fetch('/api/rolepitch/tailor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jd_id: jdId }),
+      body: JSON.stringify({
+        parsed_resume: parsedResume,
+        jd: { title: jdTitle, company: jdCompany, description: jdDescription },
+      }),
     })
       .then(r => r.json())
       .then(data => {
         clearInterval(stepTimer);
         if (data.error) throw new Error(data.error);
-        saveSession({ tailoredResumeId: data.tailored_resume_id });
+        saveSession({ tailoredResult: data });
         setCur(STEPS.length - 1);
         setDone(true);
         setTimeout(onNext, 800);
@@ -609,12 +625,23 @@ function StepResult({ onNext, onBack, dir }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const { tailoredResumeId } = loadSession();
-    if (!tailoredResumeId) { setError('No tailored resume found'); setLoading(false); return; }
-    fetch(`/api/rolepitch/result?tailored_resume_id=${tailoredResumeId}`)
-      .then(r => r.json())
-      .then(data => { if (data.error) throw new Error(data.error); setResult(data); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
+    const session = loadSession();
+    const tr = session.tailoredResult;
+    if (!tr) { setError('No tailored resume found — go back and try again'); setLoading(false); return; }
+
+    // Map stateless tailor response to the shape StepResult expects
+    const jd = { title: session.jdTitle || '', company: session.jdCompany || '' };
+    const bullets_by_role = (tr.tailored?.experience || []).map((role, i) => {
+      const origRole = (session.parsedResume?.experience || [])[i] || {};
+      return {
+        company: role.company,
+        role: role.title,
+        before: (origRole.bullets || []).map(b => ({ text: typeof b === 'string' ? b : b.text })),
+        after: (role.bullets || []).map(b => ({ text: b.text, original: b.original })),
+      };
+    });
+    setResult({ jd, before_score: tr.before_score, after_score: tr.after_score, bullets_by_role, gaps: tr.gaps || [] });
+    setLoading(false);
   }, []);
 
   if (loading) return (
@@ -636,7 +663,7 @@ function StepResult({ onNext, onBack, dir }) {
   const displayRole = result.bullets_by_role?.find(r => r.before?.length && r.after?.length) || result.bullets_by_role?.[0];
 
   return (
-    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '24px 32px 0', flexShrink: 0 }}>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Step 5 of 7</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
@@ -699,8 +726,9 @@ function StepResult({ onNext, onBack, dir }) {
                 <div style={{ width: '35%', height: 7, background: 'var(--border)', borderRadius: 3 }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {(tab === 'after' ? displayRole.after : displayRole.before).map((text, i) => {
-                  const isImproved = tab === 'after' && text !== displayRole.before[i];
+                {(tab === 'after' ? displayRole.after : displayRole.before).map((bullet, i) => {
+                  const text = typeof bullet === 'string' ? bullet : bullet.text;
+                  const isImproved = tab === 'after' && text !== (typeof displayRole.before[i] === 'string' ? displayRole.before[i] : displayRole.before[i]?.text);
                   return (
                     <div key={i} style={{ background: isImproved ? 'oklch(0.72 0.17 155 / 0.07)' : 'transparent', border: isImproved ? '1px solid oklch(0.72 0.17 155 / 0.25)' : '1px solid transparent', borderRadius: 6, padding: isImproved ? '10px 12px' : '2px 0', transition: 'all 0.3s ease' }}>
                       <p style={{ fontSize: 12, lineHeight: 1.75, color: tab === 'before' ? 'var(--text-muted)' : 'var(--resume-text)', fontFamily: 'Georgia,serif', fontStyle: tab === 'before' ? 'normal' : 'normal' }}>{text}</p>
@@ -739,21 +767,17 @@ function StepGapQuestions({ onNext, onBack, dir }) {
   const followupPending = useRef(false);           // true when waiting for follow-up reply
 
   useEffect(() => {
-    const { tailoredResumeId } = loadSession();
-    if (!tailoredResumeId) { setLoadingQ(false); return; }
-    fetch(`/api/rolepitch/result?tailored_resume_id=${tailoredResumeId}`)
-      .then(r => r.json())
-      .then(data => {
-        const qs = data.gap_questions?.length ? data.gap_questions : DEFAULT_QUESTIONS;
-        setQuestions(qs);
-        setThread([{ role: 'pilot', text: qs[0].question, tip: qs[0].tip }]);
-        setLoadingQ(false);
-      })
-      .catch(() => {
-        setQuestions(DEFAULT_QUESTIONS);
-        setThread([{ role: 'pilot', text: DEFAULT_QUESTIONS[0].question, tip: DEFAULT_QUESTIONS[0].tip }]);
-        setLoadingQ(false);
-      });
+    // Use gap questions from tailored result (no auth needed)
+    const session = loadSession();
+    const gaps = session.tailoredResult?.gaps;
+    let qs = DEFAULT_QUESTIONS;
+    if (gaps?.length) {
+      qs = gaps.slice(0, 3).map(gap => ({ question: `Tell me more about: ${gap}`, tip: gap }))
+        .concat(DEFAULT_QUESTIONS).slice(0, DEFAULT_QUESTIONS.length);
+    }
+    setQuestions(qs);
+    setThread([{ role: 'pilot', text: qs[0].question, tip: qs[0].tip }]);
+    setLoadingQ(false);
   }, []);
 
   // Auto-scroll to bottom on new messages
@@ -777,13 +801,23 @@ function StepGapQuestions({ onNext, onBack, dir }) {
         setThread(t => [...t, { role: 'pilot', text: "Got it. Running the final pass now…", tip: null }]);
         setDone(true);
       }, 380);
-      const { tailoredResumeId, jdId } = loadSession();
+      // Save answers to session for final output; re-tailor with context
+      const session = loadSession();
+      saveSession({ chatAnswers: collectedAnswers.current });
       setSubmitting(true);
-      fetch('/api/ai/resume-tailor-v2/refine', {
+      fetch('/api/rolepitch/tailor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jd_id: jdId, tailored_resume_id: tailoredResumeId, answers: collectedAnswers.current }),
-      }).catch(() => {}).finally(() => { setSubmitting(false); setTimeout(onNext, 1200); });
+        body: JSON.stringify({
+          parsed_resume: session.parsedResume,
+          jd: { title: session.jdTitle, company: session.jdCompany, description: session.jdDescription },
+          context: collectedAnswers.current,
+        }),
+      })
+        .then(r => r.json())
+        .then(data => { if (!data.error) saveSession({ tailoredResult: data }); })
+        .catch(() => {})
+        .finally(() => { setSubmitting(false); setTimeout(onNext, 1200); });
     }
   }, [questions, onNext]);
 
@@ -825,7 +859,7 @@ function StepGapQuestions({ onNext, onBack, dir }) {
   }, [draft, sendAnswer]);
 
   return (
-    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ padding: '20px 32px 0', flexShrink: 0 }}>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--amber)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Step 6 of 7</div>
@@ -934,14 +968,19 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
   const [signedUp, setSignedUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const { tailoredResumeId } = loadSession();
-    if (!tailoredResumeId) return;
-    fetch(`/api/rolepitch/result?tailored_resume_id=${tailoredResumeId}`)
-      .then(r => r.json())
-      .then(data => { if (!data.error) setResult(data); })
-      .catch(() => {});
+    const session = loadSession();
+    const tr = session.tailoredResult;
+    if (tr) {
+      setResult({ jd: { title: session.jdTitle, company: session.jdCompany }, after_score: tr.after_score });
+    }
+    // Check if already signed in
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setSignedUp(true);
+    });
   }, []);
 
   const finalScore = result ? Math.min(result.after_score + 7, 97) : 91;
@@ -949,9 +988,8 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
   const jdCompany = result?.jd?.company || '';
 
   const handleGoogleSignup = () => {
-    const { tailoredResumeId } = loadSession();
+    // step=6 means "returning from auth at final step — save + redirect to dashboard"
     const qs = new URLSearchParams({ step: '6', source: 'rolepitch' });
-    if (tailoredResumeId) qs.set('tr', tailoredResumeId);
     router.push(`/rolepitch/auth?${qs.toString()}`);
   };
 
@@ -963,7 +1001,25 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
 
   const handleDownload = () => {
     if (!signedUp) { setModal('signup'); return; }
-    setModal('paywall');
+    // Already signed in — save to DB then go to dashboard
+    const session = loadSession();
+    if (session.parsedResume) {
+      setSaving(true);
+      fetch('/api/rolepitch/save-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parsed: session.parsedResume,
+          jd: { title: session.jdTitle, company: session.jdCompany, description: session.jdDescription },
+          jd_id: session.jdId || null,
+          tailored: session.tailoredResult,
+        }),
+      })
+        .then(() => { window.location.href = '/rolepitch/dashboard'; })
+        .catch(() => { window.location.href = '/rolepitch/dashboard'; });
+    } else {
+      window.location.href = '/rolepitch/dashboard';
+    }
   };
 
   return (
@@ -994,9 +1050,12 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
           </div>
         )}
 
-        <button className="rp-btn-primary" style={{ width: '100%', padding: 14, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={handleDownload}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 7l3 3 3-3M3 13h10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Download PDF
+        <button className="rp-btn-primary" style={{ width: '100%', padding: 14, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={handleDownload} disabled={saving}>
+          {saving
+            ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+            : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 7l3 3 3-3M3 13h10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          }
+          {saving ? 'Saving…' : signedUp ? 'Go to dashboard →' : 'Download PDF'}
         </button>
         <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={onTailorAnother}>Tailor another role →</button>
         <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/rolepitch/dashboard')}>View all my pitches →</button>
@@ -1060,13 +1119,98 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
   );
 }
 
+// ── Returning user: slim done screen ─────────────────────────────────────────
+function StepReturningDone({ onTailorAnother, dir }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(true);
+  const [savedId, setSavedId] = useState(null);
+  const [score, setScore] = useState(null);
+  const [jdLabel, setJdLabel] = useState('');
+
+  useEffect(() => {
+    const session = loadSession();
+    const tr = session.tailoredResult;
+    if (tr) setScore(Math.min((tr.after_score || 78) + 7, 97));
+    setJdLabel(session.jdTitle || '');
+
+    fetch('/api/rolepitch/save-resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parsed: session.parsedResume,
+        jd: { title: session.jdTitle, company: session.jdCompany, description: session.jdDescription },
+        jd_id: session.jdId || null,
+        tailored: tr,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => { if (data.tailored_resume_id) setSavedId(data.tailored_resume_id); })
+      .finally(() => setSaving(false));
+  }, []);
+
+  return (
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 28 }}>
+      <div style={{ textAlign: 'center', maxWidth: 420 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--green)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Done</div>
+        {score && <div style={{ fontSize: 52, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--green)', letterSpacing: '-0.04em', marginBottom: 6, lineHeight: 1 }}>{score}%</div>}
+        {score && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>match score</div>}
+        <h2 style={{ fontSize: 'clamp(22px,2.5vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 8 }}>Your resume is tailored</h2>
+        {jdLabel && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>For <strong style={{ color: 'var(--text)' }}>{jdLabel}</strong></p>}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 360 }}>
+        {savedId && (
+          <button
+            className="rp-btn-primary"
+            style={{ width: '100%', padding: 14, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            onClick={() => window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${savedId}`, '_blank')}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 7l3 3 3-3M3 13h10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Download PDF
+          </button>
+        )}
+        <button
+          className={savedId ? 'rp-btn-ghost' : 'rp-btn-primary'}
+          style={{ width: '100%', padding: 14, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          onClick={() => router.push('/rolepitch/dashboard')}
+          disabled={saving}
+        >
+          {saving
+            ? <><div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} /> Saving…</>
+            : 'View in dashboard →'
+          }
+        </button>
+        <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={onTailorAnother}>Tailor another role →</button>
+      </div>
+    </div>
+  );
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
-const TOTAL = 7;
+const TOTAL_NEW = 7;      // new users: full 7-step onboarding
+const TOTAL_RETURNING = 4; // returning users: JD → Processing → Chat → Done
 
 export default function RolePitchStart() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
+  const [isReturning, setIsReturning] = useState(false); // signed-in with existing vault
+  const [ready, setReady] = useState(false); // don't render until we know the mode
+
+  useEffect(() => {
+    // Lock page scroll
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.height = '100%';
+    document.documentElement.style.height = '100%';
+    return () => {
+      document.documentElement.style.overflow = prev;
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+      document.documentElement.style.height = '';
+    };
+  }, []);
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
@@ -1079,44 +1223,112 @@ export default function RolePitchStart() {
     if (urlTr) saveSession({ tailoredResumeId: urlTr });
 
     const session = loadSession();
-    const startStep = !isNaN(urlStep) ? urlStep : (session.step || 0);
-    setStep(startStep);
+
+    // Returning from OAuth at step 6 (final) — save session data to DB then go to dashboard
+    if (urlStep === 6 && params.get('source') === 'rolepitch' && session.parsedResume) {
+      fetch('/api/rolepitch/save-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parsed: session.parsedResume,
+          jd: { title: session.jdTitle, company: session.jdCompany, description: session.jdDescription },
+          jd_id: session.jdId || null,
+          tailored: session.tailoredResult,
+        }),
+      })
+        .then(() => { window.location.href = '/rolepitch/dashboard'; })
+        .catch(() => { window.location.href = '/rolepitch/dashboard'; });
+      return;
+    }
 
     // Clean URL without reloading
     if (params.has('step') || params.has('tr') || params.has('source')) {
       window.history.replaceState({}, '', '/rolepitch/start');
     }
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        // Signed-in user — fetch their profile from DB if not already in session
+        let parsedResume = session.parsedResume;
+        if (!parsedResume) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('structured_resume, parsed_json')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          parsedResume = prof?.parsed_json || prof?.structured_resume || null;
+          if (parsedResume) saveSession({ parsedResume });
+        }
+
+        if (parsedResume) {
+          // Returning user with vault — slim 3-step flow
+          saveSession({ isAuthenticated: true, step: 0, jdId: null, jdTitle: null, jdCompany: null, jdDescription: null, tailoredResumeId: null, tailoredResult: null });
+          setIsReturning(true);
+          setStep(0);
+        } else {
+          // Signed in but no profile yet — run full onboarding
+          saveSession({ isAuthenticated: true });
+          setStep(0);
+        }
+      } else {
+        // Not signed in — new user full flow
+        const startStep = !isNaN(urlStep) ? urlStep : (session.step || 0);
+        setStep(startStep);
+      }
+      setReady(true);
+    });
   }, []);
+
+  const TOTAL = isReturning ? TOTAL_RETURNING : TOTAL_NEW;
 
   const go = useCallback((n) => {
     setDir(n > step ? 1 : -1);
     setStep(n);
-    saveSession({ step: n });
-  }, [step]);
+    if (!isReturning) saveSession({ step: n });
+  }, [step, isReturning]);
 
-  const next = useCallback(() => go(Math.min(step + 1, TOTAL - 1)), [step, go]);
+  const next = useCallback(() => go(Math.min(step + 1, TOTAL - 1)), [step, go, TOTAL]);
   const back = useCallback(() => {
     const prev = Math.max(step - 1, 0);
-    // Going back to job input — clear tailored result so re-entering a JD re-triggers tailoring
-    if (prev <= 2) saveSession({ jdId: null, jdTitle: null, jdCompany: null, tailoredResumeId: null });
+    if (!isReturning && prev <= 2) saveSession({ jdId: null, jdTitle: null, jdCompany: null, jdDescription: null, tailoredResumeId: null, tailoredResult: null });
     go(prev);
-  }, [step, go]);
+  }, [step, go, isReturning]);
   const goHome = useCallback(() => router.push('/rolepitch'), [router]);
   const tailorAnother = useCallback(() => {
-    // Clear JD state but keep vault/profile
-    saveSession({ jdId: null, jdTitle: null, jdCompany: null, tailoredResumeId: null, step: 2 });
-    go(2);
-  }, [go]);
+    saveSession({ jdId: null, jdTitle: null, jdCompany: null, jdDescription: null, tailoredResumeId: null, tailoredResult: null, step: isReturning ? 0 : 2 });
+    go(isReturning ? 0 : 2);
+  }, [go, isReturning]);
 
-  const STEPS = [
-    <StepUpload key={`step-${step}`} onNext={next} dir={dir} />,
-    <StepVault key={`step-${step}`} onNext={next} onBack={back} dir={dir} />,
-    <StepJobInput key={`step-${step}`} onNext={next} onBack={back} dir={dir} />,
-    <StepProcessing key={`step-${step}`} onNext={next} dir={dir} />,
-    <StepResult key={`step-${step}`} onNext={next} onBack={back} dir={dir} />,
-    <StepGapQuestions key={`step-${step}`} onNext={next} onBack={back} dir={dir} />,
-    <StepFinalOutput key={`step-${step}`} onBack={back} onHome={goHome} onTailorAnother={tailorAnother} dir={dir} />,
+  // Returning users: 4 steps — JD input, Processing, Chat Q&A, Done
+  const RETURNING_STEPS = [
+    <StepJobInput key={`ret-${step}`} onNext={next} onBack={() => router.push('/rolepitch/dashboard')} dir={dir} returning />,
+    <StepProcessing key={`ret-${step}`} onNext={next} dir={dir} />,
+    <StepGapQuestions key={`ret-${step}`} onNext={next} onBack={back} dir={dir} />,
+    <StepReturningDone key={`ret-${step}`} onTailorAnother={tailorAnother} dir={dir} />,
   ];
+
+  // New users: full 7-step onboarding
+  const NEW_STEPS = [
+    <StepUpload key={`new-${step}`} onNext={next} dir={dir} />,
+    <StepVault key={`new-${step}`} onNext={next} onBack={back} dir={dir} />,
+    <StepJobInput key={`new-${step}`} onNext={next} onBack={back} dir={dir} />,
+    <StepProcessing key={`new-${step}`} onNext={next} dir={dir} />,
+    <StepResult key={`new-${step}`} onNext={next} onBack={back} dir={dir} />,
+    <StepGapQuestions key={`new-${step}`} onNext={next} onBack={back} dir={dir} />,
+    <StepFinalOutput key={`new-${step}`} onBack={back} onHome={goHome} onTailorAnother={tailorAnother} dir={dir} />,
+  ];
+
+  const currentSteps = isReturning ? RETURNING_STEPS : NEW_STEPS;
+
+  if (!ready) return (
+    <>
+      <style>{CSS_VARS}</style>
+      <div className="rp-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -1124,9 +1336,27 @@ export default function RolePitchStart() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
-        <ProgressBar step={step} total={TOTAL} onHome={goHome} />
+        {isReturning ? (
+          // Returning users: minimal nav with back-to-dashboard link
+          <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <button onClick={() => router.push('/rolepitch/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 0 }}>
+              <div style={{ width: 22, height: 22, background: 'var(--accent)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
+              </div>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>RolePitch</span>
+            </button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {Array.from({ length: TOTAL_RETURNING }).map((_, i) => (
+                <div key={i} style={{ height: 3, width: 48, borderRadius: 2, background: i < step ? 'var(--accent)' : i === step ? 'var(--border)' : 'var(--border-subtle)', transition: 'background 0.3s' }} />
+              ))}
+            </div>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{step + 1}/{TOTAL_RETURNING}</span>
+          </div>
+        ) : (
+          <ProgressBar step={step} total={TOTAL_NEW} onHome={goHome} />
+        )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {STEPS[step]}
+          {currentSteps[step]}
         </div>
       </div>
     </>

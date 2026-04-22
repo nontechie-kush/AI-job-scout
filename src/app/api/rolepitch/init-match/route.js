@@ -21,13 +21,13 @@ import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 35;
+export const maxDuration = 65;
 
 export async function POST(request) {
   try {
     const supabase = await createClientFromRequest(request);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // user may be null — pre-login RolePitch flow stores JD in session only
 
     const body = await request.json();
     const { url, title, company = '', description } = body;
@@ -78,7 +78,19 @@ export async function POST(request) {
       jdTitle = jdDescription.split('\n')[0].slice(0, 80).trim() || 'Untitled Role';
     }
 
-    // ── Insert job_descriptions row ───────────────────────────────────
+    // ── Guest (pre-login) path: return JD inline, no DB insert ───────
+    if (!user) {
+      return NextResponse.json({
+        jd_id: null,
+        title: jdTitle,
+        company: jdCompany,
+        description: jdDescription,
+        source,
+        guest: true,
+      });
+    }
+
+    // ── Insert job_descriptions row (authenticated users) ─────────────
     const { data: jd, error: insertErr } = await supabase
       .from('job_descriptions')
       .insert({

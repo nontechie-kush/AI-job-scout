@@ -143,13 +143,18 @@ export async function GET(request) {
     };
 
     // ── Score calculation ─────────────────────────────────────────────
-    // before: base resume_strength (or 63 default)
-    // after: improvement based on atoms used ratio (capped at 91 for gap-question ceiling)
-    const beforeScore = tr.resume_strength || 63;
-    const usageRatio = stats.total_achievements > 0
-      ? Math.min(stats.achievements_used / stats.total_achievements, 1)
-      : 0.5;
-    const afterScore = Math.min(Math.round(beforeScore + (30 * usageRatio)), 84);
+    let beforeScore, afterScore;
+    if (tr.pipeline_version === 'rolepitch-v1') {
+      // RolePitch stores scores inside tailored_version JSON
+      beforeScore = tr.tailored_version?.before_score || tr.resume_strength || 63;
+      afterScore = tr.tailored_version?.after_score || beforeScore;
+    } else {
+      beforeScore = tr.resume_strength || 63;
+      const usageRatio = stats.total_achievements > 0
+        ? Math.min(stats.achievements_used / stats.total_achievements, 1)
+        : 0.5;
+      afterScore = Math.min(Math.round(beforeScore + (30 * usageRatio)), 84);
+    }
 
     // ── Gap questions (from dropped atoms, max 3) ─────────────────────
     // Dropped atoms are stored in tailored_version metadata if present,

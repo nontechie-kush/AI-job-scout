@@ -21,7 +21,7 @@ export async function GET(request) {
 
     const { data: resumes, error } = await supabase
       .from('tailored_resumes')
-      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version')
+      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
       .eq('user_id', user.id)
       .not('jd_id', 'is', null)
       .order('created_at', { ascending: false })
@@ -47,15 +47,23 @@ export async function GET(request) {
 
     const result = resumes.map(r => {
       const jd = jdMap.get(r.jd_id) || {};
-      const beforeScore = r.resume_strength || 63;
-      const usageRatio = (totalAtoms.count || 0) > 0
-        ? Math.min((r.selected_atom_ids || []).length / totalAtoms.count, 1)
-        : 0.5;
-      const afterScore = Math.min(Math.round(beforeScore + 30 * usageRatio), 84);
-
-      // Count bullets rewritten
       const exp = r.tailored_version?.experience || [];
       const bulletsRewritten = exp.reduce((n, role) => n + (role.bullets || []).length, 0);
+
+      // rolepitch-v1 rows store real scores inside tailored_version
+      let beforeScore, afterScore, highlightsUsed;
+      if (r.pipeline_version === 'rolepitch-v1') {
+        beforeScore = r.tailored_version?.before_score || 55;
+        afterScore = r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
+        highlightsUsed = bulletsRewritten;
+      } else {
+        beforeScore = r.resume_strength || 63;
+        const usageRatio = (totalAtoms.count || 0) > 0
+          ? Math.min((r.selected_atom_ids || []).length / totalAtoms.count, 1)
+          : 0.5;
+        afterScore = Math.min(Math.round(beforeScore + 30 * usageRatio), 84);
+        highlightsUsed = (r.selected_atom_ids || []).length;
+      }
 
       return {
         id: r.id,
@@ -63,7 +71,7 @@ export async function GET(request) {
         created_at: r.created_at,
         before_score: beforeScore,
         after_score: afterScore,
-        highlights_used: (r.selected_atom_ids || []).length,
+        highlights_used: highlightsUsed,
         bullets_rewritten: bulletsRewritten,
       };
     });

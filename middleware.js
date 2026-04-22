@@ -21,7 +21,7 @@ export async function middleware(request) {
   // rolepitch.com/ → rewrite to /rolepitch
   // rolepitch.com/start → rewrite to /rolepitch/start
   // rolepitch.com/api/* → pass through without rewriting
-  if (isRolePitch && !pathname.startsWith('/api') && !pathname.startsWith('/auth')) {
+  if (isRolePitch && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/rolepitch')) {
     const rpPath = pathname === '/' ? '/rolepitch' : `/rolepitch${pathname}`;
     const url = request.nextUrl.clone();
     url.pathname = rpPath;

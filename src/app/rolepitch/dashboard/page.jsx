@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 const CSS_VARS = `
   :root {
@@ -85,10 +86,14 @@ export default function RolePitchDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
     document.documentElement.setAttribute('data-rp-theme', theme);
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
 
     fetch('/api/rolepitch/my-resumes')
       .then(r => r.json())
@@ -102,21 +107,14 @@ export default function RolePitchDashboard() {
 
   const handleDownload = async (resumeId) => {
     setDownloading(resumeId);
-    try {
-      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`);
-      if (!res.ok) throw new Error('failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `rolepitch-${resumeId.slice(0, 8)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // PDF not yet available — navigate to detail page instead
-      router.push(`/rolepitch/resume/${resumeId}`);
-    }
+    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
     setDownloading(null);
+  };
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/rolepitch');
   };
 
   return (
@@ -133,9 +131,25 @@ export default function RolePitchDashboard() {
             <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>RolePitch</span>
           </button>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {user?.email && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'none' }}>{user.email}</span>
+            )}
+            {user && (
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
+                {(user.email || '?')[0].toUpperCase()}
+              </div>
+            )}
+            <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              🧠 Memory
+            </button>
             <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/start')}>
               + New pitch
             </button>
+            {user && (
+              <button className="rp-btn-ghost" onClick={handleSignOut} style={{ fontSize: 12, padding: '7px 14px', color: 'var(--text-faint)' }}>
+                Sign out
+              </button>
+            )}
           </div>
         </div>
 

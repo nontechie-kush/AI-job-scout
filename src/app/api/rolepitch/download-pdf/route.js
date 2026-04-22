@@ -24,11 +24,20 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-function buildHtml(resume, jdTitle, jdCompany) {
-  const name = esc(resume.name || 'Your Name');
+function makeSafeFilename(name, role) {
+  const sanitize = str => (str || '').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
+  const namePart = sanitize(name);
+  const rolePart = sanitize(role);
+  return [namePart, rolePart].filter(Boolean).join('_') || 'Resume';
+}
+
+function buildHtml(resume, jdTitle, jdCompany, filename) {
+  const name = esc(resume.name || '');
+  const tagline = esc(resume.title || resume.tagline || '');
   const email = esc(resume.contact?.email || '');
   const phone = esc(resume.contact?.phone || '');
   const location = esc(resume.contact?.location || '');
+  const linkedin = resume.contact?.linkedin || '';
   const summary = esc(resume.summary || '');
 
   const experienceHtml = (resume.experience || []).map(role => {
@@ -73,12 +82,13 @@ function buildHtml(resume, jdTitle, jdCompany) {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${name} — Resume</title>
+<title>${esc(filename)}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Georgia', serif; font-size: 11pt; color: #111; background: white; max-width: 760px; margin: 0 auto; padding: 36px 40px; }
-  h1 { font-size: 22pt; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
-  .contact { font-family: Arial, sans-serif; font-size: 9pt; color: #555; margin-bottom: 18px; display: flex; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 22pt; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 2px; text-align: center; }
+  .tagline { font-family: Arial, sans-serif; font-size: 9.5pt; color: #444; margin-bottom: 6px; text-align: center; }
+  .contact { font-family: Arial, sans-serif; font-size: 9pt; color: #555; margin-bottom: 18px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
   .contact span::before { content: ''; }
   .tailored-badge { font-family: Arial, sans-serif; font-size: 8pt; color: #4f6ef7; background: #eef1ff; border: 1px solid #c7d0ff; border-radius: 4px; padding: 3px 8px; display: inline-block; margin-bottom: 18px; }
   .summary { font-size: 10.5pt; line-height: 1.65; color: #333; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1.5px solid #ddd; }
@@ -101,8 +111,10 @@ function buildHtml(resume, jdTitle, jdCompany) {
 </head>
 <body>
   <h1>${name}</h1>
+  ${tagline ? `<div class="tagline">${tagline}</div>` : ''}
   <div class="contact">
     ${email ? `<span>${email}</span>` : ''}
+    ${linkedin ? `<span><a href="${esc(linkedin)}" style="color:#555;text-decoration:none;">LinkedIn</a></span>` : ''}
     ${phone ? `<span>${phone}</span>` : ''}
     ${location ? `<span>${location}</span>` : ''}
   </div>
@@ -111,6 +123,12 @@ function buildHtml(resume, jdTitle, jdCompany) {
   ${(resume.experience || []).length ? `<h2>Experience</h2>${experienceHtml}` : ''}
   ${(resume.education || []).length ? `<h2>Education</h2>${educationHtml}` : ''}
   ${(resume.skills || []).length ? `<h2>Skills</h2>${skillsHtml}` : ''}
+<script>
+  window.addEventListener('load', function() {
+    document.title = ${JSON.stringify(filename)};
+    setTimeout(function() { window.print(); }, 400);
+  });
+</script>
 </body>
 </html>`;
 }
@@ -127,7 +145,7 @@ export async function GET(request) {
 
     const { data: tr, error } = await supabase
       .from('tailored_resumes')
-      .select('tailored_version, jd_id, match_id')
+      .select('tailored_version, base_version, jd_id, match_id')
       .eq('id', tailoredResumeId)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -141,14 +159,33 @@ export async function GET(request) {
       jdCompany = jd?.company || '';
     }
 
-    const resume = tr.tailored_version || {};
-    const html = buildHtml(resume, jdTitle, jdCompany);
-    const filename = `rolepitch-${jdTitle ? jdTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase() : tailoredResumeId.slice(0, 8)}.html`;
+    const tv = tr.tailored_version || {};
+    const bv = tr.base_version || {};
 
+    // Fetch profile as final fallback for name/contact
+    let profileName = '', profileContact = {};
+    if (!tv.name && !bv.name) {
+      const { data: prof } = await supabase.from('profiles').select('structured_resume').eq('user_id', user.id).maybeSingle();
+      profileName = prof?.structured_resume?.name || '';
+      profileContact = prof?.structured_resume?.contact || {};
+    }
+
+    // Merge: tailored_version fields take priority, fall back to base_version, then profile
+    const resume = {
+      name: tv.name || bv.name || profileName,
+      contact: (tv.contact && Object.keys(tv.contact).length > 0) ? tv.contact : (bv.contact && Object.keys(bv.contact).length > 0 ? bv.contact : profileContact),
+      summary: tv.summary || bv.summary || '',
+      experience: tv.experience || bv.experience || [],
+      education: tv.education || bv.education || [],
+      skills: tv.skills || bv.skills || [],
+    };
+
+    const filename = makeSafeFilename(resume.name, jdTitle);
+    const html = buildHtml(resume, jdTitle, jdCompany, filename);
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `inline; filename="${filename}.pdf"`,
       },
     });
   } catch (err) {

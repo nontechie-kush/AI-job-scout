@@ -22,7 +22,7 @@ import { createClientFromRequest } from '@/lib/supabase/server';
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // ── Board detection ───────────────────────────────────────────────────────────
 
@@ -54,13 +54,20 @@ async function directFetch(url) {
   return res.text();
 }
 
-async function scraperApiFetch(url, render = false) {
+async function scraperApiFetch(url, render = false, countryCode = '') {
   const key = process.env.SCRAPERAPI_KEY;
   if (!key || key === 'placeholder') throw new Error('ScraperAPI not configured');
-  const apiUrl = `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}${render ? '&render=true' : ''}`;
-  const res = await fetch(apiUrl, { signal: AbortSignal.timeout(25000) });
-  if (!res.ok) throw new Error(`ScraperAPI ${res.status}`);
-  return res.text();
+  const country = countryCode ? `&country_code=${countryCode}` : '';
+  const apiUrl = `https://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}${render ? '&render=true' : ''}${country}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(apiUrl, { signal: controller.signal });
+    if (!res.ok) throw new Error(`ScraperAPI ${res.status}`);
+    return res.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ── Board-specific extractors ─────────────────────────────────────────────────
@@ -129,10 +136,8 @@ function extractCutshort(html) {
 
 function extractGeneric(html) {
   const $ = cheerio.load(html);
-  // Remove nav, header, footer, scripts, styles
-  $('nav, header, footer, script, style, [class*="nav"], [class*="header"], [class*="footer"], [class*="sidebar"], [class*="cookie"], [class*="banner"]').remove();
 
-  // Try JSON-LD first
+  // Try JSON-LD first (before removing scripts)
   try {
     const jsonLd = $('script[type="application/ld+json"]').map((_, el) => $(el).html()).get();
     for (const raw of jsonLd) {
@@ -146,6 +151,9 @@ function extractGeneric(html) {
       }
     }
   } catch {}
+
+  // Remove nav, header, footer, scripts, styles before text extraction
+  $('nav, header, footer, script, style, [class*="nav"], [class*="header"], [class*="footer"], [class*="sidebar"], [class*="cookie"], [class*="banner"]').remove();
 
   const title = $('h1').first().text().trim();
   const description = $('main, article, [class*="job"], [class*="description"], [id*="job"], [id*="description"]')
@@ -178,10 +186,6 @@ If this is not a job posting, output: {"not_a_job": true}`,
 
 export async function POST(request) {
   try {
-    const supabase = await createClientFromRequest(request);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     const { url } = await request.json();
     if (!url?.trim()) return NextResponse.json({ error: 'url required' }, { status: 400 });
 
@@ -204,10 +208,16 @@ export async function POST(request) {
       } else if (board === 'cutshort') {
         const html = await directFetch(url);
         extracted = extractCutshort(html);
-      } else if (board === 'linkedin' || board === 'naukri' || board === 'wellfound') {
-        // JS-heavy — go straight to ScraperAPI
+      } else if (board === 'linkedin' || board === 'wellfound') {
+        // JS-heavy — need render=true for full content
         const html = await scraperApiFetch(url, true);
         extracted = extractGeneric(html);
+      } else if (board === 'naukri' || board === 'instahyre' || board === 'internshala' || board === 'foundit') {
+        // These sites block automated access even with JS rendering — fast-fail to paste
+        return NextResponse.json({
+          source: 'needs_paste',
+          reason: `${board.charAt(0).toUpperCase() + board.slice(1)} blocks automated access. Open the job page, copy the description, and paste it below.`,
+        });
       } else {
         // Generic: try direct first, fall back to ScraperAPI
         try {

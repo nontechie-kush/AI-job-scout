@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 const CSS_VARS = `
   :root {
@@ -57,7 +58,7 @@ const CSS_VARS = `
   }
 `;
 
-function Nav({ dark, setDark, onGetStarted }) {
+function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ function Nav({ dark, setDark, onGetStarted }) {
           </div>
           <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>RolePitch</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <a href="#how" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How it works</a>
           <a href="#pricing" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => setDark(d => !d)} style={{
@@ -96,12 +97,33 @@ function Nav({ dark, setDark, onGetStarted }) {
               : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.5 8.5A5.5 5.5 0 015.5 1.5a5.5 5.5 0 100 11 5.5 5.5 0 007-4z" stroke="var(--text)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             }
           </button>
-          <button style={{
-            background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
-            padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
-          }} onClick={onGetStarted}>
-            Get Started
-          </button>
+          {user ? (
+            <button onClick={onDashboard} style={{
+              background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
+              padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'oklch(1 0 0 / 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                {(user.email || '?')[0].toUpperCase()}
+              </div>
+              My Dashboard
+            </button>
+          ) : (
+            <>
+              <button onClick={onSignIn} style={{
+                background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)',
+                cursor: 'pointer', padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+              }}>
+                Sign in
+              </button>
+              <button style={{
+                background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
+                padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
+              }} onClick={onGetStarted}>
+                Get started
+              </button>
+            </>
+          )}
         </div>
       </div>
     </nav>
@@ -514,10 +536,22 @@ function Footer() {
 export default function RolePitchLanding() {
   const router = useRouter();
   const [dark, setDark] = useState(false);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('rp_theme');
     if (saved === 'dark') setDark(true);
+    createClient().auth.getUser().then(({ data: { user } }) => setUser(user));
+  }, []);
+
+  // Handle OAuth callback code landing on root (Supabase sometimes redirects here)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      const next = encodeURIComponent('/rolepitch/start?step=6&source=rolepitch');
+      window.location.replace(`/api/auth/callback?code=${code}&next=${next}`);
+    }
   }, []);
 
   useEffect(() => {
@@ -525,7 +559,20 @@ export default function RolePitchLanding() {
     localStorage.setItem('rp_theme', dark ? 'dark' : 'light');
   }, [dark]);
 
-  const handleGetStarted = () => router.push('/rolepitch/start');
+  const isRolePitchDomain = typeof window !== 'undefined' && (window.location.hostname === 'rolepitch.com' || window.location.hostname === 'www.rolepitch.com');
+  const handleGetStarted = () => router.push(isRolePitchDomain ? '/start' : '/rolepitch/start');
+  const handleDashboard = () => router.push('/rolepitch/dashboard');
+  const handleSignIn = () => {
+    // Reuse the auth page, redirect to dashboard after sign-in
+    const supabase = createClient();
+    supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/rolepitch/dashboard')}`,
+        scopes: 'email profile',
+      },
+    });
+  };
 
   return (
     <>
@@ -533,7 +580,7 @@ export default function RolePitchLanding() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
-        <Nav dark={dark} setDark={setDark} onGetStarted={handleGetStarted} />
+        <Nav dark={dark} setDark={setDark} onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
         <Hero onGetStarted={handleGetStarted} />
         <HowItWorks />
         <AtomizationBand />
