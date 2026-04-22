@@ -48,6 +48,20 @@ const CSS_VARS = `
   .rp-card:hover { box-shadow: 0 4px 24px oklch(0 0 0 / 0.08); border-color: oklch(0.78 0.015 248); }
   .rp-scroll::-webkit-scrollbar { width: 4px; }
   .rp-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  @media (max-width: 600px) {
+    .rp-nav { padding: 14px 16px !important; }
+    .rp-nav-label { display: none !important; }
+    .rp-nav-memory { display: none !important; }
+    .rp-btn-ghost { padding: 8px 12px !important; font-size: 12px !important; }
+    .rp-btn-primary { padding: 8px 14px !important; font-size: 12px !important; }
+    .rp-card { padding: 16px !important; }
+    .rp-card-row { flex-direction: column !important; gap: 12px !important; }
+    .rp-card-meta { flex-direction: row !important; align-items: center !important; gap: 8px !important; }
+    .rp-card-stats { display: none !important; }
+    .rp-card-actions { width: 100% !important; justify-content: stretch !important; }
+    .rp-card-actions button { flex: 1 !important; }
+    .rp-card-score { flex-shrink: 0; }
+  }
 `;
 
 function ScorePill({ before, after }) {
@@ -123,30 +137,27 @@ export default function RolePitchDashboard() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-dash">
         {/* Nav */}
-        <div style={{ padding: '18px 40px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, backdropFilter: 'blur(12px)' }}>
-          <button onClick={() => router.push('/rolepitch')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 0 }}>
+        <div className="rp-nav" style={{ padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10, backdropFilter: 'blur(12px)' }}>
+          <button onClick={() => router.push('/rolepitch')} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 0, flexShrink: 0 }}>
             <div style={{ width: 24, height: 24, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </div>
             <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>RolePitch</span>
           </button>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {user?.email && (
-              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'none' }}>{user.email}</span>
-            )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {user && (
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
                 {(user.email || '?')[0].toUpperCase()}
               </div>
             )}
-            <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 5 }}>
-              🧠 Memory
+            <button className="rp-btn-ghost rp-nav-memory" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
+              🧠 <span className="rp-nav-label">Memory</span>
             </button>
-            <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/start')}>
+            <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/start')} style={{ fontSize: 12, padding: '7px 12px', whiteSpace: 'nowrap' }}>
               + New pitch
             </button>
             {user && (
-              <button className="rp-btn-ghost" onClick={handleSignOut} style={{ fontSize: 12, padding: '7px 14px', color: 'var(--text-faint)' }}>
+              <button className="rp-btn-ghost rp-nav-label" onClick={handleSignOut} style={{ fontSize: 12, padding: '7px 12px', color: 'var(--text-faint)' }}>
                 Sign out
               </button>
             )}
@@ -186,41 +197,38 @@ export default function RolePitchDashboard() {
               {resumes.map((r, i) => {
                 const color = companyColor(r.jd.company);
                 return (
-                  <div key={r.id} className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both`, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-                    {/* Company avatar */}
-                    <div style={{ width: 44, height: 44, borderRadius: 11, background: color + '22', border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 700, color }}>{companyInitials(r.jd.company)}</span>
-                    </div>
-
-                    {/* Role info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.jd.title}</div>
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                        {r.jd.company && <span>{r.jd.company} · </span>}
-                        <span>{formatDate(r.created_at)}</span>
+                  <div key={r.id} className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both` }}>
+                    {/* Top row: avatar + title + score */}
+                    <div className="rp-card-row" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: color + '22', border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color }}>{companyInitials(r.jd.company)}</span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.jd.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {r.jd.company && <span>{r.jd.company} · </span>}
+                          <span>{formatDate(r.created_at)}</span>
+                        </div>
+                      </div>
+                      <div className="rp-card-score" style={{ flexShrink: 0 }}>
+                        <ScorePill before={r.before_score} after={r.after_score} />
                       </div>
                     </div>
 
-                    {/* Score */}
-                    <div style={{ flexShrink: 0 }}>
-                      <ScorePill before={r.before_score} after={r.after_score} />
-                    </div>
-
-                    {/* Stats */}
-                    <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
-                      {[
-                        [`${r.highlights_used}`, 'highlights'],
-                        [`${r.bullets_rewritten}`, 'bullets'],
-                      ].map(([val, label]) => (
-                        <div key={label} style={{ textAlign: 'center' }}>
-                          <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{val}</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    {/* Bottom row: stats + actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div className="rp-card-stats" style={{ display: 'flex', gap: 16 }}>
+                        {[
+                          [`${r.highlights_used}`, 'highlights'],
+                          [`${r.bullets_rewritten}`, 'bullets'],
+                        ].map(([val, label]) => (
+                          <div key={label} style={{ textAlign: 'center' }}>
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{val}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rp-card-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                       <button
                         className="rp-btn-ghost"
                         onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
@@ -240,6 +248,7 @@ export default function RolePitchDashboard() {
                         }
                         PDF
                       </button>
+                    </div>
                     </div>
                   </div>
                 );

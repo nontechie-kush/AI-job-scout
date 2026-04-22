@@ -51,10 +51,19 @@ const CSS_VARS = `
   .rp-fade-up-3 { animation: rp-fadeUp 0.6s ease both 0.4s; }
   .rp-fade-up-4 { animation: rp-fadeUp 0.6s ease both 0.55s; }
   @media (max-width: 768px) {
-    .rp-hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
+    .rp-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
     .rp-steps-grid { grid-template-columns: 1fr !important; }
     .rp-diff-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
     .rp-pricing-grid { grid-template-columns: 1fr !important; }
+    .rp-nav-links { display: none !important; }
+    .rp-nav-signin { display: none !important; }
+    .rp-score-card { top: -8px !important; right: -8px !important; padding: 8px 12px !important; }
+    .rp-score-ring { width: 100px !important; height: 100px !important; }
+    .rp-score-ring svg { width: 100px !important; height: 100px !important; }
+    .rp-score-ring svg circle { cx: 50px !important; cy: 50px !important; r: 38px !important; }
+    .rp-score-num { font-size: 24px !important; }
+    .rp-atom-stats { gap: 12px !important; }
+    .rp-atom-stats div { font-size: 16px !important; }
   }
 `;
 
@@ -86,8 +95,8 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
           <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>RolePitch</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a href="#how" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How it works</a>
-          <a href="#pricing" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
+          <a href="#how" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How it works</a>
+          <a href="#pricing" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => setDark(d => !d)} style={{
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
             width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -106,11 +115,11 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
               <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'oklch(1 0 0 / 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
                 {(user.email || '?')[0].toUpperCase()}
               </div>
-              My Dashboard
+              <span className="rp-nav-links" style={{ display: 'inline' }}>My Dashboard</span>
             </button>
           ) : (
             <>
-              <button onClick={onSignIn} style={{
+              <button onClick={onSignIn} className="rp-nav-signin" style={{
                 background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)',
                 cursor: 'pointer', padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
               }}>
@@ -292,7 +301,7 @@ function Hero({ onGetStarted }) {
           </div>
 
           <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
-            <div style={{
+            <div className="rp-score-card" style={{
               position: 'absolute', top: -16, right: -16, zIndex: 10,
               background: 'var(--surface)', border: '1px solid var(--border)',
               borderRadius: 16, padding: '12px 16px',
