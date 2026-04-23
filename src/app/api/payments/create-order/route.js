@@ -71,7 +71,7 @@ export async function POST(request) {
       credits,
     });
   } catch (err) {
-    console.error('[create-order]', err);
-    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    console.error('[create-order] error:', err?.message || err, 'stack:', err?.stack?.split('\n')[0]);
+    return NextResponse.json({ error: 'Failed to create order', detail: err?.message }, { status: 500 });
   }
 }
