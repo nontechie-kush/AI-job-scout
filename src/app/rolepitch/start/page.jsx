@@ -117,12 +117,180 @@ function ProgressBar({ step, total, onHome }) {
   );
 }
 
+// ── Link source label helper ───────────────────────────────────────────────────
+function linkLabel(url) {
+  if (url.includes('linkedin.com')) return 'LinkedIn';
+  if (url.includes('github.com')) return 'GitHub';
+  if (url.includes('huggingface.co')) return 'HuggingFace';
+  if (url.includes('framer.com')) return 'Framer';
+  if (url.includes('behance.net')) return 'Behance';
+  if (url.includes('dribbble.com')) return 'Dribbble';
+  if (url.includes('medium.com')) return 'Medium';
+  if (url.includes('notion.so')) return 'Notion';
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
+}
+
+// ── Step 1b: Enrich (links nudge after parse) ─────────────────────────────────
+function StepEnrich({ parsedResult, detectedLinks, onDone, onSkip }) {
+  // phase: nudge | loading | done
+  const [phase, setPhase] = useState('nudge');
+  const [manualLinks, setManualLinks] = useState('');
+  const [enriching, setEnriching] = useState(false);
+  const [sources, setSources] = useState([]);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Pre-select auto-detected links
+  const [checkedLinks, setCheckedLinks] = useState(() => new Set(detectedLinks));
+
+  const allLinks = [
+    ...detectedLinks,
+    ...manualLinks.split(/[\s,\n]+/).map(u => u.trim()).filter(u => u.startsWith('http')),
+  ].filter((u, i, arr) => arr.indexOf(u) === i);
+
+  const enrich = async () => {
+    const urls = allLinks.filter(u => checkedLinks.has(u));
+    const manualOnly = manualLinks.split(/[\s,\n]+/).map(u => u.trim()).filter(u => u.startsWith('http') && !detectedLinks.includes(u));
+    const finalUrls = [...new Set([...urls, ...manualOnly])];
+
+    if (!finalUrls.length) { onSkip(); return; }
+
+    setEnriching(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/rolepitch/enrich-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: finalUrls }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Enrichment failed');
+
+      if (!data.text || data.text.trim().length < 50) {
+        // Scraped but empty — proceed without enrichment
+        setSources(data.sources || []);
+        setPhase('done');
+        setTimeout(() => onDone(null, data.sources), 800);
+        return;
+      }
+
+      // Re-parse with enriched context
+      const { parsedResume } = JSON.parse(localStorage.getItem('rp_session') || '{}');
+      const form = new FormData();
+
+      if (parsedResume) {
+        form.append('type', 'paste');
+        form.append('text', JSON.stringify(parsedResume)); // pass existing parse as base text
+        form.append('additionalContext', data.text);
+      } else {
+        form.append('type', 'links_only');
+        form.append('additionalContext', data.text);
+      }
+
+      const parseRes = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
+      const parseData = await parseRes.json();
+      if (!parseRes.ok) throw new Error(parseData.error || 'Re-parse failed');
+
+      setSources(data.sources || []);
+      setPhase('done');
+      setTimeout(() => onDone(parseData.parsed, data.sources), 800);
+    } catch (err) {
+      setErrorMsg(err.message);
+      setEnriching(false);
+    }
+  };
+
+  if (phase === 'done') {
+    const okCount = sources.filter(s => s.status === 'ok').length;
+    return (
+      <div style={{ width: '100%', maxWidth: 480, background: 'var(--green-dim)', border: '1px solid oklch(0.72 0.17 155 / 0.3)', borderRadius: 14, padding: '28px 32px', textAlign: 'center', animation: 'rp-fadeUp 0.3s ease' }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+          {okCount > 0 ? `Read ${okCount} source${okCount > 1 ? 's' : ''}` : 'Profile enriched'}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Vault will include everything Pilot found</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 28px', animation: 'rp-fadeUp 0.35s ease' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3z" fill="var(--accent)" opacity="0.3"/><path d="M8 5v4l2.5 1.5" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round"/></svg>
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>Make your vault richer</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Pilot can read your LinkedIn, GitHub, or portfolio to pull in work that didn&apos;t make it onto your resume.
+          </div>
+        </div>
+      </div>
+
+      {/* Auto-detected links */}
+      {detectedLinks.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Found in your resume</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {detectedLinks.map(url => (
+              <label key={url} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 12px', background: checkedLinks.has(url) ? 'var(--accent-dim)' : 'var(--surface2)', border: `1px solid ${checkedLinks.has(url) ? 'oklch(0.50 0.19 248 / 0.25)' : 'var(--border)'}`, borderRadius: 8, transition: 'all 0.15s' }}>
+                <input
+                  type="checkbox"
+                  checked={checkedLinks.has(url)}
+                  onChange={e => setCheckedLinks(prev => { const n = new Set(prev); e.target.checked ? n.add(url) : n.delete(url); return n; })}
+                  style={{ accentColor: 'var(--accent)', width: 14, height: 14, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{linkLabel(url)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{url.replace(/^https?:\/\//, '')}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manual link input */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          {detectedLinks.length > 0 ? 'Add more links' : 'Your links'}
+        </div>
+        <textarea
+          className="rp-input"
+          value={manualLinks}
+          onChange={e => setManualLinks(e.target.value)}
+          placeholder={'https://linkedin.com/in/yourname\nhttps://github.com/yourname\nhttps://yourportfolio.com'}
+          rows={3}
+          style={{ resize: 'none', lineHeight: 1.6, fontSize: 13 }}
+        />
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 5 }}>LinkedIn · GitHub · Framer · Behance · portfolio — one per line</div>
+      </div>
+
+      {errorMsg && (
+        <div style={{ fontSize: 12, color: 'oklch(0.75 0.15 30)', background: 'oklch(0.65 0.2 30 / 0.08)', border: '1px solid oklch(0.65 0.2 30 / 0.25)', borderRadius: 7, padding: '8px 12px', marginBottom: 12 }}>{errorMsg}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="rp-btn-ghost" onClick={onSkip} style={{ fontSize: 13, flex: '0 0 auto' }}>Skip</button>
+        <button className="rp-btn-primary" onClick={enrich} disabled={enriching} style={{ flex: 1, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          {enriching
+            ? <><div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />Reading your links…</>
+            : 'Let Pilot read them →'
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Step 1: Upload ─────────────────────────────────────────────────────────────
 function StepUpload({ onNext, dir }) {
-  const [phase, setPhase] = useState('idle'); // idle | dragging | loading | error | done
+  // phase: idle | dragging | loading | enrich | links_only | error | done
+  const [phase, setPhase] = useState('idle');
   const [loadingStep, setLoadingStep] = useState(0);
   const [parseResult, setParseResult] = useState(null);
+  const [detectedLinks, setDetectedLinks] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [linksOnlyInput, setLinksOnlyInput] = useState('');
+  const [linksOnlyLoading, setLinksOnlyLoading] = useState(false);
   const fileRef = useRef();
 
   const LOADING_STEPS = ['Reading your experience…', 'Extracting achievements…', 'Building your career vault…'];
@@ -131,7 +299,6 @@ function StepUpload({ onNext, dir }) {
     setPhase('loading');
     setLoadingStep(0);
 
-    // Animate loading steps while waiting for API
     let stepIdx = 0;
     const stepTimer = setInterval(() => {
       stepIdx = Math.min(stepIdx + 1, LOADING_STEPS.length - 1);
@@ -155,7 +322,8 @@ function StepUpload({ onNext, dir }) {
       const parsed = data.parsed || data;
       saveSession({ parsedName: parsed.name, parsedResume: parsed });
       setParseResult(parsed);
-      setPhase('done');
+      setDetectedLinks(data.detectedLinks || []);
+      setPhase('enrich');
       track('rp_resume_uploaded', { method: 'pdf', years_exp: parsed.years_exp, seniority: parsed.seniority });
     } catch (err) {
       clearInterval(stepTimer);
@@ -176,7 +344,7 @@ function StepUpload({ onNext, dir }) {
     try {
       const form = new FormData();
       form.append('type', 'paste');
-      form.append('text', `Kushendra Suryavanshi\nSenior Product Manager\n\nExperience:\nRazorpay (2024–Present) — Senior Product Manager\n• Led cross-functional team of 12 to redesign payment infrastructure, reducing latency by 40%\n• Launched RazorpayX Business Banking to 8,000+ SMEs in 3 months\n\nMeesho (2022–2024) — Product Manager\n• Owned seller onboarding v2 — reduced time-to-first-sale from 11 days to 3.5 days\n• Built A/B testing framework used by 6 product teams, improving experiment velocity by 60%\n• Drove supplier NPS from 34 to 61\n\nFlipkart (2020–2022) — Associate Product Manager\n• Redesigned checkout flow, increasing conversion by 32%\n• Shipped address autofill using ML signals, reducing manual input by 70%`);
+      form.append('text', `Kushendra Suryavanshi\nSenior Product Manager\nhttps://linkedin.com/in/kushendra\nhttps://github.com/nontechie-kush\n\nExperience:\nRazorpay (2024–Present) — Senior Product Manager\n• Led cross-functional team of 12 to redesign payment infrastructure, reducing latency by 40%\n• Launched RazorpayX Business Banking to 8,000+ SMEs in 3 months\n\nMeesho (2022–2024) — Product Manager\n• Owned seller onboarding v2 — reduced time-to-first-sale from 11 days to 3.5 days\n• Built A/B testing framework used by 6 product teams, improving experiment velocity by 60%\n• Drove supplier NPS from 34 to 61\n\nFlipkart (2020–2022) — Associate Product Manager\n• Redesigned checkout flow, increasing conversion by 32%\n• Shipped address autofill using ML signals, reducing manual input by 70%`);
 
       const res = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
       clearInterval(stepTimer);
@@ -185,7 +353,8 @@ function StepUpload({ onNext, dir }) {
       const parsed = data.parsed || data;
       saveSession({ parsedName: parsed.name, parsedResume: parsed });
       setParseResult(parsed);
-      setPhase('done');
+      setDetectedLinks(data.detectedLinks || []);
+      setPhase('enrich');
     } catch (err) {
       clearInterval(stepTimer);
       setErrorMsg(err.message);
@@ -193,20 +362,98 @@ function StepUpload({ onNext, dir }) {
     }
   }, []);
 
-  return (
-    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 32 }}>
-      <div style={{ textAlign: 'center', maxWidth: 480 }}>
-        <div className="rp-fade-up" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 1 of 7</div>
-        <h1 className="rp-fade-up" style={{ fontSize: 'clamp(26px,3vw,36px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 10 }}>Upload your resume</h1>
-        <p className="rp-fade-up" style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>RolePitch reads your achievements—not just job titles</p>
-      </div>
+  // Called when StepEnrich finishes (with or without enriched parse)
+  const handleEnrichDone = useCallback((enrichedParsed, sources) => {
+    if (enrichedParsed) {
+      saveSession({ parsedName: enrichedParsed.name, parsedResume: enrichedParsed });
+    }
+    track('rp_profile_enriched', { sources_ok: (sources || []).filter(s => s.status === 'ok').length });
+    setPhase('done');
+    setTimeout(onNext, 600);
+  }, [onNext]);
 
+  const handleEnrichSkip = useCallback(() => {
+    setPhase('done');
+    setTimeout(onNext, 200);
+  }, [onNext]);
+
+  // Links-only path (designers, no resume)
+  const handleLinksOnly = useCallback(async () => {
+    const urls = linksOnlyInput.split(/[\s,\n]+/).map(u => u.trim()).filter(u => u.startsWith('http'));
+    if (!urls.length) return;
+    setLinksOnlyLoading(true);
+    try {
+      const enrichRes = await fetch('/api/rolepitch/enrich-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      });
+      const enrichData = await enrichRes.json();
+      if (!enrichData.text || enrichData.text.length < 50) throw new Error('Could not read those links — try adding your LinkedIn or portfolio');
+
+      const form = new FormData();
+      form.append('type', 'links_only');
+      form.append('additionalContext', enrichData.text);
+      const parseRes = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
+      const parseData = await parseRes.json();
+      if (!parseRes.ok) throw new Error(parseData.error || 'Could not extract profile from links');
+
+      saveSession({ parsedName: parseData.parsed?.name, parsedResume: parseData.parsed });
+      setParseResult(parseData.parsed);
+      track('rp_resume_uploaded', { method: 'links_only' });
+      setPhase('done');
+      setTimeout(onNext, 400);
+    } catch (err) {
+      setErrorMsg(err.message);
+      setLinksOnlyLoading(false);
+    }
+  }, [linksOnlyInput, onNext]);
+
+  return (
+    <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 28 }}>
+      {/* Header — hide when enriching */}
+      {phase !== 'enrich' && phase !== 'done' && (
+        <div style={{ textAlign: 'center', maxWidth: 480 }}>
+          <div className="rp-fade-up" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Step 1 of 7</div>
+          <h1 className="rp-fade-up" style={{ fontSize: 'clamp(26px,3vw,36px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 10 }}>
+            {phase === 'links_only' ? 'No resume? No problem.' : 'Tell Pilot about yourself'}
+          </h1>
+          <p className="rp-fade-up" style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
+            {phase === 'links_only'
+              ? 'Drop your LinkedIn, portfolio, GitHub — Pilot will read them all.'
+              : 'Upload your resume. Pilot reads the work behind the job titles.'}
+          </p>
+        </div>
+      )}
+
+      {/* Enrich nudge */}
+      {phase === 'enrich' && (
+        <>
+          <div style={{ textAlign: 'center', maxWidth: 480 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Step 1 of 7</div>
+            <h2 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 6 }}>
+              {parseResult?.name ? `Got it, ${parseResult.name.split(' ')[0]}.` : 'Resume read.'}
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Pilot found {parseResult?.experience?.length || 0} roles. Want it to check your online presence too?
+            </p>
+          </div>
+          <StepEnrich
+            parsedResult={parseResult}
+            detectedLinks={detectedLinks}
+            onDone={handleEnrichDone}
+            onSkip={handleEnrichSkip}
+          />
+        </>
+      )}
+
+      {/* Drop zone */}
       {(phase === 'idle' || phase === 'dragging') && (
         <div onClick={() => fileRef.current?.click()}
           onDragOver={e => { e.preventDefault(); setPhase('dragging'); }}
           onDragLeave={() => setPhase('idle')}
           onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) parseFile(f); }}
-          style={{ width: '100%', maxWidth: 480, border: `2px dashed ${phase === 'dragging' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 14, padding: '52px 32px', textAlign: 'center', cursor: 'pointer', background: phase === 'dragging' ? 'var(--accent-dim)' : 'var(--surface)', transition: 'all 0.2s' }}>
+          style={{ width: '100%', maxWidth: 480, border: `2px dashed ${phase === 'dragging' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 14, padding: '48px 32px', textAlign: 'center', cursor: 'pointer', background: phase === 'dragging' ? 'var(--accent-dim)' : 'var(--surface)', transition: 'all 0.2s' }}>
           <div style={{ width: 52, height: 52, borderRadius: 12, background: 'var(--surface2)', border: '1px solid var(--border)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
               <path d="M11 14V4M7 8l4-4 4 4" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -214,12 +461,39 @@ function StepUpload({ onNext, dir }) {
             </svg>
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Drop your resume here</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>PDF or DOCX — up to 5MB</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>PDF, DOCX, or screenshot — up to 10MB</div>
           <div style={{ display: 'inline-block', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 16px', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Browse files</div>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
         </div>
       )}
 
+      {/* Links-only path */}
+      {phase === 'links_only' && (
+        <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 28px' }}>
+          <textarea
+            className="rp-input"
+            value={linksOnlyInput}
+            onChange={e => setLinksOnlyInput(e.target.value)}
+            placeholder={'https://linkedin.com/in/yourname\nhttps://github.com/yourname\nhttps://yourportfolio.com'}
+            rows={4}
+            style={{ resize: 'none', lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}
+            autoFocus
+          />
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 16 }}>LinkedIn · GitHub · Framer · Behance · portfolio — one per line</div>
+          {errorMsg && <div style={{ fontSize: 12, color: 'oklch(0.75 0.15 30)', marginBottom: 12 }}>{errorMsg}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="rp-btn-ghost" onClick={() => { setPhase('idle'); setErrorMsg(''); }} style={{ fontSize: 13 }}>← Back</button>
+            <button className="rp-btn-primary" onClick={handleLinksOnly} disabled={linksOnlyLoading || !linksOnlyInput.trim()} style={{ flex: 1, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {linksOnlyLoading
+                ? <><div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />Reading…</>
+                : 'Read my links →'
+              }
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
       {phase === 'loading' && (
         <div style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '36px 32px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -240,6 +514,7 @@ function StepUpload({ onNext, dir }) {
         </div>
       )}
 
+      {/* Error */}
       {phase === 'error' && (
         <div style={{ width: '100%', maxWidth: 480, background: 'oklch(0.65 0.2 30 / 0.08)', border: '1px solid oklch(0.65 0.2 30 / 0.3)', borderRadius: 14, padding: '28px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 13, color: 'oklch(0.75 0.15 30)', marginBottom: 16 }}>{errorMsg}</div>
@@ -247,21 +522,23 @@ function StepUpload({ onNext, dir }) {
         </div>
       )}
 
+      {/* Done */}
       {phase === 'done' && (
         <div style={{ width: '100%', maxWidth: 480, background: 'var(--green-dim)', border: '1px solid oklch(0.72 0.17 155 / 0.3)', borderRadius: 14, padding: '28px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 36, marginBottom: 8, animation: 'rp-checkPop 0.4s ease' }}>✓</div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Resume parsed successfully</div>
-          {parseResult && (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              Ready to build your vault{parseResult.name ? ` for ${parseResult.name}` : ''}
-            </div>
-          )}
-          <button className="rp-btn-primary" onClick={onNext} style={{ marginTop: 24, width: '100%' }}>Preview my vault →</button>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Vault building…</div>
+          {parseResult && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{parseResult.name || 'Your profile'} · {parseResult.experience?.length || 0} roles</div>}
         </div>
       )}
 
+      {/* Bottom actions — idle/dragging only */}
       {(phase === 'idle' || phase === 'dragging') && (
-        <button className="rp-btn-ghost" onClick={useSample} style={{ fontSize: 13 }}>Use sample resume</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <button className="rp-btn-ghost" onClick={useSample} style={{ fontSize: 13 }}>Use sample resume</button>
+          <button onClick={() => setPhase('links_only')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-faint)', textDecoration: 'underline', fontFamily: 'var(--sans)' }}>
+            No resume? Start with your links →
+          </button>
+        </div>
       )}
     </div>
   );

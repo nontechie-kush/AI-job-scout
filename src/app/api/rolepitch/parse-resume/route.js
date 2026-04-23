@@ -68,6 +68,7 @@ export async function POST(request) {
   try {
     const formData = await request.formData();
     const type = formData.get('type');
+    const additionalContext = formData.get('additionalContext') || '';
     let textToParse = '';
 
     if (type === 'pdf') {
@@ -78,6 +79,9 @@ export async function POST(request) {
       textToParse = pdfData.text;
     } else if (type === 'paste' || type === 'text') {
       textToParse = formData.get('text') || '';
+    } else if (type === 'links_only') {
+      // Designer/portfolio-only path — no resume file
+      textToParse = additionalContext;
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
@@ -86,16 +90,29 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Not enough content to parse' }, { status: 400 });
     }
 
+    // Merge scraped context from links (capped to avoid token overflow)
+    const fullText = additionalContext && type !== 'links_only'
+      ? `${textToParse.slice(0, 10000)}\n\n${additionalContext.slice(0, 4000)}`
+      : textToParse.slice(0, 14000);
+
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
       max_tokens: 2000,
-      messages: [{ role: 'user', content: `${PARSE_PROMPT}\n\n---\n${textToParse.slice(0, 12000)}\n---` }],
+      messages: [{ role: 'user', content: `${PARSE_PROMPT}\n\n---\n${fullText}\n---` }],
     });
 
     const raw = message.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     const parsed = JSON.parse(raw);
 
-    return NextResponse.json({ parsed });
+    // Auto-detect links in the resume text for the enrichment nudge
+    const urlRegex = /https?:\/\/[^\s"'<>)\],]+/gi;
+    const rawLinks = (textToParse.match(urlRegex) || []);
+    const KNOWN_PROFILE_HOSTS = ['linkedin.com', 'github.com', 'huggingface.co', 'framer.com', 'behance.net', 'dribbble.com', 'notion.so', 'medium.com', 'substack.com'];
+    const detectedLinks = [...new Set(rawLinks)]
+      .filter(u => KNOWN_PROFILE_HOSTS.some(h => u.includes(h)))
+      .slice(0, 5);
+
+    return NextResponse.json({ parsed, detectedLinks });
   } catch (err) {
     console.error('[rolepitch/parse-resume]', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
