@@ -1,9 +1,7 @@
 name: Match Jobs
 
 on:
-  schedule:
-    - cron: '0 2 * * *'  # Once daily at 2:00 UTC (7:30 AM IST), 1h after scrape
-  workflow_dispatch:
+  workflow_dispatch:  # manual only — schedule paused
 
 jobs:
   match:

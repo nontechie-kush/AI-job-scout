@@ -1,9 +1,7 @@
 name: Scrape Jobs
 
 on:
-  schedule:
-    - cron: '0 1 * * *'  # Once daily at 1:00 UTC (6:30 AM IST)
-  workflow_dispatch:
+  workflow_dispatch:  # manual only — schedule paused to save ScraperAPI credits
 
 jobs:
   scrape:
