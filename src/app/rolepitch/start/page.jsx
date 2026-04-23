@@ -890,6 +890,42 @@ function StepResult({ onNext, onBack, dir }) {
 }
 
 // ── Step 6: Chat Gap Questions ────────────────────────────────────────────────
+
+// Converts a raw gap string like "No direct ERP experience (SAP, Oracle)"
+// into a Pilot-voice conversational opener
+function gapToQuestion(gap) {
+  const g = gap.toLowerCase();
+
+  // Pattern: "No X experience" → "Have you worked with X?"
+  const noExpMatch = gap.match(/^No (?:direct |explicit |demonstrated |proven |formal |strong )?(.+?) experience/i);
+  if (noExpMatch) {
+    const topic = noExpMatch[1].trim();
+    return `The JD wants ${topic} experience — have you touched this at all, even indirectly? Walk me through it.`;
+  }
+
+  // Pattern: "Lacks X" or "Missing X"
+  const lacksMatch = gap.match(/^(?:Lacks?|Missing) (.+)/i);
+  if (lacksMatch) {
+    return `They're looking for ${lacksMatch[1].trim()} — any exposure there, even in a side project or adjacent role?`;
+  }
+
+  // Pattern: "No X domain expertise"
+  const domainMatch = gap.match(/^No (?:explicit |demonstrated )?(.+?) (?:domain )?expertise/i);
+  if (domainMatch) {
+    return `How familiar are you with ${domainMatch[1].trim()}? Even working knowledge counts — tell me what you've seen.`;
+  }
+
+  // Pattern: "No demonstrated experience with X"
+  const expWithMatch = gap.match(/^No (?:\w+ )?experience (?:with|in|managing|leading) (.+)/i);
+  if (expWithMatch) {
+    return `Have you had any experience with ${expWithMatch[1].trim()}? Even at a smaller scale or supporting someone who did?`;
+  }
+
+  // Fallback: clean up and ask naturally
+  const cleaned = gap.replace(/^No (?:direct |explicit |demonstrated |proven )?/i, '').replace(/\.$/, '');
+  return `The JD flags a gap here: "${cleaned}". Have you dealt with this anywhere — even briefly? Give me the context.`;
+}
+
 const DEFAULT_QUESTIONS = [
   { question: 'Do you have experience working directly with enterprise or B2B customers?', tip: 'e.g. customer calls, QBRs, pilots, contracts' },
   { question: 'Have you worked on payment systems or financial infrastructure?', tip: 'e.g. routing, fraud, settlement, compliance' },
@@ -910,12 +946,11 @@ function StepGapQuestions({ onNext, onBack, dir }) {
   const followupPending = useRef(false);           // true when waiting for follow-up reply
 
   useEffect(() => {
-    // Use gap questions from tailored result (no auth needed)
     const session = loadSession();
     const gaps = session.tailoredResult?.gaps;
     let qs = DEFAULT_QUESTIONS;
     if (gaps?.length) {
-      qs = gaps.slice(0, 3).map(gap => ({ question: `Tell me more about: ${gap}`, tip: gap }))
+      qs = gaps.slice(0, 3).map(gap => ({ question: gapToQuestion(gap), tip: gap }))
         .concat(DEFAULT_QUESTIONS).slice(0, DEFAULT_QUESTIONS.length);
     }
     setQuestions(qs);
