@@ -1,8 +1,8 @@
 {
-  "name": "CareerPilot AI",
-  "short_name": "Pilot",
-  "description": "Your AI-powered job search engine",
-  "start_url": "/dashboard",
+  "name": "RolePitch",
+  "short_name": "RolePitch",
+  "description": "Your resume, tailored for every role.",
+  "start_url": "/rolepitch",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#7c3aed",

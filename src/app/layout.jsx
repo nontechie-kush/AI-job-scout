@@ -10,13 +10,13 @@ const GA_ID = 'G-S84XLE50EG';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'CareerPilot AI — Right Jobs. Right Outreach. 10x Faster.',
-  description: 'CareerPilot scans 20+ job sites every 4 hours, finds referral paths, and drafts your applications. You just review and apply.',
+  title: 'RolePitch — Your resume, tailored for every role.',
+  description: 'Paste a job link. Pilot reads the JD, picks your strongest achievements, and rewrites your bullets to match — in under 60 seconds.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Pilot',
+    title: 'RolePitch',
   },
 };
 
