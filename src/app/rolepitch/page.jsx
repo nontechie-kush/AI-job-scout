@@ -247,11 +247,11 @@ function Hero({ onGetStarted }) {
 
           <h1 className="rp-fade-up-2" style={{ fontSize: 'clamp(36px, 4.5vw, 58px)', fontWeight: 600, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 20 }}>
             Your resume,<br />
-            <span style={{ background: 'linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>pitched to every role.</span>
+            <span style={{ background: 'linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>tailored for every role.</span>
           </h1>
 
           <p className="rp-fade-up-3" style={{ fontSize: 'clamp(15px, 1.8vw, 18px)', color: 'var(--text-muted)', lineHeight: 1.65, maxWidth: 440, marginBottom: 36, fontWeight: 400 }}>
-            Paste a job link. RolePitch selects your best achievements and rewrites them to match — in under 60 seconds.
+            Paste a job link. Pilot reads the JD, picks your strongest achievements, and rewrites your bullets to match — in under 60 seconds.
           </p>
 
           <div className="rp-fade-up-4" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -263,7 +263,7 @@ function Hero({ onGetStarted }) {
             }} onClick={onGetStarted}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-              Get Started — it&apos;s free
+              Tailor my resume — free
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: 'rp-arrowMove 1.5s ease infinite' }}>
                 <path d="M1 7h12M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -283,7 +283,7 @@ function Hero({ onGetStarted }) {
               ))}
             </div>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text)' }}>1,200+</strong> resumes tailored this week
+              <strong style={{ color: 'var(--text)' }}>10 free pitches</strong> · no card required
             </span>
           </div>
         </div>
@@ -347,9 +347,9 @@ function Hero({ onGetStarted }) {
 
 function HowItWorks() {
   const steps = [
-    { n: '01', title: 'Upload your resume', desc: 'We read your work history and extract every meaningful achievement into your personal vault.', tag: 'Vault built' },
-    { n: '02', title: 'Paste a job link', desc: 'RolePitch analyzes the role requirements and matches them against your vault of achievements.', tag: 'Fit analyzed' },
-    { n: '03', title: 'Download your pitch', desc: 'Your resume is rewritten with the best-fit achievements selected and bullets improved to match. Done in under 60 seconds.', tag: 'Ready to send' },
+    { n: '01', title: 'Upload your resume once', desc: 'Pilot reads your work history and builds a personal vault of every achievement, metric, and skill you\'ve ever had.', tag: 'Vault built' },
+    { n: '02', title: 'Drop a job link or JD', desc: 'Pilot scores your fit, identifies gaps, and asks you 2–3 quick questions to fill context it can\'t find on your resume.', tag: 'Fit scored' },
+    { n: '03', title: 'Get your tailored resume', desc: 'Your best achievements are selected and bullets rewritten to match the role — in under 60 seconds. Download as PDF.', tag: 'Ready to apply' },
   ];
 
   return (
@@ -383,7 +383,7 @@ function HowItWorks() {
 
 function AtomizationBand() {
   return (
-    <section style={{ padding: '0 24px' }}>
+    <section style={{ padding: '48px 24px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <div style={{
           borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)',
@@ -476,13 +476,13 @@ function Pricing({ onGetStarted }) {
   const [showUpgrade, setShowUpgrade] = useState(null); // plan id or null
 
   const plans = [
-    { id: null,  name: 'Free',       price: '₹0',   sub: '10 pitches included', features: ['10 role pitches free', 'Full memory vault', 'PDF download', 'Gap chat questions'], cta: 'Start free', highlight: false, badge: null },
-    { id: '25',  name: '25 Pitches', price: '₹299', sub: '+ GST · one-time',    features: ['25 pitch credits', 'Never expires', 'Full memory vault', 'PDF download'], cta: 'Buy 25 pitches', highlight: true, badge: 'Most Popular' },
-    { id: '50',  name: '50 Pitches', price: '₹499', sub: '+ GST · one-time',    features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'], cta: 'Buy 50 pitches', highlight: false, badge: null },
+    { id: 'free', name: 'Free',       price: '₹0',   sub: '10 pitches included', features: ['10 role pitches free', 'Full memory vault', 'PDF download', 'Gap chat questions'], cta: 'Start free', highlight: false, badge: null },
+    { id: '25',   name: '25 Pitches', price: '₹299', sub: '+ GST · one-time',    features: ['25 pitch credits', 'Never expires', 'Full memory vault', 'PDF download'], cta: 'Buy 25 pitches', highlight: true, badge: 'Most Popular' },
+    { id: '50',   name: '50 Pitches', price: '₹499', sub: '+ GST · one-time',    features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'], cta: 'Buy 50 pitches', highlight: false, badge: null },
   ];
 
   const handleBuy = async (plan) => {
-    if (!plan.id) { onGetStarted(); return; }
+    if (plan.id === 'free') { onGetStarted(); return; }
     setBuyLoading(plan.id);
     setBuyError('');
     try {
@@ -491,9 +491,9 @@ function Pricing({ onGetStarted }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: plan.id }),
       });
-      const order = await res.json();
-      // Not logged in — redirect to sign in first, then come back to pricing
+      // Not logged in — redirect to sign in first
       if (res.status === 401) { window.location.href = '/rolepitch/auth?redirect=/rolepitch%23pricing'; return; }
+      const order = await res.json();
       if (!res.ok || order.error) throw new Error(order.error || 'Failed to create order');
 
       const rzp = new window.Razorpay({
