@@ -181,14 +181,15 @@ export default function ResumeDetailPage() {
           </div>
 
           {/* Score + stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 20, marginBottom: 32, animation: 'rp-fadeUp 0.35s 0.05s ease both' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32, animation: 'rp-fadeUp 0.35s 0.05s ease both' }}>
+            {/* Score card */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <ScoreBar before={beforeScore} after={afterScore} />
               <div style={{ height: 1, background: 'var(--border-subtle)' }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center' }}>
                 {[
-                  ['Highlights', `${data.stats?.achievements_used} of ${data.stats?.total_achievements}`],
-                  ['Bullets', data.stats?.bullets_rewritten],
+                  ['Highlights', data.stats?.achievements_used > 0 ? `${data.stats.achievements_used} of ${data.stats.total_achievements}` : `${data.stats?.total_achievements || 0} found`],
+                  ['Bullets', data.stats?.bullets_rewritten || 0],
                   ['Layout', '✓'],
                 ].map(([k, v]) => (
                   <div key={k}>
@@ -203,9 +204,11 @@ export default function ResumeDetailPage() {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>Gap context added</div>
-                <button onClick={() => setShowAnswers(s => !s)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 500 }}>
-                  {showAnswers ? 'Hide' : 'Show answers'}
-                </button>
+                {data.gap_questions?.length > 0 && (
+                  <button onClick={() => setShowAnswers(s => !s)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 500 }}>
+                    {showAnswers ? 'Hide' : 'Show'}
+                  </button>
+                )}
               </div>
               {showAnswers && data.gap_questions?.length ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -219,7 +222,7 @@ export default function ResumeDetailPage() {
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--text-faint)', lineHeight: 1.6 }}>
                   {data.gap_questions?.length
-                    ? `${data.gap_questions.length} gap questions were asked to improve context.`
+                    ? `${data.gap_questions.length} gap question${data.gap_questions.length > 1 ? 's' : ''} answered to improve context.`
                     : 'No gap questions recorded for this pitch.'}
                 </p>
               )}

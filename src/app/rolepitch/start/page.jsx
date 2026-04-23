@@ -1087,7 +1087,7 @@ function StepGapQuestions({ onNext, onBack, dir }) {
               }}>
                 {msg.text}
               </div>
-              {msg.tip && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 5, paddingLeft: 4 }}>{msg.tip}</div>}
+              {/* tip hidden on mobile — it's redundant with the question */}
             </div>
           </div>
         ))}
@@ -1124,7 +1124,11 @@ function StepGapQuestions({ onNext, onBack, dir }) {
               </button>
             </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Press Enter to send · answers are saved to your vault</div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>
+            {typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+              ? 'Tap → to send · answers are saved to your vault'
+              : 'Press Enter to send · answers are saved to your vault'}
+          </div>
         </div>
       )}
 
