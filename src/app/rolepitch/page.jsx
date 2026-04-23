@@ -471,20 +471,73 @@ function Differentiator() {
 }
 
 function Pricing({ onGetStarted }) {
+  const [buyLoading, setBuyLoading] = useState(null);
+  const [buyError, setBuyError] = useState('');
+  const [showUpgrade, setShowUpgrade] = useState(null); // plan id or null
+
   const plans = [
-    { name: 'Free', price: null, sub: '10 pitches included', features: ['10 role pitches free', 'Full memory vault', 'PDF download', 'Gap chat questions'], cta: 'Start free', highlight: false, badge: null },
-    { name: '25 Pitches', price: '₹299', total: '₹352', sub: '+ ₹53 GST · one-time', features: ['25 pitch credits', 'Never expires', 'Full memory vault', 'PDF download'], cta: 'Buy 25 pitches', highlight: true, badge: 'Most Popular' },
-    { name: '50 Pitches', price: '₹499', total: '₹589', sub: '+ ₹90 GST · one-time', features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'], cta: 'Buy 50 pitches', highlight: false, badge: null },
+    { id: null,  name: 'Free',       price: '₹0',   sub: '10 pitches included', features: ['10 role pitches free', 'Full memory vault', 'PDF download', 'Gap chat questions'], cta: 'Start free', highlight: false, badge: null },
+    { id: '25',  name: '25 Pitches', price: '₹299', sub: '+ GST · one-time',    features: ['25 pitch credits', 'Never expires', 'Full memory vault', 'PDF download'], cta: 'Buy 25 pitches', highlight: true, badge: 'Most Popular' },
+    { id: '50',  name: '50 Pitches', price: '₹499', sub: '+ GST · one-time',    features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'], cta: 'Buy 50 pitches', highlight: false, badge: null },
   ];
+
+  const handleBuy = async (plan) => {
+    if (!plan.id) { onGetStarted(); return; }
+    setBuyLoading(plan.id);
+    setBuyError('');
+    try {
+      const res = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: plan.id }),
+      });
+      const order = await res.json();
+      // Not logged in — redirect to sign in first, then come back to pricing
+      if (res.status === 401) { window.location.href = '/rolepitch/auth?redirect=/rolepitch%23pricing'; return; }
+      if (!res.ok || order.error) throw new Error(order.error || 'Failed to create order');
+
+      const rzp = new window.Razorpay({
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'RolePitch',
+        description: order.label,
+        order_id: order.order_id,
+        theme: { color: '#4f46e5' },
+        handler: async (response) => {
+          const vRes = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+          const vData = await vRes.json();
+          if (vData.ok) window.location.href = '/rolepitch/dashboard';
+          else setBuyError(vData.error || 'Verification failed');
+        },
+        modal: { ondismiss: () => setBuyLoading(null) },
+      });
+      rzp.on('payment.failed', (r) => { setBuyError(r.error?.description || 'Payment failed'); setBuyLoading(null); });
+      rzp.open();
+    } catch (err) {
+      setBuyError(err.message);
+      setBuyLoading(null);
+    }
+  };
 
   return (
     <section id="pricing" style={{ padding: '96px 24px', borderTop: '1px solid var(--border-subtle)' }}>
+      <script src="https://checkout.razorpay.com/v1/checkout.js" async />
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 14 }}>Pricing</span>
           <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 600, letterSpacing: '-0.03em' }}>Simple. No surprises.</h2>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 12 }}>Pay only when you need more pitches. No subscription.</p>
         </div>
+        {buyError && <div style={{ textAlign: 'center', fontSize: 13, color: 'oklch(0.65 0.2 30)', marginBottom: 20 }}>{buyError}</div>}
         <div className="rp-pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'start' }}>
           {plans.map((p, i) => (
             <div key={i} style={{
@@ -499,19 +552,25 @@ function Pricing({ onGetStarted }) {
               )}
               <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600, color: p.highlight ? 'var(--accent)' : 'var(--text-muted)' }}>{p.name}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-                {p.price
-                  ? <><span style={{ fontFamily: 'var(--mono)', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{p.price}</span><span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 4 }}>base</span></>
-                  : <span style={{ fontFamily: 'var(--mono)', fontSize: 32, fontWeight: 600 }}>Free</span>
-                }
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{p.price}</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 24 }}>{p.sub}</div>
-              <button onClick={onGetStarted} style={{
-                width: '100%', padding: '11px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                background: p.highlight ? 'var(--accent)' : 'var(--surface2)',
-                color: p.highlight ? 'white' : 'var(--text)',
-                marginBottom: 24,
-              }}>{p.cta}</button>
+              <button
+                onClick={() => handleBuy(p)}
+                disabled={buyLoading === p.id}
+                style={{
+                  width: '100%', padding: '11px', borderRadius: 8, border: 'none', cursor: buyLoading === p.id ? 'not-allowed' : 'pointer',
+                  fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
+                  background: p.highlight ? 'var(--accent)' : 'var(--surface2)',
+                  color: p.highlight ? 'white' : 'var(--text)',
+                  marginBottom: 24, opacity: buyLoading === p.id ? 0.7 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                {buyLoading === p.id
+                  ? <><div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${p.highlight ? 'white' : 'var(--text)'}`, borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />Processing…</>
+                  : p.cta}
+              </button>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {p.features.map((f, j) => (
                   <div key={j} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
