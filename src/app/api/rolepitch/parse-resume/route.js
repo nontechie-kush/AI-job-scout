@@ -109,7 +109,7 @@ export async function POST(request) {
       // Single vision call — parse directly from images, skip text extraction step
       const visionMsg = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [{
           role: 'user',
           content: [
@@ -119,7 +119,16 @@ export async function POST(request) {
         }],
       });
       const visionRaw = visionMsg.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-      const visionParsed = JSON.parse(visionRaw);
+      // Tolerant parse — truncated JSON still yields partial data
+      let visionParsed;
+      try {
+        visionParsed = JSON.parse(visionRaw);
+      } catch {
+        // Attempt to salvage truncated JSON by closing open structures
+        const salvage = visionRaw.replace(/,\s*$/, '').replace(/:\s*"[^"]*$/, ': ""') + ']}';
+        try { visionParsed = JSON.parse(salvage); }
+        catch { visionParsed = JSON.parse(visionRaw.substring(0, visionRaw.lastIndexOf('}') + 1) + '}'); }
+      }
       return NextResponse.json({ parsed: visionParsed, detectedLinks: [] });
     } else if (type === 'paste' || type === 'text') {
       textToParse = formData.get('text') || '';
