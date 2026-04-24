@@ -91,13 +91,13 @@ export async function POST(request) {
         idx++;
       }
     } else if (type === 'images') {
-      // Vision path — send all images to Claude and ask it to extract resume text first
+      // Vision path — single call: send images + parse prompt together using Haiku (fast, vision-capable)
       const imageContents = [];
       let imgIdx = 0;
       while (formData.get(`image_${imgIdx}`)) {
         const img = formData.get(`image_${imgIdx}`);
         const buffer = Buffer.from(await img.arrayBuffer());
-        const mediaType = img.type || 'image/jpeg';
+        const mediaType = (img.type && img.type.startsWith('image/')) ? img.type : 'image/jpeg';
         imageContents.push({
           type: 'image',
           source: { type: 'base64', media_type: mediaType, data: buffer.toString('base64') },
@@ -106,19 +106,21 @@ export async function POST(request) {
       }
       if (imageContents.length === 0) return NextResponse.json({ error: 'No images provided' }, { status: 400 });
 
-      // Use vision to extract text from all screenshots, then parse
-      const extractMsg = await anthropic.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 3000,
+      // Single vision call — parse directly from images, skip text extraction step
+      const visionMsg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2000,
         messages: [{
           role: 'user',
           content: [
             ...imageContents,
-            { type: 'text', text: 'These are screenshots of a resume. Extract ALL text exactly as it appears — preserve every bullet, date, company, title, and metric. Output raw text only, no commentary.' },
+            { type: 'text', text: `These are screenshots of a resume. ${PARSE_PROMPT}` },
           ],
         }],
       });
-      textToParse = extractMsg.content[0].text;
+      const visionRaw = visionMsg.content[0].text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      const visionParsed = JSON.parse(visionRaw);
+      return NextResponse.json({ parsed: visionParsed, detectedLinks: [] });
     } else if (type === 'paste' || type === 'text') {
       textToParse = formData.get('text') || '';
     } else if (type === 'links_only') {
