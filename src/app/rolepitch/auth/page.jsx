@@ -59,6 +59,7 @@ function RolePitchAuthInner() {
   const step = searchParams.get('step') || '6';
   const tr = searchParams.get('tr') || '';
   const redirect = searchParams.get('redirect') || '';
+  const source = searchParams.get('source') || '';
   const oauthFailed = searchParams.get('error') === 'oauth_failed';
 
   useEffect(() => {
@@ -74,26 +75,41 @@ function RolePitchAuthInner() {
     // Implicit flow: Google redirects back here with #access_token in the hash
     if (window.location.hash.includes('access_token')) {
       setLoading(true);
-      // redirect param = came from pricing; go there instead of start
+
+      const claimAndRedirect = async (dest) => {
+        // Claim any pending critique for this user
+        try {
+          const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+          if (session.critiqueId || source === 'critique') {
+            await fetch('/api/rolepitch/claim-critique', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ critique_id: session.critiqueId || null }),
+            });
+          }
+        } catch {}
+        window.location.href = dest;
+      };
+
       if (redirect) {
-        setLoadingMsg('Redirecting you to payment…');
-        setTimeout(() => { window.location.href = redirect; }, 800);
+        setLoadingMsg(source === 'critique' ? 'Saving your critique…' : 'Redirecting you to payment…');
+        setTimeout(() => claimAndRedirect(redirect), 800);
       } else {
         setLoadingMsg('Redirecting…');
         setTimeout(() => {
           const dest = `/rolepitch/start?step=${step}&source=rolepitch${tr ? `&tr=${tr}` : ''}`;
-          window.location.href = dest;
+          claimAndRedirect(dest);
         }, 800);
       }
     }
-  }, [step, tr, redirect]);
+  }, [step, tr, redirect, source]);
 
   const handleGoogle = async () => {
     setLoading(true);
     setError('');
 
-    // Pass redirect param through the round-trip so we land correctly after OAuth
-    const callbackQs = new URLSearchParams({ step, source: 'rolepitch' });
+    // Pass all params through the round-trip so we land correctly after OAuth
+    const callbackQs = new URLSearchParams({ step, source: source || 'rolepitch' });
     if (tr) callbackQs.set('tr', tr);
     if (redirect) callbackQs.set('redirect', redirect);
 
@@ -110,9 +126,12 @@ function RolePitchAuthInner() {
   };
 
   // Context-aware copy
-  const isPricingFlow = !!redirect;
-  const headline = isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
-  const subline = isPricingFlow
+  const isPricingFlow = !!redirect && source !== 'critique';
+  const isCritiqueFlow = source === 'critique';
+  const headline = isCritiqueFlow ? 'Save your critique' : isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
+  const subline = isCritiqueFlow
+    ? 'Sign up free — your critique will be saved to your dashboard and you can tailor your resume from there.'
+    : isPricingFlow
     ? 'Sign in with Google, then we\'ll take you to checkout.'
     : 'Free account — 10 pitches included. No credit card. Your vault is preserved forever.';
 
@@ -135,6 +154,17 @@ function RolePitchAuthInner() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Your resume is ready</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign in to save it and download the PDF</div>
+              </div>
+            </div>
+          )}
+
+          {/* Critique context badge */}
+          {isCritiqueFlow && (
+            <div style={{ background: 'oklch(0.50 0.19 248 / 0.08)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 2H3a1 1 0 00-1 1v9a1 1 0 001 1h3l2 2 2-2h3a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M5 6h6M5 9h4" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Your critique is ready</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign up to save it and tailor your resume from your dashboard</div>
               </div>
             </div>
           )}

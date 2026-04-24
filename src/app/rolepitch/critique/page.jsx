@@ -311,12 +311,18 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
   };
 
   const handleTailor = () => {
-    // Pass parsed resume into tailor flow via sessionStorage, skip upload step
+    // Save critique context to session so auth page + dashboard can pick it up
     try {
       const existing = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-      sessionStorage.setItem('rp_session', JSON.stringify({ ...existing, parsedResume }));
+      sessionStorage.setItem('rp_session', JSON.stringify({
+        ...existing,
+        parsedResume,
+        critiqueId,
+        fromCritique: true,
+      }));
     } catch {}
-    router.push('/rolepitch/start?step=2&source=critique');
+    // Send to auth — after sign-in lands on dashboard where critique will be visible
+    router.push('/rolepitch/auth?source=critique&redirect=/rolepitch/dashboard');
   };
 
   const s = critique.sections || {};

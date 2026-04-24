@@ -96,10 +96,68 @@ function companyColor(company) {
   return `hsl(${hues[h % hues.length]}, 60%, 45%)`;
 }
 
+function scoreColor(score) {
+  if (score >= 75) return 'var(--green)';
+  if (score >= 50) return 'var(--amber)';
+  return 'oklch(0.65 0.2 30)';
+}
+
+function CritiqueCard({ c, i, router }) {
+  const score = c.critique_json?.overall_score || 0;
+  const verdict = c.critique_json?.headline_verdict || '';
+  const label = c.critique_json?.score_label || '';
+  const expiresAt = new Date(c.expires_at);
+  const daysLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000));
+
+  const handleTailor = () => {
+    // Store parsed resume from critique into session for tailor flow
+    try {
+      const existing = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      sessionStorage.setItem('rp_session', JSON.stringify({ ...existing, critiqueId: c.id, fromCritique: true }));
+    } catch {}
+    router.push('/rolepitch/start?step=2&source=critique');
+  };
+
+  return (
+    <div className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both` }}>
+      <div className="rp-card-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+        {/* Score circle */}
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: `${scoreColor(score)}18`, border: `1.5px solid ${scoreColor(score)}44`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(score), lineHeight: 1 }}>{score}</span>
+          <span style={{ fontSize: 8, color: scoreColor(score), opacity: 0.7 }}>/100</span>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: scoreColor(score), background: `${scoreColor(score)}15`, padding: '2px 8px', borderRadius: 20 }}>{label}</span>
+            {c.target_context && <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>· {c.target_context}</span>}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+            "{verdict}"
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+            {formatDate(c.created_at)} · {daysLeft}d left
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="rp-btn-ghost" style={{ fontSize: 12, padding: '7px 14px' }} onClick={() => router.push(`/rolepitch/report/${c.id}`)}>
+          View report
+        </button>
+        <button className="rp-btn-primary" style={{ fontSize: 12, padding: '7px 14px' }} onClick={handleTailor}>
+          Tailor for a job →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RolePitchDashboard() {
   const router = useRouter();
+  const [tab, setTab] = useState('pitches'); // 'pitches' | 'critiques'
   const [resumes, setResumes] = useState([]);
+  const [critiques, setCritiques] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [critiquesLoading, setCritiquesLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(null);
   const [user, setUser] = useState(null);
@@ -121,6 +179,12 @@ export default function RolePitchDashboard() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => { setUser(user); if (user) fetchCredits(); });
 
+    // If coming from critique flow, default to critiques tab
+    try {
+      const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      if (session.fromCritique) { setTab('critiques'); sessionStorage.removeItem('rp_session'); }
+    } catch {}
+
     fetch('/api/rolepitch/my-resumes')
       .then(r => {
         if (r.status === 401) { window.location.href = '/rolepitch/auth?step=7&source=rolepitch'; return null; }
@@ -133,6 +197,11 @@ export default function RolePitchDashboard() {
         setLoading(false);
       })
       .catch(err => { setError(err.message); setLoading(false); });
+
+    fetch('/api/rolepitch/my-critiques')
+      .then(r => r.ok ? r.json() : { critiques: [] })
+      .then(data => { setCritiques(data.critiques || []); setCritiquesLoading(false); })
+      .catch(() => setCritiquesLoading(false));
   }, []);
 
   const handleDownload = async (resumeId) => {
@@ -195,35 +264,61 @@ export default function RolePitchDashboard() {
 
         {/* Content */}
         <div style={{ maxWidth: 860, margin: '0 auto', padding: '40px 24px' }}>
-          <div style={{ marginBottom: 32, animation: 'rp-fadeUp 0.4s ease both' }}>
-            <h1 style={{ fontSize: 'clamp(24px, 3vw, 34px)', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 8 }}>Your pitches</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Every role you&apos;ve tailored your resume for — download or re-run anytime.</p>
+          <div style={{ marginBottom: 28, animation: 'rp-fadeUp 0.4s ease both' }}>
+            <h1 style={{ fontSize: 'clamp(24px, 3vw, 34px)', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 20 }}>Your vault</h1>
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
+              {[
+                { id: 'pitches', label: 'Pitches', count: resumes.length },
+                { id: 'critiques', label: 'Resume Critiques', count: critiques.length },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  style={{
+                    padding: '7px 18px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 600, fontFamily: 'var(--sans)',
+                    background: tab === t.id ? 'var(--bg)' : 'transparent',
+                    color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
+                    boxShadow: tab === t.id ? '0 1px 4px oklch(0 0 0 / 0.08)' : 'none',
+                    transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {t.label}
+                  {t.count > 0 && (
+                    <span style={{ fontSize: 11, background: tab === t.id ? 'var(--accent-dim)' : 'var(--border)', color: tab === t.id ? 'var(--accent)' : 'var(--text-faint)', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {loading && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
-            </div>
-          )}
-
-          {error && (
-            <div style={{ background: 'oklch(0.65 0.2 30 / 0.08)', border: '1px solid oklch(0.65 0.2 30 / 0.25)', borderRadius: 12, padding: '20px 24px', color: 'oklch(0.75 0.15 30)', fontSize: 14 }}>
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && resumes.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '80px 24px' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
-              <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No pitches yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Tailor your resume for a role and it&apos;ll appear here.</p>
-              <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/start')}>Start your first pitch →</button>
-            </div>
-          )}
-
-          {!loading && resumes.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {resumes.map((r, i) => {
+          {/* ── Pitches Tab ── */}
+          {tab === 'pitches' && (
+            <>
+              {loading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                </div>
+              )}
+              {error && (
+                <div style={{ background: 'oklch(0.65 0.2 30 / 0.08)', border: '1px solid oklch(0.65 0.2 30 / 0.25)', borderRadius: 12, padding: '20px 24px', color: 'oklch(0.75 0.15 30)', fontSize: 14 }}>
+                  {error}
+                </div>
+              )}
+              {!loading && !error && resumes.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
+                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No pitches yet</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Tailor your resume for a role and it&apos;ll appear here.</p>
+                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/start')}>Start your first pitch →</button>
+                </div>
+              )}
+              {!loading && resumes.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {resumes.map((r, i) => {
                 const color = companyColor(r.jd.company);
                 return (
                   <div key={r.id} className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both` }}>
@@ -281,8 +376,39 @@ export default function RolePitchDashboard() {
                     </div>
                   </div>
                 );
-              })}
-            </div>
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Critiques Tab ── */}
+          {tab === 'critiques' && (
+            <>
+              {critiquesLoading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                </div>
+              )}
+              {!critiquesLoading && critiques.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No critiques yet</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Get a free critique of your resume — no job link needed.</p>
+                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/critique')}>Critique my resume →</button>
+                </div>
+              )}
+              {!critiquesLoading && critiques.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {critiques.map((c, i) => <CritiqueCard key={c.id} c={c} i={i} router={router} />)}
+                  <div style={{ textAlign: 'center', paddingTop: 8 }}>
+                    <button className="rp-btn-ghost" style={{ fontSize: 13 }} onClick={() => router.push('/rolepitch/critique')}>
+                      + New critique
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
