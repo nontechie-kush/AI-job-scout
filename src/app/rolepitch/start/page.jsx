@@ -365,7 +365,9 @@ function StepUpload({ onNext, dir }) {
   // Called when StepEnrich finishes (with or without enriched parse)
   const handleEnrichDone = useCallback((enrichedParsed, sources) => {
     if (enrichedParsed) {
-      saveSession({ parsedName: enrichedParsed.name, parsedResume: enrichedParsed });
+      saveSession({ parsedName: enrichedParsed.name, parsedResume: enrichedParsed, enrichSources: sources || [] });
+    } else {
+      saveSession({ enrichSources: sources || [] });
     }
     track('rp_profile_enriched', { sources_ok: (sources || []).filter(s => s.status === 'ok').length });
     setPhase('done');
@@ -1050,18 +1052,42 @@ function StepResult({ onNext, onBack, dir }) {
     const tr = session.tailoredResult;
     if (!tr) { setError('No tailored resume found — go back and try again'); setLoading(false); return; }
 
-    // Map stateless tailor response to the shape StepResult expects
     const jd = { title: session.jdTitle || '', company: session.jdCompany || '' };
+    const isLinksOnly = !session.parsedResume?.experience?.some(r => (r.bullets || []).length > 0);
+
     const bullets_by_role = (tr.tailored?.experience || []).map((role, i) => {
       const origRole = (session.parsedResume?.experience || [])[i] || {};
+      const beforeBullets = (origRole.bullets || []).map(b => ({ text: typeof b === 'string' ? b : b.text }));
+      const afterBullets = (role.bullets || []).map(b => ({ text: b.text, original: b.original }));
       return {
         company: role.company,
         role: role.title,
-        before: (origRole.bullets || []).map(b => ({ text: typeof b === 'string' ? b : b.text })),
-        after: (role.bullets || []).map(b => ({ text: b.text, original: b.original })),
+        before: beforeBullets,
+        after: afterBullets,
+        rewrittenCount: afterBullets.filter((b, idx) => b.text !== (beforeBullets[idx]?.text || '')).length,
       };
     });
-    setResult({ jd, before_score: tr.before_score, after_score: tr.after_score, bullets_by_role, gaps: tr.gaps || [] });
+
+    // Compute stats from actual data
+    const totalBullets = bullets_by_role.reduce((s, r) => s + r.after.length, 0);
+    const rewrittenTotal = bullets_by_role.reduce((s, r) => s + r.rewrittenCount, 0);
+    const originalTotal = bullets_by_role.reduce((s, r) => s + r.before.length, 0);
+
+    setResult({
+      jd,
+      before_score: tr.before_score,
+      after_score: tr.after_score,
+      bullets_by_role,
+      gaps: tr.gaps || [],
+      isLinksOnly,
+      enrichSources: session.enrichSources || [],
+      jdSnippet: session.jdDescription ? session.jdDescription.slice(0, 300) : '',
+      stats: {
+        total_bullets: totalBullets,
+        rewritten: rewrittenTotal,
+        original_total: originalTotal,
+      },
+    });
     setLoading(false);
   }, []);
 
@@ -1117,16 +1143,40 @@ function StepResult({ onNext, onBack, dir }) {
           </div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              ['Highlights used', `${result.stats?.achievements_used} of ${result.stats?.total_achievements}`],
-              ['Bullets rewritten', result.stats?.bullets_rewritten],
-              ['Layout', 'Preserved ✓'],
+              ['Bullets written', result.stats.total_bullets],
+              ['Rewritten for JD', result.stats.rewritten],
+              result.isLinksOnly
+                ? ['Source', 'Links only']
+                : ['Original bullets', result.stats.original_total],
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k}</span>
-                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, color: String(v).includes('✓') ? 'var(--green)' : 'var(--text)' }}>{v}</span>
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--text)' }}>{v}</span>
               </div>
             ))}
           </div>
+
+          {/* What Pilot read — evidence panel */}
+          {(result.jdSnippet || result.enrichSources?.length > 0) && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>What Pilot read</div>
+              {result.jdSnippet && (
+                <div style={{ marginBottom: result.enrichSources?.length > 0 ? 10 : 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Job description</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.55, fontStyle: 'italic' }}>
+                    &ldquo;{result.jdSnippet.replace(/\s+/g, ' ').trim()}…&rdquo;
+                  </div>
+                </div>
+              )}
+              {result.enrichSources?.filter(s => s.status === 'ok').map(s => (
+                <div key={s.url} style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--green)', marginBottom: 2 }}>{linkLabel(s.url)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{s.chars.toLocaleString()} chars extracted</div>
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
 
         {/* Resume preview */}
@@ -1134,12 +1184,13 @@ function StepResult({ onNext, onBack, dir }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 7, padding: 3, border: '1px solid var(--border-subtle)' }}>
-                {['before', 'after'].map(t => (
-                  <button key={t} onClick={() => setTab(t)} style={{ padding: '5px 16px', borderRadius: 5, border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', background: tab === t ? (t === 'after' ? 'var(--green)' : 'var(--surface2)') : 'transparent', color: tab === t ? (t === 'after' ? 'white' : 'var(--text)') : 'var(--text-muted)', transition: 'all 0.2s' }}>{t === 'after' ? 'After — tailored' : 'Before — original'}</button>
+                {(result.isLinksOnly ? ['after'] : ['before', 'after']).map(t => (
+                  <button key={t} onClick={() => setTab(t)} style={{ padding: '5px 16px', borderRadius: 5, border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', background: tab === t ? (t === 'after' ? 'var(--green)' : 'var(--surface2)') : 'transparent', color: tab === t ? (t === 'after' ? 'white' : 'var(--text)') : 'var(--text-muted)', transition: 'all 0.2s' }}>{t === 'after' ? (result.isLinksOnly ? 'Generated resume' : 'After — tailored') : 'Before — original'}</button>
                 ))}
               </div>
               {tab === 'before' && <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>generic, not positioned for this role</span>}
-              {tab === 'after' && <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>{result.stats?.bullets_rewritten} bullets rewritten for this role</span>}
+              {tab === 'after' && !result.isLinksOnly && <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>{result.stats.rewritten} bullets rewritten for this role</span>}
+              {tab === 'after' && result.isLinksOnly && <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>Generated from your profile</span>}
             </div>
             <div style={{ background: 'var(--card-bg)', borderRadius: 10, padding: 28, boxShadow: '0 4px 32px oklch(0 0 0 / 0.12)', border: tab === 'after' ? '1px solid oklch(0.72 0.17 155 / 0.25)' : '1px solid var(--border)', opacity: tab === 'before' ? 0.75 : 1, transition: 'all 0.3s' }}>
               <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid var(--border)' }}>

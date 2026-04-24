@@ -47,21 +47,44 @@ export async function POST(request) {
       ? `\nCANDIDATE CONTEXT (from interview Q&A — use this to enrich bullets):\n${context.map(c => `Q: ${c.question}\nA: ${c.answer}`).join('\n\n')}`
       : '';
 
-    const resumeText = (parsed_resume.experience || []).map(role => {
+    const experiences = parsed_resume.experience || [];
+    const isLinksOnly = experiences.length > 0 && experiences.every(r => (r.bullets || []).length === 0);
+
+    const resumeText = experiences.map(role => {
       const bullets = (role.bullets || []).map(b => `  • ${typeof b === 'string' ? b : b.text}`).join('\n');
-      return `${role.title} at ${role.company} (${role.start_date || '?'} – ${role.end_date || 'Present'})\n${bullets}`;
+      const bulletSection = bullets || '  (no bullets — generate 3-4 based on role title and context)';
+      return `${role.title} at ${role.company} (${role.start_date || '?'} – ${role.end_date || 'Present'})\n${bulletSection}`;
     }).join('\n\n');
 
-    const prompt = `You are an expert resume writer. Tailor this resume for the job description below.
+    const bulletInstruction = isLinksOnly
+      ? `BULLET RULES — GENERATE mode (no original bullets exist):
+- Write 3-4 bullets per role based on the role title, company, and any context in the candidate profile.
+- Use realistic achievements typical for this role level — do NOT fabricate specific metrics unless the profile provides them.
+- Start each with a strong past-tense action verb.
+- Keep each bullet 12-18 words. STAR structure: Action + what + outcome.
+- Use keywords from the JD naturally.
+- Set "original" field to "" (empty string) for all bullets.`
+      : `BULLET RULES — TAILOR mode (rewrite existing bullets):
+- Each bullet MUST be 12-18 words maximum. No exceptions.
+- Start with a strong past-tense action verb (Led, Built, Drove, Launched, Reduced, Grew, Scaled, Owned, Shipped, Increased).
+- Follow STAR structure compressed into one line: Action + what + result/metric.
+- Include the metric from the original bullet if one exists. Never fabricate metrics.
+- Use JD vocabulary naturally — do not force every JD keyword into every bullet.
+- Never start two consecutive bullets with the same verb.
+- Set "original" to the original bullet text verbatim.`;
+
+    const prompt = `You are an expert resume writer. ${isLinksOnly ? 'Generate a tailored resume' : 'Tailor this resume'} for the job description below.
 
 JOB: ${jd.title || 'Role'} at ${jd.company || 'Company'}
 ---
 ${jd.description.slice(0, 4000)}
 ---
 
-RESUME:
+CANDIDATE PROFILE:
 Name: ${parsed_resume.name || ''}
+Summary: ${parsed_resume.summary || ''}
 Skills: ${(parsed_resume.skills || []).join(', ')}
+Candidate edges: ${(parsed_resume.candidate_edges || []).join('; ')}
 
 ${resumeText}
 ---
@@ -69,8 +92,8 @@ ${resumeText}
 Return ONLY valid JSON. No markdown, no explanation.
 
 {
-  "before_score": <integer 0-100: how well original resume matches JD>,
-  "after_score": <integer 0-100: how well tailored resume matches JD — must be higher>,
+  "before_score": <integer 0-100: ${isLinksOnly ? 'estimated fit of raw profile before tailoring' : 'how well original resume matches JD'}>,
+  "after_score": <integer 0-100: how well ${isLinksOnly ? 'generated' : 'tailored'} resume matches JD — must be higher than before_score>,
   "gaps": ["gap1", "gap2"],
   "summary": "2-3 sentence tailored professional summary using keywords from JD",
   "skills": ["updated skills list prioritizing JD keywords"],
@@ -82,29 +105,21 @@ Return ONLY valid JSON. No markdown, no explanation.
       "end_date": "YYYY-MM or null",
       "bullets": [
         {
-          "text": "Rewritten bullet — see bullet rules below",
-          "original": "original bullet text"
+          "text": "bullet text",
+          "original": "original bullet or empty string"
         }
       ]
     }
   ]
 }
 
-BULLET RULES (critical — violations will break the resume):
-- Each bullet MUST be 12-18 words maximum. No exceptions.
-- Start with a strong past-tense action verb (Led, Built, Drove, Launched, Reduced, Grew, Scaled, Owned, Shipped, Increased).
-- Follow STAR structure compressed into one line: Action + what + result/metric.
-- Good example: "Led GTM launch of AI search feature, driving 40% lift in DAU within 60 days."
-- Bad example (too long): "Successfully led the end-to-end go-to-market strategy and launch of a new AI-powered search feature that resulted in significant improvements to daily active user metrics."
-- Include the metric from the original bullet if one exists. Never fabricate metrics.
-- Use JD vocabulary naturally — do not force every JD keyword into every bullet.
-- Never start two consecutive bullets with the same verb.
+${bulletInstruction}
 
 OTHER RULES:
-- Keep ALL roles from original resume. Do not drop any.
-- Never fabricate facts, companies, or titles not in the original.
+- Keep ALL roles. Do not drop any.
+- Never fabricate companies or titles not in the profile.
 - before_score and after_score must be realistic integers (before typically 40-70, after 65-90).
-- gaps: list 2-4 things the JD wants that aren't in the resume.
+- gaps: list 2-4 things the JD wants that the profile doesn't clearly show.
 - summary must use exact keywords from JD.`;
 
     const msg = await anthropic.messages.create({
