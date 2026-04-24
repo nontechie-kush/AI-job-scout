@@ -99,7 +99,7 @@ function scoreColor(score) {
   return 'var(--red)';
 }
 
-const COUNTDOWN_SECS = 7;
+const COUNTDOWN_SECS = 10;
 
 // ── Step 1: Upload ────────────────────────────────────────────────────────────
 function StepUpload({ onParsed }) {
