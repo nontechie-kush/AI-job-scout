@@ -13,6 +13,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { createBrowserClient } from '@supabase/ssr';
 
 const CSS = `
   :root {
@@ -44,38 +45,76 @@ const CSS = `
 
 function RolePitchAuthInner() {
   const searchParams = useSearchParams();
-  const supabase = createClient();
+  // Implicit flow client — avoids PKCE "invalid flow state" cookie loss across paths
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { auth: { flowType: 'implicit' } }
+  );
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('Redirecting…');
   const [error, setError] = useState('');
+  const [hasResume, setHasResume] = useState(false);
 
   const step = searchParams.get('step') || '6';
   const tr = searchParams.get('tr') || '';
+  const redirect = searchParams.get('redirect') || '';
   const oauthFailed = searchParams.get('error') === 'oauth_failed';
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
     document.documentElement.setAttribute('data-rp-theme', theme);
-  }, []);
+
+    // Only show "Your resume is ready" if there's actual session resume data
+    try {
+      const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      setHasResume(!!(session.parsedResume || session.tailoredResume));
+    } catch { setHasResume(false); }
+
+    // Implicit flow: Google redirects back here with #access_token in the hash
+    if (window.location.hash.includes('access_token')) {
+      setLoading(true);
+      // redirect param = came from pricing; go there instead of start
+      if (redirect) {
+        setLoadingMsg('Redirecting you to payment…');
+        setTimeout(() => { window.location.href = redirect; }, 800);
+      } else {
+        setLoadingMsg('Redirecting…');
+        setTimeout(() => {
+          const dest = `/rolepitch/start?step=${step}&source=rolepitch${tr ? `&tr=${tr}` : ''}`;
+          window.location.href = dest;
+        }, 800);
+      }
+    }
+  }, [step, tr, redirect]);
 
   const handleGoogle = async () => {
     setLoading(true);
     setError('');
 
-    // Build the return URL with step + tr so start page restores position
-    const qs = new URLSearchParams({ step, source: 'rolepitch' });
-    if (tr) qs.set('tr', tr);
-    const nextUrl = `/rolepitch/start?${qs.toString()}`;
+    // Pass redirect param through the round-trip so we land correctly after OAuth
+    const callbackQs = new URLSearchParams({ step, source: 'rolepitch' });
+    if (tr) callbackQs.set('tr', tr);
+    if (redirect) callbackQs.set('redirect', redirect);
 
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(nextUrl)}`,
+        // Implicit flow: token arrives as URL hash on this page itself
+        redirectTo: `${window.location.origin}/rolepitch/auth?${callbackQs.toString()}`,
         scopes: 'email profile',
       },
     });
 
     if (authError) { setError(authError.message); setLoading(false); }
   };
+
+  // Context-aware copy
+  const isPricingFlow = !!redirect;
+  const headline = isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
+  const subline = isPricingFlow
+    ? 'Sign in with Google, then we\'ll take you to checkout.'
+    : 'Free account — 10 pitches included. No credit card. Your vault is preserved forever.';
 
   return (
     <div style={{ fontFamily: 'var(--sans)', background: 'var(--bg)', color: 'var(--text)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -89,18 +128,31 @@ function RolePitchAuthInner() {
         </div>
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 28px' }}>
-          {/* Vault saved badge */}
-          <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1.2" /><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Your resume is ready</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign in to save it and download the PDF</div>
+          {/* Vault saved badge — only when resume exists in session */}
+          {hasResume && !isPricingFlow && (
+            <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1.2" /><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Your resume is ready</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign in to save it and download the PDF</div>
+              </div>
             </div>
-          </div>
+          )}
 
-          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Save your pitch</h2>
+          {/* Pricing context badge */}
+          {isPricingFlow && (
+            <div style={{ background: 'oklch(0.50 0.19 248 / 0.08)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.4l-3.7 1.9.7-4.1-3-2.9 4.2-.7z" fill="var(--accent)" opacity="0.8"/></svg>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>One step away</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign in first, then complete your purchase</div>
+              </div>
+            </div>
+          )}
+
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>{headline}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 24 }}>
-            Free account — 2 pitches included. No credit card. Your vault is preserved forever.
+            {subline}
           </p>
 
           <button
@@ -117,7 +169,7 @@ function RolePitchAuthInner() {
                   <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
                 </svg>
             }
-            {loading ? 'Redirecting…' : 'Continue with Google'}
+            {loading ? loadingMsg : 'Continue with Google'}
           </button>
 
           {(error || oauthFailed) && (

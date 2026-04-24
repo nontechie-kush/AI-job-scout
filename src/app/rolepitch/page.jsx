@@ -230,7 +230,7 @@ function ResumeCard({ highlighted = false, label, score }) {
   );
 }
 
-function Hero({ onGetStarted }) {
+function Hero({ onGetStarted, onCritique }) {
   const [tab, setTab] = useState('after');
 
   return (
@@ -268,12 +268,19 @@ function Hero({ onGetStarted }) {
                 <path d="M1 7h12M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <a href="#how" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, padding: '13px 4px' }}>
-              See how it works
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M1 6h10M7 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <button style={{
+              background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', cursor: 'pointer',
+              padding: '13px 20px', borderRadius: 9, fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em',
+              display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s ease',
+            }} onClick={onCritique}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M7 4.5v3M7 9.5h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
-            </a>
+              Critique my resume
+            </button>
           </div>
 
           <div className="rp-fade-up-4" style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 36 }}>
@@ -635,6 +642,10 @@ export default function RolePitchLanding() {
     track('rp_get_started_clicked', { source: 'landing', user_signed_in: !!user });
     router.push(isRolePitchDomain ? '/start' : '/rolepitch/start');
   };
+  const handleCritique = () => {
+    track('rp_critique_clicked', { source: 'landing' });
+    router.push(isRolePitchDomain ? '/critique' : '/rolepitch/critique');
+  };
   const handleDashboard = () => router.push('/rolepitch/dashboard');
   const handleSignIn = () => {
     track('rp_sign_in_clicked', { source: 'landing' });
@@ -656,7 +667,7 @@ export default function RolePitchLanding() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
         <Nav dark={dark} setDark={setDark} onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
-        <Hero onGetStarted={handleGetStarted} />
+        <Hero onGetStarted={handleGetStarted} onCritique={handleCritique} />
         <HowItWorks />
         <AtomizationBand />
         <Differentiator />
