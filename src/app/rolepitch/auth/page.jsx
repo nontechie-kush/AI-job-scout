@@ -50,6 +50,7 @@ function RolePitchAuthInner() {
 
   const step = searchParams.get('step') || '6';
   const tr = searchParams.get('tr') || '';
+  const oauthFailed = searchParams.get('error') === 'oauth_failed';
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
@@ -119,8 +120,10 @@ function RolePitchAuthInner() {
             {loading ? 'Redirecting…' : 'Continue with Google'}
           </button>
 
-          {error && (
-            <p style={{ fontSize: 12, color: 'oklch(0.75 0.15 30)', textAlign: 'center', marginTop: 14 }}>{error}</p>
+          {(error || oauthFailed) && (
+            <p style={{ fontSize: 12, color: 'oklch(0.75 0.15 30)', textAlign: 'center', marginTop: 14 }}>
+              {error || 'Sign-in failed — please try again'}
+            </p>
           )}
 
           <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', marginTop: 20, lineHeight: 1.6 }}>

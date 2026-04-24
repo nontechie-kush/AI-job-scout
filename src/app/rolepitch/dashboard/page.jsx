@@ -122,8 +122,12 @@ export default function RolePitchDashboard() {
     supabase.auth.getUser().then(({ data: { user } }) => { setUser(user); if (user) fetchCredits(); });
 
     fetch('/api/rolepitch/my-resumes')
-      .then(r => r.json())
+      .then(r => {
+        if (r.status === 401) { window.location.href = '/rolepitch/auth?step=7&source=rolepitch'; return null; }
+        return r.json();
+      })
       .then(data => {
+        if (!data) return;
         if (data.error) { setError(data.error); setLoading(false); return; }
         setResumes(data.resumes || []);
         setLoading(false);

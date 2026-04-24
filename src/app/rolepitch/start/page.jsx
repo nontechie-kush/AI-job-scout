@@ -1554,13 +1554,19 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 380 }}>
-        <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 10, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1" /><path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Original layout preserved</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Your formatting is intact</div>
-          </div>
-        </div>
+        {(() => {
+          const sess = loadSession();
+          const hasOriginalResume = sess.parsedResume?.experience?.some(r => (r.bullets || []).length > 0);
+          return (
+            <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 10, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1" /><path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{hasOriginalResume ? 'Original layout preserved' : 'Resume generated from your profile'}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{hasOriginalResume ? 'Your formatting is intact' : 'Built from your links and context'}</div>
+              </div>
+            </div>
+          );
+        })()}
 
         {signedUp && (
           <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center' }}>

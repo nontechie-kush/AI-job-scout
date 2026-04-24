@@ -66,5 +66,8 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth/login?error=oauth_failed`);
+  // If it was a rolepitch OAuth attempt, bounce back to rolepitch auth (not /auth/login)
+  const isRolePitchNext = next.includes('source=rolepitch') || next.startsWith('/rolepitch');
+  const failDest = isRolePitchNext ? '/rolepitch/auth?error=oauth_failed' : '/auth/login?error=oauth_failed';
+  return NextResponse.redirect(`${origin}${failDest}`);
 }
