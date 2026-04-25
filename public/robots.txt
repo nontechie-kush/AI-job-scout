@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /rolepitch
+Allow: /rolepitch/
+Allow: /rolepitch/critique
+Allow: /rolepitch/start
+Allow: /rolepitch/report/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /onboarding/
+Disallow: /auth/
+
+Sitemap: https://www.rolepitch.com/sitemap.xml
