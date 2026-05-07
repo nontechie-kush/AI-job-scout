@@ -55,12 +55,17 @@ function buildStructuredResume(parsed) {
         type: typeof b === 'string' ? 'achievement' : (b.type || 'achievement'),
       })),
     })),
-    education: (parsed.education_detail || parsed.education || []).map(ed => ({
-      degree: ed.degree,
-      institution: ed.institution,
-      start_date: ed.start_date || null,
-      end_date: ed.end_date || null,
-    })),
+    education: (() => {
+      const ed = Array.isArray(parsed.education_detail) ? parsed.education_detail
+        : Array.isArray(parsed.education) ? parsed.education
+        : [];
+      return ed.map(e => ({
+        degree: e.degree,
+        institution: e.institution,
+        start_date: e.start_date || null,
+        end_date: e.end_date || null,
+      }));
+    })(),
     skills: parsed.skills || [],
   };
 }
@@ -117,27 +122,9 @@ export async function POST(request) {
         foundBy = 'email';
       }
     }
-    // Final fallback: most-recent unclaimed draft from last 2 hours (email may never have been set)
-    if (!draft) {
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await service
-        .from('rp_drafts')
-        .select('*')
-        .is('user_id', null)
-        .gt('expires_at', new Date().toISOString())
-        .gt('created_at', twoHoursAgo)
-        .not('parsed_resume', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) {
-        console.error(`[rolepitch/claim-draft ${rid}] lookup-by-recency error`, { message: error.message });
-      } else if (data) {
-        draft = data;
-        foundBy = 'recency';
-        console.log(`[rolepitch/claim-draft ${rid}] found draft by recency fallback`, { draft_id: data.id });
-      }
-    }
+    // NOTE: removed recency fallback — it could claim another user's unclaimed
+    // draft when run from dashboard mount or any retry path. Stick to draft_id
+    // (carried via URL through OAuth) and email match (draft.email = user.email).
     if (!draft) {
       console.warn(`[rolepitch/claim-draft ${rid}] no draft found`, { draft_id, email: user.email });
       return NextResponse.json({ claimed: false, has_tailored: false, tailored_resume_id: null, pitch_credits: null, draft_id: null });

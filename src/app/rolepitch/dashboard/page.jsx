@@ -107,15 +107,15 @@ function CritiqueCard({ c, i, router }) {
   const verdict = c.critique_json?.headline_verdict || '';
   const label = c.critique_json?.score_label || '';
   const expiresAt = new Date(c.expires_at);
-  const daysLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000));
+  const msLeft = expiresAt - Date.now();
+  const daysLeft = Math.max(0, Math.ceil(msLeft / 86400000));
+  const expiryLabel = msLeft <= 0 ? 'expired' : daysLeft === 0 ? 'expires today' : `${daysLeft}d left`;
 
   const handleTailor = () => {
-    // Store parsed resume from critique into session for tailor flow
-    try {
-      const existing = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-      sessionStorage.setItem('rp_session', JSON.stringify({ ...existing, critiqueId: c.id, fromCritique: true }));
-    } catch {}
-    router.push('/rolepitch/start?step=2&source=critique');
+    // Auto-tailor route: server reads critique.parsed_resume + inferred_target,
+    // runs the tailor, saves a tailored_resumes row, and redirects to the result.
+    // No client-side session juggling needed — DB is the source of truth.
+    router.push(`/rolepitch/tailoring?critique_id=${encodeURIComponent(c.id)}`);
   };
 
   return (
@@ -135,7 +135,7 @@ function CritiqueCard({ c, i, router }) {
             "{verdict}"
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
-            {formatDate(c.created_at)} · {daysLeft}d left
+            {formatDate(c.created_at)} · {expiryLabel}
           </div>
         </div>
       </div>
@@ -164,11 +164,12 @@ export default function RolePitchDashboard() {
   const [credits, setCredits] = useState(null);
   const [planTier, setPlanTier] = useState('free');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [welcome, setWelcome] = useState(null); // { granted, total }
 
   const fetchCredits = () => {
     fetch('/api/rolepitch/credits')
       .then(r => r.json())
-      .then(d => { setCredits(d.pitch_credits ?? 10); setPlanTier(d.plan_tier ?? 'free'); })
+      .then(d => { setCredits(d.pitch_credits ?? 5); setPlanTier(d.plan_tier ?? 'free'); })
       .catch(() => {});
   };
 
@@ -179,24 +180,114 @@ export default function RolePitchDashboard() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => { setUser(user); if (user) fetchCredits(); });
 
-    // If coming from critique flow, default to critiques tab
+    // Welcome flow: came from campaign signup (?welcome=1).
+    // Auth page already redeemed the campaign code; we just read live credits
+    // from the server and derive `granted` = total − 5 (the free baseline).
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('welcome') === '1') {
+      fetch('/api/rolepitch/credits')
+        .then(r => r.json())
+        .then(d => {
+          const total = d.pitch_credits ?? 5;
+          setCredits(total);
+          setPlanTier(d.plan_tier ?? 'free');
+          setWelcome({ granted: Math.max(0, total - 5), total });
+        })
+        .catch(() => setWelcome({ granted: 0, total: 5 }));
+      window.history.replaceState({}, '', '/rolepitch/dashboard');
+    }
+
+    // If coming from critique flow, default to critiques tab and consume the
+    // marker from rp_session. Safe to clear: /tailoring doesn't read rp_session,
+    // and /start writes its own session keys before redirecting here.
+    let pendingCritiqueId = null;
     try {
-      const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-      if (session.fromCritique) { setTab('critiques'); sessionStorage.removeItem('rp_session'); }
+      const sess = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      const local = JSON.parse(localStorage.getItem('rp_session') || '{}');
+      pendingCritiqueId = sess.critiqueId || local.critiqueId || null;
+      if (sess.fromCritique || local.fromCritique) {
+        setTab('critiques');
+        sessionStorage.removeItem('rp_session');
+        localStorage.removeItem('rp_session');
+      }
     } catch {}
 
-    fetch('/api/rolepitch/my-resumes')
-      .then(r => {
-        if (r.status === 401) { window.location.href = '/rolepitch/auth?step=7&source=rolepitch'; return null; }
-        return r.json();
-      })
-      .then(data => {
-        if (!data) return;
-        if (data.error) { setError(data.error); setLoading(false); return; }
-        setResumes(data.resumes || []);
-        setLoading(false);
-      })
-      .catch(err => { setError(err.message); setLoading(false); });
+    // Belt-and-suspenders: re-claim critique on dashboard mount in case the
+    // auth-page claim missed (cookie not yet propagated, etc).
+    if (pendingCritiqueId) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const token = session?.access_token;
+        if (!token) return;
+        fetch('/api/rolepitch/claim-critique', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ critique_id: pendingCritiqueId }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (d?.claimed > 0) {
+              fetch('/api/rolepitch/my-critiques')
+                .then(r => r.ok ? r.json() : { critiques: [] })
+                .then(data => setCritiques(data.critiques || []));
+            }
+          })
+          .catch(() => {});
+      });
+    }
+
+    // Belt-and-suspenders: try to claim any pending draft on dashboard mount.
+    // Catches the case where auth-page claim was interrupted by user navigation,
+    // mobile tab eviction, or transient errors. Recency fallback inside
+    // claim-draft finds the user's most recent unclaimed draft.
+    {
+      let pendingDraftId = null;
+      try { pendingDraftId = localStorage.getItem('rp_draft_id') || null; } catch {}
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const token = session?.access_token;
+        if (!token) return;
+        fetch('/api/rolepitch/claim-draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ draft_id: pendingDraftId }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (d?.claimed) {
+              try { localStorage.removeItem('rp_draft_id'); } catch {}
+              if (d?.tailored_resume_id) {
+                fetch('/api/rolepitch/my-resumes')
+                  .then(r => r.ok ? r.json() : { resumes: [] })
+                  .then(data => setResumes(data.resumes || []));
+                fetchCredits();
+              }
+            }
+          })
+          .catch(() => {});
+      });
+    }
+
+    // Welcome flow = brand-new user just completed OAuth. Skip the my-resumes
+    // probe entirely — they have zero resumes and the cookie may not yet be
+    // readable by the API route on first redirect (race), which would 401 →
+    // wrongly bounce them to /start.
+    const isWelcome = params.get('welcome') === '1';
+    if (isWelcome) {
+      setResumes([]);
+      setLoading(false);
+    } else {
+      fetch('/api/rolepitch/my-resumes')
+        .then(r => {
+          if (r.status === 401) { window.location.href = '/rolepitch/auth'; return null; }
+          return r.json();
+        })
+        .then(data => {
+          if (!data) return;
+          if (data.error) { setError(data.error); setLoading(false); return; }
+          setResumes(data.resumes || []);
+          setLoading(false);
+        })
+        .catch(err => { setError(err.message); setLoading(false); });
+    }
 
     fetch('/api/rolepitch/my-critiques')
       .then(r => r.ok ? r.json() : { critiques: [] })
@@ -270,7 +361,7 @@ export default function RolePitchDashboard() {
             <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
               {[
                 { id: 'pitches', label: 'Pitches', count: resumes.length },
-                { id: 'critiques', label: 'Resume Critiques', count: critiques.length },
+                { id: 'critiques', label: 'Resume Roasts', count: critiques.length },
               ].map(t => (
                 <button
                   key={t.id}
@@ -393,9 +484,9 @@ export default function RolePitchDashboard() {
               {!critiquesLoading && critiques.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '80px 24px' }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
-                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No critiques yet</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Get a free critique of your resume — no job link needed.</p>
-                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/critique')}>Critique my resume →</button>
+                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No roasts yet</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Get a free roast of your resume — no job link needed.</p>
+                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/critique')}>Roast my resume →</button>
                 </div>
               )}
               {!critiquesLoading && critiques.length > 0 && (
@@ -403,7 +494,7 @@ export default function RolePitchDashboard() {
                   {critiques.map((c, i) => <CritiqueCard key={c.id} c={c} i={i} router={router} />)}
                   <div style={{ textAlign: 'center', paddingTop: 8 }}>
                     <button className="rp-btn-ghost" style={{ fontSize: 13 }} onClick={() => router.push('/rolepitch/critique')}>
-                      + New critique
+                      + New roast
                     </button>
                   </div>
                 </div>
@@ -423,6 +514,111 @@ export default function RolePitchDashboard() {
           }}
         />
       )}
+
+      {welcome && (
+        <WelcomeModal
+          granted={welcome.granted}
+          total={welcome.total}
+          onClose={() => setWelcome(null)}
+          onTailor={() => { setWelcome(null); router.push('/rolepitch/start'); }}
+          onCritique={() => { setWelcome(null); router.push('/rolepitch/critique'); }}
+        />
+      )}
     </>
+  );
+}
+
+function WelcomeModal({ granted, total, onClose, onTailor, onCritique }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rp-welcome-title"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'oklch(0 0 0 / 0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20, animation: 'rp-fadeUp 0.25s ease',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rp-welcome-card"
+        style={{
+          background: 'var(--bg)', borderRadius: 16, padding: 28,
+          maxWidth: 460, width: '100%',
+          border: '1px solid var(--border)',
+          boxShadow: '0 20px 60px oklch(0 0 0 / 0.25)',
+          animation: 'rp-fadeUp 0.35s ease',
+          textAlign: 'center',
+        }}
+      >
+        <style>{`
+          @media (max-width: 480px) {
+            .rp-welcome-card { padding: 22px 18px !important; }
+            .rp-welcome-card h2 { font-size: 19px !important; }
+            .rp-welcome-card .rp-welcome-icon { width: 52px !important; height: 52px !important; margin-bottom: 14px !important; }
+            .rp-welcome-card .rp-welcome-icon svg { width: 26px !important; height: 26px !important; }
+          }
+        `}</style>
+        <div className="rp-welcome-icon" style={{
+          width: 64, height: 64, borderRadius: '50%',
+          background: 'var(--green-dim)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 18px',
+        }}>
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M8 16l5 5 11-11" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <h2 id="rp-welcome-title" style={{
+          fontSize: 22, fontWeight: 600, color: 'var(--text)',
+          letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 10px',
+        }}>
+          You're in. {total} pitches added to your account.
+        </h2>
+        <p style={{
+          fontSize: 14, lineHeight: 1.6, color: 'var(--text-muted)', margin: '0 0 8px',
+        }}>
+          {granted > 0
+            ? <>5 free + <strong style={{ color: 'var(--text)' }}>{granted} bonus</strong> = <strong style={{ color: 'var(--green)' }}>{total} total</strong>. Time to put them to work.</>
+            : <>You've got <strong style={{ color: 'var(--green)' }}>{total} free pitches</strong> ready to use.</>
+          }
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '0 0 22px' }}>
+          Pick a starting point — both are free.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            onClick={onTailor}
+            style={{
+              width: '100%', padding: '13px 18px', borderRadius: 10,
+              background: 'var(--accent)', color: 'white', border: 'none',
+              fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            Tailor my resume for a job →
+          </button>
+          <button
+            onClick={onCritique}
+            style={{
+              width: '100%', padding: '12px 18px', borderRadius: 10,
+              background: 'var(--surface)', color: 'var(--text)',
+              border: '1px solid var(--border)',
+              fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', cursor: 'pointer',
+            }}
+          >
+            Roast my resume first
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

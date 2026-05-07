@@ -13,30 +13,59 @@ import { createServiceClient } from '@/lib/supabase/service-client';
 
 export const dynamic = 'force-dynamic';
 
+function makeRid() {
+  return `sr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export async function POST(request) {
+  const rid = makeRid();
+  const t0 = Date.now();
+  console.log(`[rolepitch/save-resume ${rid}] START`, { has_auth: !!request.headers.get('authorization') });
+
   try {
     const supabase = await createClientFromRequest(request);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn(`[rolepitch/save-resume ${rid}] 401: no user`, { auth_err: userErr?.message || null });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    const { parsed, jd, tailored, jd_id: existingJdId } = await request.json();
-    console.log('[save-resume] user:', user.id, '| jd_id:', existingJdId, '| has_tailored:', !!tailored, '| has_jd_desc:', !!jd?.description, '| has_parsed:', !!parsed);
-    if (!parsed) return NextResponse.json({ error: 'parsed required' }, { status: 400 });
+    const { parsed, jd, tailored, jd_id: existingJdId, source: rawSource } = await request.json();
 
-    // ── Credit gate: deduct 1 pitch credit atomically (only when saving a tailored resume) ──
+    // profiles.source CHECK constraint: pdf | website | text | linkedin_pdf | image
+    // Default to 'text' (broadest, paste-style fallback) if caller didn't pass one.
+    const ALLOWED_SOURCES = new Set(['pdf', 'website', 'text', 'linkedin_pdf', 'image']);
+    const profileSource = ALLOWED_SOURCES.has(rawSource) ? rawSource : 'text';
+
+    console.log(`[rolepitch/save-resume ${rid}] payload`, {
+      user_id: user.id,
+      jd_id: existingJdId || null,
+      has_tailored: !!tailored,
+      has_jd_desc: !!jd?.description,
+      has_parsed: !!parsed,
+      experience_count: parsed?.experience?.length || 0,
+      raw_source: rawSource || null,
+      profile_source: profileSource,
+    });
+    if (!parsed) {
+      console.warn(`[rolepitch/save-resume ${rid}] 400: parsed required`);
+      return NextResponse.json({ error: 'parsed required' }, { status: 400 });
+    }
+
+    // ── Credit pre-check (read-only) — actual deduction happens only after the tailored row inserts ──
+    // Prevents orphan deductions when the insert fails or the request is replayed without a JD.
+    const service = tailored ? createServiceClient() : null;
     if (tailored) {
-      const service = createServiceClient();
-      const { data: remaining, error: creditErr } = await service.rpc('deduct_pitch_credit', {
-        p_user_id: user.id,
-      });
-      if (creditErr) {
-        console.error('[save-resume] credit deduction error:', creditErr.message);
+      const { data: u, error: balErr } = await service.from('users').select('pitch_credits').eq('id', user.id).single();
+      if (balErr) {
+        console.error(`[rolepitch/save-resume ${rid}] balance read error`, { message: balErr.message, code: balErr.code });
         return NextResponse.json({ error: 'Credit check failed' }, { status: 500 });
       }
-      if (remaining === -1) {
+      console.log(`[rolepitch/save-resume ${rid}] credit check`, { pitch_credits: u?.pitch_credits });
+      if ((u?.pitch_credits ?? 0) <= 0) {
+        console.warn(`[rolepitch/save-resume ${rid}] 402: no credits`);
         return NextResponse.json({ error: 'no_credits', message: 'You have no pitches remaining. Please upgrade to continue.' }, { status: 402 });
       }
-      console.log('[save-resume] credit deducted, remaining:', remaining);
     }
 
     // Build structured_resume from the parsed result
@@ -56,12 +85,17 @@ export async function POST(request) {
           type: typeof b === 'string' ? 'achievement' : (b.type || 'achievement'),
         })),
       })),
-      education: (parsed.education_detail || parsed.education || []).map(ed => ({
-        degree: ed.degree,
-        institution: ed.institution,
-        start_date: ed.start_date || null,
-        end_date: ed.end_date || null,
-      })),
+      education: (() => {
+        const ed = Array.isArray(parsed.education_detail) ? parsed.education_detail
+          : Array.isArray(parsed.education) ? parsed.education
+          : [];
+        return ed.map(e => ({
+          degree: e.degree,
+          institution: e.institution,
+          start_date: e.start_date || null,
+          end_date: e.end_date || null,
+        }));
+      })(),
       skills: parsed.skills || [],
     };
 
@@ -76,16 +110,24 @@ export async function POST(request) {
       const { error: saveError } = await supabase.from('profiles').insert({
         user_id: user.id,
         raw_text: '',
-        source: 'rolepitch',
+        source: profileSource,
         parsed_json: parsed,
         structured_resume,
         parsed_at: new Date().toISOString(),
         claude_model: 'claude-opus-4-6',
       });
       if (saveError) {
-        console.error('[rolepitch/save-resume] profile insert error:', saveError.message);
+        console.error(`[rolepitch/save-resume ${rid}] profile insert error`, {
+          message: saveError.message,
+          code: saveError.code,
+          details: saveError.details,
+          hint: saveError.hint,
+        });
         return NextResponse.json({ error: saveError.message }, { status: 500 });
       }
+      console.log(`[rolepitch/save-resume ${rid}] profile inserted`);
+    } else {
+      console.log(`[rolepitch/save-resume ${rid}] profile exists, skipped insert`);
     }
 
     // Save JD + tailored result if provided (final step sign-in)
@@ -93,11 +135,15 @@ export async function POST(request) {
       // Use existing jd_id if init-match already created the row (authenticated flow)
       let resolvedJdId = existingJdId || null;
       if (!resolvedJdId && jd?.description) {
-        const { data: jdRow } = await supabase
+        const { data: jdRow, error: jdInsErr } = await supabase
           .from('job_descriptions')
           .insert({ user_id: user.id, title: jd.title || 'Untitled', company: jd.company || '', description: jd.description, source: 'rolepitch' })
           .select('id').single();
+        if (jdInsErr) {
+          console.error(`[rolepitch/save-resume ${rid}] jd insert error`, { message: jdInsErr.message, code: jdInsErr.code });
+        }
         resolvedJdId = jdRow?.id || null;
+        console.log(`[rolepitch/save-resume ${rid}] jd inserted`, { jd_id: resolvedJdId });
       }
 
       if (resolvedJdId) {
@@ -107,7 +153,7 @@ export async function POST(request) {
         const tailoredVersion = tailored.tailored || {};
         const highlightsUsed = (tailoredVersion.experience || []).reduce((s, r) => s + (r.bullets || []).length, 0);
 
-        console.log('[save-resume] inserting tailored_resume for jd_id:', resolvedJdId);
+        console.log(`[rolepitch/save-resume ${rid}] inserting tailored_resume`, { jd_id: resolvedJdId, highlights: highlightsUsed });
         const { data: trRow, error: trErr } = await supabase.from('tailored_resumes').insert({
           user_id: user.id,
           jd_id: jdRow.id,
@@ -124,15 +170,39 @@ export async function POST(request) {
           resume_strength: beforeScore,
         }).select('id').single();
 
-        if (trErr) console.error('[save-resume] tailored_resumes insert error:', trErr.message);
-        console.log('[save-resume] inserted tailored_resume:', trRow?.id);
-        return NextResponse.json({ ok: true, tailored_resume_id: trRow?.id || null });
+        if (trErr || !trRow?.id) {
+          console.error(`[rolepitch/save-resume ${rid}] tailored_resumes insert error`, {
+            message: trErr?.message,
+            code: trErr?.code,
+            details: trErr?.details,
+            hint: trErr?.hint,
+            no_id: !trRow?.id,
+          });
+          return NextResponse.json({ error: trErr?.message || 'Failed to save tailored resume' }, { status: 500 });
+        }
+        console.log(`[rolepitch/save-resume ${rid}] tailored_resume inserted`, { tailored_resume_id: trRow.id });
+
+        // Insert succeeded — deduct one pitch credit atomically.
+        const { data: remaining, error: creditErr } = await service.rpc('deduct_pitch_credit', { p_user_id: user.id });
+        if (creditErr) {
+          console.error(`[rolepitch/save-resume ${rid}] credit deduction error (non-fatal)`, { message: creditErr.message, code: creditErr.code });
+        } else {
+          console.log(`[rolepitch/save-resume ${rid}] credit deducted`, { remaining });
+        }
+        console.log(`[rolepitch/save-resume ${rid}] DONE 200 (tailored)`, { total_ms: Date.now() - t0, tailored_resume_id: trRow.id });
+        return NextResponse.json({ ok: true, tailored_resume_id: trRow.id, pitch_credits: remaining });
       }
     }
 
+    console.log(`[rolepitch/save-resume ${rid}] DONE 200`, { total_ms: Date.now() - t0 });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[rolepitch/save-resume]', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error(`[rolepitch/save-resume ${rid}] UNCAUGHT 500`, {
+      total_ms: Date.now() - t0,
+      name: err?.name,
+      message: err?.message,
+      stack: err?.stack?.split('\n').slice(0, 6).join('\n'),
+    });
+    return NextResponse.json({ error: err.message, rid }, { status: 500 });
   }
 }
