@@ -30,6 +30,7 @@ import { createServiceClient } from '@/lib/supabase/service-client';
 import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 const ALLOWED_SOURCES = new Set(['pdf', 'website', 'text', 'linkedin_pdf', 'image']);
 
