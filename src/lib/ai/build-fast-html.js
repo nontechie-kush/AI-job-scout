@@ -50,11 +50,13 @@ export function buildFastHtml(resume, jdTitle) {
 
   const filename = safeFilename(resume.name, jdTitle);
 
+  // <title> blank so the browser's print header doesn't show "Resume_Foo_Bar"
+  // Filename is set via Content-Disposition on the response, not <title>.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>${esc(filename)}</title>
+<title> </title>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Georgia',serif;font-size:11pt;color:#111;background:white;max-width:760px;margin:0 auto;padding:36px 40px}
@@ -71,7 +73,7 @@ export function buildFastHtml(resume, jdTitle) {
   .bullets li{font-size:10.5pt;line-height:1.65;margin-bottom:4px;color:#222}
   .skills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .skill-tag{font-family:Arial,sans-serif;font-size:9pt;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:4px;padding:2px 8px;color:#444}
-  @media print{body{padding:20px 28px;max-width:100%}@page{margin:18mm 15mm}}
+  @media print{body{padding:18mm 15mm;max-width:100%}@page{size:letter;margin:0}}
 </style>
 </head>
 <body>
@@ -86,7 +88,7 @@ export function buildFastHtml(resume, jdTitle) {
   ${(resume.experience || []).length ? `<h2>Experience</h2>${experienceHtml}` : ''}
   ${(resume.education || []).length ? `<h2>Education</h2>${educationHtml}` : ''}
   ${(resume.skills || []).length ? `<h2>Skills</h2>${skillsHtml}` : ''}
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},400);});</script>
+<script>window.addEventListener('load',function(){document.title=' ';setTimeout(function(){window.print();},400);});</script>
 </body>
 </html>`;
 }

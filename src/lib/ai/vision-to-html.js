@@ -21,6 +21,7 @@ OUTPUT RULES
 - Output ONLY the HTML, starting with <!DOCTYPE html> and ending with </html>. No markdown fences. No commentary.
 - Inline <style> in <head>. No external resources, no images, no @import, no fonts.googleapis.
 - Preserve every word, number, punctuation, em-dash, arrow (→), rupee symbol (₹) EXACTLY as shown.
+- Set <title> to a single space " " — names/labels in <title> become Chrome print headers.
 
 VISUAL FIDELITY
 - Match font family: serif resumes use 'Times New Roman', Georgia, serif. Sans use -apple-system, 'Helvetica Neue', sans-serif.

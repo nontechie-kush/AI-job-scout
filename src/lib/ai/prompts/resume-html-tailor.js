@@ -28,6 +28,8 @@ OUTPUT RULES
 - Output ONLY HTML, starting with <!DOCTYPE html> and ending with </html>. No markdown fences. No commentary.
 - Inline <style> in <head>. No external resources, no images, no @import, no fonts.googleapis.
 - Keep @page { size: letter; margin: 0; } and the .page wrapper from the original.
+- Set <title> to a single space " " — anything else becomes a header in Chrome's print PDF.
+- After </body>, append: <script>window.addEventListener('load',function(){document.title=' ';setTimeout(function(){window.print();},400);});</script>
 
 EDITING RULES
 - Where a bullet in the JSON has "text" that differs from the original, replace it.
