@@ -28,6 +28,8 @@ import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service-client';
 import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
+import { renderTailoredHtml } from '@/lib/ai/render-tailored-html';
+import { buildFastHtml } from '@/lib/ai/build-fast-html';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -157,6 +159,9 @@ export async function POST(request) {
       .eq('user_id', user.id)
       .maybeSingle();
 
+    let visionHtml = null;
+    let visionPageCount = 1;
+
     if (!existingProfile && parsed) {
       const source = ALLOWED_SOURCES.has(draft.parsed_source) ? draft.parsed_source : 'text';
       const { error: profErr } = await service.from('profiles').insert({
@@ -185,6 +190,8 @@ export async function POST(request) {
           if (pdfBlob) {
             const buffer = Buffer.from(await pdfBlob.arrayBuffer());
             const { html, pageCount } = await pdfToVisionHtml(buffer);
+            visionHtml = html;
+            visionPageCount = pageCount;
             await service.from('profiles').update({
               original_html: html,
               original_page_count: pageCount,
@@ -198,6 +205,17 @@ export async function POST(request) {
       }
     } else if (existingProfile) {
       console.log(`[rolepitch/claim-draft ${rid}] profile already exists, skipped insert`);
+      // Pull stored vision html so we can pre-render the tailored html below
+      const { data: prof } = await service
+        .from('profiles')
+        .select('original_html, original_page_count')
+        .eq('user_id', user.id)
+        .order('parsed_at', { ascending: false })
+        .maybeSingle();
+      if (prof?.original_html) {
+        visionHtml = prof.original_html;
+        visionPageCount = prof.original_page_count || 1;
+      }
     }
 
     // 3. Promote tailored result (if draft has one)
@@ -281,6 +299,37 @@ export async function POST(request) {
           } else {
             pitchCredits = remaining;
             console.log(`[rolepitch/claim-draft ${rid}] credit deducted`, { remaining });
+          }
+
+          // 3d. Pre-render the final tailored HTML so first download is instant.
+          // Non-fatal — if Sonnet fails or times out, download-pdf will render on demand.
+          try {
+            const mergedResume = {
+              name: tv.name || parsed?.name || '',
+              contact: tv.contact || parsed?.contact || {},
+              summary: tv.summary || '',
+              experience: tv.experience || [],
+              education: tv.education || [],
+              skills: tv.skills || [],
+            };
+            const finalHtml = await renderTailoredHtml({
+              originalHtml: visionHtml,
+              pageCount: visionPageCount,
+              mergedResume,
+              jobContext: {
+                title: draft.jd_snapshot?.title || '',
+                company: draft.jd_snapshot?.company || '',
+                description: (draft.jd_snapshot?.description || '').slice(0, 3000),
+              },
+              buildFastHtml,
+            });
+            await service
+              .from('tailored_resumes')
+              .update({ tailored_html: finalHtml })
+              .eq('id', tailoredResumeId);
+            console.log(`[rolepitch/claim-draft ${rid}] pre-rendered tailored_html`, { len: finalHtml.length });
+          } catch (e) {
+            console.warn(`[rolepitch/claim-draft ${rid}] pre-render failed (non-fatal)`, { message: e?.message });
           }
         }
       }
