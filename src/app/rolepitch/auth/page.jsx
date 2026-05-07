@@ -61,47 +61,224 @@ function RolePitchAuthInner() {
   const redirect = searchParams.get('redirect') || '';
   const source = searchParams.get('source') || '';
   const oauthFailed = searchParams.get('error') === 'oauth_failed';
+  const oauthDraftId = searchParams.get('draft_id') || '';
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
     document.documentElement.setAttribute('data-rp-theme', theme);
 
-    // Only show "Your resume is ready" if there's actual session resume data
+    // Show "Your resume is ready" if any flow saved a resume in either storage
     try {
-      const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-      setHasResume(!!(session.parsedResume || session.tailoredResume));
+      const sess = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      const local = JSON.parse(localStorage.getItem('rp_session') || '{}');
+      setHasResume(!!(sess.parsedResume || sess.tailoredResume || local.parsedResume || local.tailoredResume));
     } catch { setHasResume(false); }
 
     // Implicit flow: Google redirects back here with #access_token in the hash
-    if (window.location.hash.includes('access_token')) {
+    const hasHashToken = window.location.hash.includes('access_token');
+    if (hasHashToken) {
       setLoading(true);
 
-      const claimAndRedirect = async (dest) => {
-        // Claim any pending critique for this user
-        try {
-          const session = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-          if (session.critiqueId || source === 'critique') {
-            await fetch('/api/rolepitch/claim-critique', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ critique_id: session.critiqueId || null }),
-            });
-          }
-        } catch {}
-        window.location.href = dest;
+      // Parse the full token pair from the hash and hand it to Supabase via
+      // setSession(). This is what writes the auth cookie — without it, the
+      // immediate redirect races the cookie write and the next page 401s.
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      const establishSession = async () => {
+        if (!accessToken || !refreshToken) return false;
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (error) {
+          console.error('[auth] setSession failed:', error.message);
+          return false;
+        }
+        return true;
       };
 
-      if (redirect) {
-        setLoadingMsg(source === 'critique' ? 'Saving your critique…' : 'Redirecting you to payment…');
-        setTimeout(() => claimAndRedirect(redirect), 800);
-      } else {
-        setLoadingMsg('Redirecting…');
-        setTimeout(() => {
-          const dest = `/rolepitch/start?step=${step}&source=rolepitch${tr ? `&tr=${tr}` : ''}`;
-          claimAndRedirect(dest);
-        }, 800);
-      }
+      const claimAndRedirect = async (fallbackDest) => {
+        let critiqueId = null;
+        let claimed = false;
+        try {
+          const sess = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+          const local = JSON.parse(localStorage.getItem('rp_session') || '{}');
+          critiqueId = sess.critiqueId || local.critiqueId || null;
+
+          if (critiqueId || source === 'critique') {
+            const res = await fetch('/api/rolepitch/claim-critique', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              },
+              body: JSON.stringify({ critique_id: critiqueId }),
+            });
+            const j = await res.json().catch(() => ({}));
+            claimed = !!j.claimed;
+          }
+        } catch (e) {
+          console.error('[claim-critique]', e);
+        }
+
+        // Campaign redemption — runs alongside critique claim, idempotent.
+        try {
+          const refCode = localStorage.getItem('rp_campaign_code');
+          if (refCode && accessToken) {
+            const res = await fetch('/api/rolepitch/campaign/redeem', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ code: refCode }),
+            });
+            const j = await res.json().catch(() => ({}));
+            if (j?.granted || j?.already_redeemed) {
+              localStorage.removeItem('rp_campaign_code');
+            }
+          }
+        } catch (e) {
+          console.error('[campaign-redeem]', e);
+        }
+
+        // Critique flow: route to auto-tailor page when we have a claimed critique
+        if (source === 'critique' && critiqueId && claimed) {
+          window.location.href = `/rolepitch/tailoring?critique_id=${encodeURIComponent(critiqueId)}`;
+          return;
+        }
+
+        // Draft claim — replaces the step=6 OAuth round-trip dance.
+        // If the user had an in-flight tailor (anonymous draft), this atomically
+        // promotes it into profiles + tailored_resumes and lands them on the
+        // dashboard with their pitch already saved.
+        try {
+          const draftId = oauthDraftId || localStorage.getItem('rp_draft_id') || null;
+          if (draftId || accessToken) {
+            const res = await fetch('/api/rolepitch/claim-draft', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              },
+              body: JSON.stringify({ draft_id: draftId }),
+            });
+            const j = await res.json().catch(() => ({}));
+            if (j?.claimed && j?.has_tailored && j?.tailored_resume_id) {
+              // Successful end-to-end claim with a tailored pitch — go directly
+              // to dashboard with welcome marker. Skip the start-page step=6 path.
+              try { localStorage.removeItem('rp_draft_id'); } catch {}
+              window.location.href = '/rolepitch/dashboard?welcome=1';
+              return;
+            }
+            if (j?.claimed) {
+              // Draft claimed but no tailored result yet (shouldn't happen on
+              // the Download path, but covers other edges). Clear draft id and
+              // fall through to default destination.
+              try { localStorage.removeItem('rp_draft_id'); } catch {}
+            }
+          }
+        } catch (e) {
+          console.error('[claim-draft]', e);
+        }
+
+        window.location.href = fallbackDest;
+      };
+
+      setLoadingMsg(
+        source === 'critique' ? (redirect ? 'Saving your roast…' : 'Tailoring your resume…')
+        : source === 'campaign' ? 'Adding your bonus pitches…'
+        : redirect ? 'Redirecting you to payment…'
+        : 'Redirecting…'
+      );
+
+      // Critical sequence: write the auth cookie BEFORE navigating, otherwise
+      // the destination page's first request races the cookie and 401s.
+      establishSession().then(() => {
+        const dest = redirect
+          ? redirect
+          : `/rolepitch/start?step=${step}&source=${source || 'rolepitch'}${tr ? `&tr=${tr}` : ''}`;
+        claimAndRedirect(dest);
+      });
+      return;
     }
+
+    // No hash token — but the user might already be signed in. If so, skip
+    // showing the sign-in form and route them like a successful auth.
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      setLoading(true);
+      setLoadingMsg(
+        source === 'critique' ? 'Tailoring your resume…'
+        : source === 'campaign' ? 'Adding your bonus pitches…'
+        : redirect ? 'Redirecting…'
+        : 'Redirecting…'
+      );
+
+      let critiqueId = null;
+      let claimed = false;
+      try {
+        const sess = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+        const local = JSON.parse(localStorage.getItem('rp_session') || '{}');
+        critiqueId = sess.critiqueId || local.critiqueId || null;
+        if (critiqueId || source === 'critique') {
+          const res = await fetch('/api/rolepitch/claim-critique', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ critique_id: critiqueId }),
+          });
+          const j = await res.json().catch(() => ({}));
+          claimed = !!j.claimed;
+        }
+      } catch (e) {
+        console.error('[claim-critique]', e);
+      }
+
+      if (source === 'critique' && critiqueId && claimed) {
+        window.location.href = `/rolepitch/tailoring?critique_id=${encodeURIComponent(critiqueId)}`;
+        return;
+      }
+
+      // Draft claim — same logic as the OAuth-hash branch above. Covers the
+      // case where the user was already signed in when they hit auth (e.g.
+      // returning visitor whose session is still valid).
+      try {
+        const draftId = oauthDraftId || localStorage.getItem('rp_draft_id') || null;
+        if (draftId) {
+          const res = await fetch('/api/rolepitch/claim-draft', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ draft_id: draftId }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (j?.claimed && j?.has_tailored && j?.tailored_resume_id) {
+            try { localStorage.removeItem('rp_draft_id'); } catch {}
+            window.location.href = '/rolepitch/dashboard?welcome=1';
+            return;
+          }
+          if (j?.claimed) {
+            try { localStorage.removeItem('rp_draft_id'); } catch {}
+          }
+        }
+      } catch (e) {
+        console.error('[claim-draft]', e);
+      }
+
+      const dest = redirect
+        ? redirect
+        : `/rolepitch/start?step=${step}&source=${source || 'rolepitch'}${tr ? `&tr=${tr}` : ''}`;
+      window.location.href = dest;
+    })();
   }, [step, tr, redirect, source]);
 
   const handleGoogle = async () => {
@@ -112,6 +289,9 @@ function RolePitchAuthInner() {
     const callbackQs = new URLSearchParams({ step, source: source || 'rolepitch' });
     if (tr) callbackQs.set('tr', tr);
     if (redirect) callbackQs.set('redirect', redirect);
+
+    const liveDraftId = localStorage.getItem('rp_draft_id') || null;
+    if (liveDraftId) callbackQs.set('draft_id', liveDraftId);
 
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -126,11 +306,14 @@ function RolePitchAuthInner() {
   };
 
   // Context-aware copy
-  const isPricingFlow = !!redirect && source !== 'critique';
+  const isCampaignFlow = source === 'campaign';
+  const isPricingFlow = !!redirect && source !== 'critique' && !isCampaignFlow;
   const isCritiqueFlow = source === 'critique';
-  const headline = isCritiqueFlow ? 'Save your critique' : isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
-  const subline = isCritiqueFlow
-    ? 'Sign up free — your critique will be saved to your dashboard and you can tailor your resume from there.'
+  const headline = isCampaignFlow ? 'Claim your bonus' : isCritiqueFlow ? 'Save your roast' : isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
+  const subline = isCampaignFlow
+    ? 'Sign up with Google — your bonus pitches will be added to your account instantly.'
+    : isCritiqueFlow
+    ? 'Sign up free — your roast will be saved to your dashboard and you can tailor your resume from there.'
     : isPricingFlow
     ? 'Sign in with Google, then we\'ll take you to checkout.'
     : 'Free account — 10 pitches included. No credit card. Your vault is preserved forever.';
@@ -147,8 +330,8 @@ function RolePitchAuthInner() {
         </div>
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 28px' }}>
-          {/* Vault saved badge — only when resume exists in session */}
-          {hasResume && !isPricingFlow && (
+          {/* Vault saved badge — only shown after a tailor flow, not for critique-only users */}
+          {hasResume && !isPricingFlow && !isCritiqueFlow && (
             <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1.2" /><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               <div>
@@ -163,7 +346,7 @@ function RolePitchAuthInner() {
             <div style={{ background: 'oklch(0.50 0.19 248 / 0.08)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 2H3a1 1 0 00-1 1v9a1 1 0 001 1h3l2 2 2-2h3a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M5 6h6M5 9h4" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round"/></svg>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Your critique is ready</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Your roast is ready</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign up to save it and tailor your resume from your dashboard</div>
               </div>
             </div>

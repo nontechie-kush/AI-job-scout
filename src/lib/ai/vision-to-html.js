@@ -11,6 +11,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -55,6 +56,40 @@ const PDF_SERVICE_URL = process.env.PDF_SERVICE_URL;
 const PDF_SERVICE_SECRET = process.env.PDF_SERVICE_SECRET;
 
 /**
+ * Count page divs/markers in HTML output to estimate page count.
+ * Looks for .page divs or @page CSS occurrences.
+ */
+export function countPagesInHtml(html) {
+  if (!html) return 1;
+  // Count <div class="page"> or <div class='page'> occurrences
+  const divMatches = (html.match(/class=["']page["']/g) || []).length;
+  if (divMatches > 0) return divMatches;
+  // Fall back to counting @page rules
+  const pageRuleMatches = (html.match(/@page/g) || []).length;
+  return pageRuleMatches > 0 ? pageRuleMatches : 1;
+}
+
+/**
+ * Generate semantic HTML from a resume PDF buffer using Gemini 2.5 Flash vision.
+ * Sends the PDF directly (no png conversion needed).
+ * Returns { html, pageCount }.
+ */
+export async function pdfToVisionHtmlGemini(pdfBuffer) {
+  const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genai.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction: VISION_SYSTEM,
+  });
+  const result = await model.generateContent([
+    { inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } },
+    { text: 'Recreate this resume as one complete printable HTML document. Match every bold, italic, underline, border, table structure you see. Output ONLY the HTML starting with <!DOCTYPE html>.' },
+  ]);
+  const html = stripFences(result.response.text());
+  const pageCount = countPagesInHtml(html);
+  return { html, pageCount };
+}
+
+/**
  * Render a PDF's first page to a PNG buffer at 300 DPI by calling the
  * self-hosted pdf-service /pdf-to-png endpoint.
  *
@@ -92,9 +127,15 @@ function stripFences(html) {
 
 /**
  * Generate semantic HTML from a resume PDF buffer using vision.
+ * Uses Gemini 2.5 Flash when GEMINI_API_KEY is set; falls back to Claude Sonnet.
  * Returns { html, pageCount }.
  */
 export async function pdfToVisionHtml(pdfBuffer) {
+  // Prefer Gemini 2.5 Flash — sends PDF directly, no png rendering step needed
+  if (process.env.GEMINI_API_KEY) {
+    return pdfToVisionHtmlGemini(pdfBuffer);
+  }
+
   const { png, pageCount } = await pdfToPng(pdfBuffer);
 
   const resp = await anthropic.messages.create({
