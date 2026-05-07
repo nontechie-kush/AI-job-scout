@@ -126,6 +126,10 @@ export async function POST(request) {
     const additionalContext = formData.get('additionalContext') || '';
     const draftId = formData.get('draft_id') || null;
     let textToParse = '';
+    // Token returned to clients in the critique flow so they can attach
+    // the stored PDF path to the rp_critiques row created in the next step.
+    let parseToken = null;
+    let pdfPath = null;
 
     // Map input type to the canonical profiles.source value (per CHECK constraint:
     // 'pdf' | 'website' | 'text' | 'linkedin_pdf' | 'image'). Caller passes this
@@ -161,24 +165,34 @@ export async function POST(request) {
       textToParse = pdfData.text;
       console.log(`[rolepitch/parse-resume ${rid}] pdf parsed`, { pages: pdfData.numpages, text_len: textToParse.length });
 
-      // Store raw PDF to Supabase Storage — best-effort, non-blocking
-      if (draftId) {
-        try {
-          const storagePath = `drafts/${draftId}/original.pdf`;
-          const service = createServiceClient();
-          const { error: uploadErr } = await service.storage
-            .from('resumes')
-            .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true });
-          if (uploadErr) {
-            console.warn(`[rolepitch/parse-resume ${rid}] pdf storage upload failed (non-fatal)`, { message: uploadErr.message });
-          } else {
-            console.log(`[rolepitch/parse-resume ${rid}] pdf stored`, { path: storagePath });
-            // Mirror path to draft row so claim-draft can find it
+      // Store raw PDF to Supabase Storage — best-effort, non-blocking.
+      // Two paths:
+      //   draft_id present  → drafts/{draftId}/original.pdf  (mirrored to rp_drafts.pdf_path)
+      //   draft_id missing  → critiques/{parse_token}/original.pdf  (returned in body for the
+      //                       critique route to attach to rp_critiques.pdf_path)
+      try {
+        const storageScope = draftId ? `drafts/${draftId}` : null;
+        if (!storageScope) {
+          parseToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `pt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+        }
+        const storagePath = `${storageScope || `critiques/${parseToken}`}/original.pdf`;
+        const service = createServiceClient();
+        const { error: uploadErr } = await service.storage
+          .from('resumes')
+          .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true });
+        if (uploadErr) {
+          console.warn(`[rolepitch/parse-resume ${rid}] pdf storage upload failed (non-fatal)`, { message: uploadErr.message });
+        } else {
+          pdfPath = storagePath;
+          console.log(`[rolepitch/parse-resume ${rid}] pdf stored`, { path: storagePath, scope: storageScope ? 'draft' : 'critique' });
+          if (draftId) {
             await mirrorToDraft(draftId, { pdf_path: storagePath }, rid);
           }
-        } catch (storageErr) {
-          console.warn(`[rolepitch/parse-resume ${rid}] pdf storage threw (non-fatal)`, { message: storageErr?.message });
         }
+      } catch (storageErr) {
+        console.warn(`[rolepitch/parse-resume ${rid}] pdf storage threw (non-fatal)`, { message: storageErr?.message });
       }
 
       // Append any extra files (additional PDFs)
@@ -268,8 +282,8 @@ export async function POST(request) {
           email: visionParsed?.contact?.email || null,
         }, rid);
       }
-      console.log(`[rolepitch/parse-resume ${rid}] DONE 200 (vision)`, { total_ms: Date.now() - t0, draft_mirrored: !!draftId });
-      return NextResponse.json({ parsed: visionParsed, detectedLinks: [], source: canonicalSource });
+      console.log(`[rolepitch/parse-resume ${rid}] DONE 200 (vision)`, { total_ms: Date.now() - t0, draft_mirrored: !!draftId, parse_token: !!parseToken });
+      return NextResponse.json({ parsed: visionParsed, detectedLinks: [], source: canonicalSource, parse_token: parseToken, pdf_path: pdfPath });
     } else if (type === 'paste' || type === 'text') {
       textToParse = formData.get('text') || '';
       console.log(`[rolepitch/parse-resume ${rid}] paste input`, { text_len: textToParse.length });
@@ -407,8 +421,8 @@ export async function POST(request) {
       }, rid);
     }
 
-    console.log(`[rolepitch/parse-resume ${rid}] DONE 200`, { total_ms: Date.now() - t0, detected_links: detectedLinks.length, draft_mirrored: !!draftId });
-    return NextResponse.json({ parsed, detectedLinks, source: canonicalSource });
+    console.log(`[rolepitch/parse-resume ${rid}] DONE 200`, { total_ms: Date.now() - t0, detected_links: detectedLinks.length, draft_mirrored: !!draftId, parse_token: !!parseToken });
+    return NextResponse.json({ parsed, detectedLinks, source: canonicalSource, parse_token: parseToken, pdf_path: pdfPath });
   } catch (err) {
     console.error(`[rolepitch/parse-resume ${rid}] UNCAUGHT 500`, {
       total_ms: Date.now() - t0,

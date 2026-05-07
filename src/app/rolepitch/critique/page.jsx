@@ -72,7 +72,7 @@ const PILOT_LINES = [
   'Checking bullet strength…',
   'Scoring impact and metrics…',
   'Identifying the weak spots…',
-  'Writing your critique…',
+  'Writing your roast…',
 ];
 
 function statusColor(status) {
@@ -102,6 +102,10 @@ function scoreColor(score) {
 const COUNTDOWN_SECS = 10;
 const MAX_IMG_PX = 1600;
 const IMG_QUALITY = 0.75;
+// Vercel serverless body limit is 4.5MB. We cap raw file inputs at 10MB (large images
+// get compressed below) and reject the upload if compressed total still exceeds 4MB.
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
 
 async function compressImage(file) {
   return new Promise((resolve) => {
@@ -159,13 +163,26 @@ function StepUpload({ onParsed }) {
 
   const addFiles = async (newFiles) => {
     const raw = Array.from(newFiles);
+    const oversized = raw.find(f => f.size > MAX_FILE_BYTES);
+    if (oversized) {
+      setErrorMsg(`"${oversized.name}" is over 10MB. Compress or screenshot the relevant pages and try again.`);
+      setPhase('error');
+      return;
+    }
     const entries = await Promise.all(raw.map(async f => {
       const isImage = f.type.startsWith('image/');
       const file = isImage ? await compressImage(f) : f;
       return { name: f.name, file, type: isImage ? 'image' : 'file' };
     }));
+    const nextTotal = [...stagedFiles, ...entries].reduce((s, e) => s + (e.file?.size || 0), 0);
+    if (nextTotal > MAX_TOTAL_BYTES) {
+      setErrorMsg(`Combined files exceed ${Math.round(MAX_TOTAL_BYTES / 1024 / 1024)}MB after compression. Drop one and try again.`);
+      setPhase('error');
+      return;
+    }
     setStagedFiles(prev => [...prev, ...entries]);
     setPhase('staged');
+    setErrorMsg('');
     startCountdown();
   };
 
@@ -179,7 +196,7 @@ function StepUpload({ onParsed }) {
   };
 
   const cancelCountdown = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     setCountdown(COUNTDOWN_SECS);
   };
 
@@ -210,7 +227,7 @@ function StepUpload({ onParsed }) {
       catch { throw new Error(res.status === 413 ? 'Files too large — try fewer screenshots or a PDF' : `Server error (${res.status})`); }
 
       if (!res.ok || data.error) throw new Error(data.error || 'Parse failed');
-      onParsed(data.parsed);
+      onParsed(data.parsed, data.pdf_path || null);
     } catch (e) {
       setErrorMsg(e.message);
       setPhase('error');
@@ -234,7 +251,7 @@ function StepUpload({ onParsed }) {
     const fd = new FormData();
     fd.append('type', 'paste');
     fd.append('text', pasteText.trim());
-    try { const data = await parseFormData(fd); onParsed(data.parsed); }
+    try { const data = await parseFormData(fd); onParsed(data.parsed, data.pdf_path || null); }
     catch (e) { setErrorMsg(e.message); setPhase('error'); }
   };
 
@@ -244,7 +261,7 @@ function StepUpload({ onParsed }) {
     const fd = new FormData();
     fd.append('type', 'url');
     fd.append('url', urlText.trim());
-    try { const data = await parseFormData(fd); onParsed(data.parsed); }
+    try { const data = await parseFormData(fd); onParsed(data.parsed, data.pdf_path || null); }
     catch (e) { setErrorMsg(e.message); setPhase('error'); }
   };
 
@@ -265,7 +282,7 @@ function StepUpload({ onParsed }) {
     <div>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Upload your resume</h2>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>PDF, screenshots, link, or paste — Pilot will read everything and give you a brutally honest critique.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>PDF, screenshots, link, or paste — Pilot will read everything and give you a brutally honest roast.</p>
       </div>
 
       {!pasteMode && !urlMode && phase !== 'staged' && (
@@ -331,7 +348,18 @@ function StepUpload({ onParsed }) {
               Analyse now →
             </button>
             <button
-              onClick={() => { cancelCountdown(); moreRef.current?.click(); }}
+              onClick={() => {
+                // Pause countdown while picker is open. If user picks files, addFiles
+                // restarts it. If user cancels the picker (no onChange), focus returns
+                // to the window — restart the countdown so the staged files still ship.
+                cancelCountdown();
+                const onFocusBack = () => {
+                  window.removeEventListener('focus', onFocusBack);
+                  setTimeout(() => { if (!countdownRef.current) startCountdown(); }, 200);
+                };
+                window.addEventListener('focus', onFocusBack);
+                moreRef.current?.click();
+              }}
               style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 600, whiteSpace: 'nowrap' }}
             >
               + Upload more
@@ -397,7 +425,7 @@ function StepTarget({ onSubmit }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>What are you aiming for?</h2>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          The more specific you are, the sharper the critique. Skip if you just want a general review.
+          The more specific you are, the sharper the roast. Skip if you just want a general review.
         </p>
       </div>
 
@@ -412,7 +440,7 @@ function StepTarget({ onSubmit }) {
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
         <button className="rc-btn-primary" onClick={() => onSubmit(context.trim())}>
-          Critique my resume →
+          Roast my resume →
         </button>
         <button className="rc-btn-outline" onClick={() => onSubmit('')}>
           Skip — general review
@@ -471,19 +499,45 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTailor = () => {
-    // Save critique context to session so auth page + dashboard can pick it up
+  const handleTailor = async () => {
+    // Persist to BOTH storages so start page (localStorage) + auth page can read it.
+    const patch = { parsedResume, critiqueId, fromCritique: true };
     try {
-      const existing = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
-      sessionStorage.setItem('rp_session', JSON.stringify({
-        ...existing,
-        parsedResume,
-        critiqueId,
-        fromCritique: true,
-      }));
+      const sExist = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+      sessionStorage.setItem('rp_session', JSON.stringify({ ...sExist, ...patch }));
     } catch {}
-    // Send to auth — after sign-in lands on dashboard where critique will be visible
-    router.push('/rolepitch/auth?source=critique&redirect=/rolepitch/dashboard');
+    try {
+      const lExist = JSON.parse(localStorage.getItem('rp_session') || '{}');
+      localStorage.setItem('rp_session', JSON.stringify({ ...lExist, ...patch }));
+    } catch {}
+
+    // If already signed in, skip the auth round-trip — claim and go straight
+    // to tailoring. Otherwise fall through to OAuth.
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        if (critiqueId) {
+          await fetch('/api/rolepitch/claim-critique', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ critique_id: critiqueId }),
+          }).catch(() => {});
+          router.push(`/rolepitch/tailoring?critique_id=${encodeURIComponent(critiqueId)}`);
+          return;
+        }
+        router.push('/rolepitch/start?step=0&source=critique');
+        return;
+      }
+    } catch (e) {
+      console.error('[handleTailor] session check failed:', e);
+    }
+
+    router.push('/rolepitch/auth?source=critique&step=0');
   };
 
   const s = critique.sections || {};
@@ -599,11 +653,11 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
           </button>
           {shareUrl && (
             <button className="rc-btn-outline" onClick={handleCopy}>
-              {copied ? 'Copied!' : 'Share this critique'}
+              {copied ? 'Copied!' : 'Share this roast'}
             </button>
           )}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 12 }}>10 free pitches · no credit card</div>
+        <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 12 }}>5 free pitches · no credit card</div>
       </div>
     </div>
   );
@@ -614,6 +668,7 @@ function CritiqueInner() {
   const router = useRouter();
   const [step, setStep] = useState('upload'); // upload | target | generating | report
   const [parsedResume, setParsedResume] = useState(null);
+  const [pdfPath, setPdfPath] = useState(null);
   const [critique, setCritique] = useState(null);
   const [critiqueId, setCritiqueId] = useState(null);
   const [targetContext, setTargetContext] = useState('');
@@ -623,28 +678,48 @@ function CritiqueInner() {
     document.documentElement.setAttribute('data-rc-theme', theme);
   }, []);
 
-  const handleParsed = (parsed) => {
+  const handleParsed = (parsed, parsePdfPath) => {
     setParsedResume(parsed);
+    if (parsePdfPath) setPdfPath(parsePdfPath);
     setStep('target');
   };
 
+  const [critiqueError, setCritiqueError] = useState('');
+
   const handleTarget = async (context) => {
     setTargetContext(context);
+    setCritiqueError('');
     setStep('generating');
 
+    // Client-side timeout — if the function hangs past 70s, abort and surface
+    // a real error instead of leaving the user staring at a spinner forever.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 70000);
+
     try {
+      console.log('[critique-page] POST /api/rolepitch/critique', { has_target: !!context, target_len: context?.length || 0, experience_count: parsedResume?.experience?.length || 0 });
       const res = await fetch('/api/rolepitch/critique', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parsed_resume: parsedResume, target_context: context }),
+        body: JSON.stringify({ parsed_resume: parsedResume, target_context: context, pdf_path: pdfPath }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Critique failed');
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        console.error('[critique-page] critique API failed', { status: res.status, error: data?.error, rid: data?.rid });
+        throw new Error(data?.error || `Critique failed (HTTP ${res.status})${data?.rid ? ` · ref ${data.rid}` : ''}`);
+      }
       setCritique(data.critique);
       setCritiqueId(data.critique_id);
       setStep('report');
     } catch (e) {
-      // On failure go back to target step with error — for now just go back
+      clearTimeout(timeoutId);
+      const msg = e.name === 'AbortError'
+        ? 'Took too long — the model is overloaded. Try again in a moment.'
+        : e.message || 'Critique failed — please retry.';
+      console.error('[critique-page] caught error', { name: e.name, message: e.message });
+      setCritiqueError(msg);
       setStep('target');
     }
   };
