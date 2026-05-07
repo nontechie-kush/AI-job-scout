@@ -2339,10 +2339,13 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
   const jdLabel = result?.jd?.title || 'your target role';
   const jdCompany = result?.jd?.company || '';
 
-  const handleGoogleSignup = () => {
+  const handleGoogleSignup = async () => {
     track('rp_oauth_triggered', { source: 'signup_wall' });
+    // Ensure draft exists before leaving — on mobile the mount call may not have completed
+    const draftId = await ensureDraftId().catch(() => getDraftId());
     // step=6 means "returning from auth at final step — save + redirect to dashboard"
     const qs = new URLSearchParams({ step: '6', source: 'rolepitch' });
+    if (draftId) qs.set('draft_id', draftId);
     router.push(`/rolepitch/auth?${qs.toString()}`);
   };
 
