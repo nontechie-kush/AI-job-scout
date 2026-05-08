@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { track } from '@/components/PostHogProvider';
@@ -17,6 +17,8 @@ const CSS_VARS = `
     --accent-hover: oklch(0.44 0.19 248);
     --green: oklch(0.55 0.17 155);
     --green-dim: oklch(0.55 0.17 155 / 0.10);
+    --red: oklch(0.55 0.18 25);
+    --red-dim: oklch(0.55 0.18 25 / 0.10);
     --text: oklch(0.16 0.03 248);
     --text-muted: oklch(0.44 0.04 248);
     --text-faint: oklch(0.62 0.03 248);
@@ -36,6 +38,8 @@ const CSS_VARS = `
     --accent-hover: oklch(0.68 0.19 248);
     --green: oklch(0.72 0.17 155);
     --green-dim: oklch(0.72 0.17 155 / 0.12);
+    --red: oklch(0.68 0.18 25);
+    --red-dim: oklch(0.68 0.18 25 / 0.12);
     --text: oklch(0.94 0.01 248);
     --text-muted: oklch(0.58 0.04 248);
     --text-faint: oklch(0.38 0.03 248);
@@ -47,6 +51,7 @@ const CSS_VARS = `
   @keyframes rp-dotBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
   @keyframes rp-arrowMove { 0%,100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
   @keyframes rp-shimmer { from { background-position: -200% center; } to { background-position: 200% center; } }
+  @keyframes rp-slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
   .rp-fade-up-1 { animation: rp-fadeUp 0.6s ease both 0.1s; }
   .rp-fade-up-2 { animation: rp-fadeUp 0.6s ease both 0.25s; }
   .rp-fade-up-3 { animation: rp-fadeUp 0.6s ease both 0.4s; }
@@ -65,6 +70,9 @@ const CSS_VARS = `
     .rp-score-num { font-size: 24px !important; }
     .rp-atom-stats { gap: 12px !important; }
     .rp-atom-stats div { font-size: 16px !important; }
+    .rp-testimonials-grid { grid-template-columns: 1fr !important; }
+    .rp-inbox-toggle { flex-direction: column !important; }
+    .rp-inbox-toggle button { width: 100% !important; }
   }
 `;
 
@@ -97,6 +105,7 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <a href="#how" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How it works</a>
+          <a href="/blog" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Blog</a>
           <a href="#pricing" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
           <button onClick={() => setDark(d => !d)} style={{
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
@@ -130,7 +139,7 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
                 background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
                 padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
               }} onClick={onGetStarted}>
-                Get started
+                Get started free
               </button>
             </>
           )}
@@ -140,212 +149,206 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
   );
 }
 
-function ScoreCounter({ from, to, duration = 1600, delay = 400 }) {
-  const [val, setVal] = useState(from);
-  const [done, setDone] = useState(false);
-  const startedRef = useRef(false);
+function RecruiterInbox({ tab, setTab }) {
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (startedRef.current) return;
-      startedRef.current = true;
-      const start = performance.now();
-      const tick = (now) => {
-        const p = Math.min((now - start) / duration, 1);
-        const ease = 1 - Math.pow(1 - p, 4);
-        setVal(Math.round(from + (to - from) * ease));
-        if (p < 1) requestAnimationFrame(tick);
-        else setDone(true);
-      };
-      requestAnimationFrame(tick);
-    }, delay);
-    return () => clearTimeout(timeout);
-  }, [from, to, duration, delay]);
+    if (paused) return;
+    const id = setInterval(() => {
+      setTab(t => t === 'before' ? 'after' : 'before');
+    }, 3000);
+    return () => clearInterval(id);
+  }, [paused, setTab]);
 
-  const r = 54, circ = 2 * Math.PI * r;
-  const offset = circ * (1 - val / 100);
-  const color = val >= 80 ? 'var(--green)' : val >= 60 ? 'var(--accent)' : 'var(--text-muted)';
-
-  return (
-    <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="140" height="140" style={{ position: 'absolute', transform: 'rotate(-90deg)' }}>
-        <circle cx="70" cy="70" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
-        <circle cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth="6"
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: 'stroke 0.3s ease', filter: done ? `drop-shadow(0 0 6px ${color})` : 'none' }} />
-      </svg>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 32, fontWeight: 600, color, lineHeight: 1 }}>
-          {val}<span style={{ fontSize: 18 }}>%</span>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>match</div>
-      </div>
-    </div>
-  );
-}
-
-function ResumeCard({ highlighted = false, label, score }) {
-  const lines = [
-    { w: '85%', h: 8 }, { w: '60%', h: 6, mt: 4 },
-    { w: '40%', h: 5, mt: 16, isLabel: true }, { w: '95%', h: 5, accent: highlighted, mt: 6 },
-    { w: '88%', h: 5, accent: highlighted, mt: 4 }, { w: '70%', h: 5, mt: 4 },
-    { w: '40%', h: 5, mt: 14, isLabel: true }, { w: '90%', h: 5, mt: 6 }, { w: '80%', h: 5, mt: 4 },
+  const applicants = [
+    { name: 'Rahul S.', role: 'Backend Developer', match: 41, isYou: false },
+    { name: 'Anjali P.', role: 'Software Engineer', match: 55, isYou: false },
+    { name: 'You', role: 'Software Engineer', match: tab === 'after' ? 89 : 44, isYou: true },
+    { name: 'Meera K.', role: 'Full Stack Dev', match: 74, isYou: false },
   ];
+
   return (
-    <div style={{
-      background: 'var(--card-bg)', borderRadius: 10, padding: '20px 18px',
-      boxShadow: highlighted
-        ? '0 8px 40px oklch(0 0 0 / 0.2), 0 0 0 1px oklch(0.72 0.17 155 / 0.3)'
-        : '0 4px 24px oklch(0 0 0 / 0.12)',
-      position: 'relative', minWidth: 220, width: '100%',
-    }}>
-      {label && (
-        <div style={{
-          position: 'absolute', top: -10, left: 14,
-          background: highlighted ? 'var(--green)' : 'var(--surface2)',
-          color: highlighted ? 'white' : 'var(--text-muted)',
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-          padding: '3px 8px', borderRadius: 4,
-        }}>{label}</div>
-      )}
-      {lines.map((l, i) => (
-        <div key={i} style={{
-          height: l.h, width: l.w, borderRadius: 3, marginTop: l.mt || 0,
-          background: l.accent
-            ? 'linear-gradient(90deg, oklch(0.72 0.17 155 / 0.35) 0%, oklch(0.62 0.19 248 / 0.2) 100%)'
-            : l.isLabel ? 'oklch(0.75 0.04 248)' : 'oklch(0.88 0.01 248)',
-          border: l.accent ? '1px solid oklch(0.72 0.17 155 / 0.4)' : 'none',
-        }} />
-      ))}
-      {score !== undefined && (
-        <div style={{
-          position: 'absolute', bottom: 12, right: 12,
-          fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600,
-          color: highlighted ? 'var(--green)' : 'oklch(0.55 0.03 248)',
-          background: highlighted ? 'oklch(0.72 0.17 155 / 0.12)' : 'oklch(0.88 0.01 248)',
-          padding: '3px 7px', borderRadius: 4,
-        }}>{score}%</div>
+    <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, width: '100%' }}>
+      <div className="rp-inbox-toggle" style={{ display: 'flex', gap: 0, background: 'var(--surface)', borderRadius: 8, padding: 3, border: '1px solid var(--border-subtle)' }}>
+        {[['before', '🏃 Before'], ['after', '✅ After RolePitch']].map(([t, label]) => (
+          <button key={t} onClick={() => { setTab(t); setPaused(true); }} style={{
+            padding: '6px 20px', borderRadius: 6, border: 'none', cursor: 'pointer',
+            fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+            background: tab === t ? (t === 'after' ? 'var(--green)' : 'var(--red)') : 'transparent',
+            color: tab === t ? 'white' : 'var(--text-muted)',
+            transition: 'all 0.2s ease',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', width: '100%', maxWidth: 420, boxShadow: '0 16px 60px oklch(0 0 0 / 0.12)' }}>
+        <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57' }} />
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }} />
+          <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>Applications · Senior PM, Stripe</span>
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: tab === 'after' ? 'var(--green)' : 'var(--text-faint)', animation: tab === 'after' ? 'rp-slideIn 0.4s ease' : 'none' }}>
+            {tab === 'after' ? '✓ 1 shortlisted' : '0 shortlisted'}
+          </span>
+        </div>
+
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {applicants.map((a, i) => {
+            const isCall = a.match >= 75 || (a.isYou && tab === 'after');
+            const matchColor = a.match >= 80 ? 'var(--green)' : a.match >= 60 ? 'var(--accent)' : 'var(--red)';
+            return (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8,
+                border: a.isYou
+                  ? (isCall ? '1.5px solid oklch(0.55 0.17 155 / 0.5)' : '1.5px solid oklch(0.55 0.18 25 / 0.4)')
+                  : '1px solid var(--border-subtle)',
+                background: a.isYou
+                  ? (isCall ? 'oklch(0.55 0.17 155 / 0.05)' : 'oklch(0.55 0.18 25 / 0.04)')
+                  : 'transparent',
+                transition: 'all 0.4s ease',
+              }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: a.isYou ? 'var(--accent)' : 'var(--surface2)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: a.isYou ? 'white' : 'var(--text-faint)', flexShrink: 0 }}>{a.name[0]}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: a.isYou ? 700 : 500, color: a.isYou ? 'var(--text)' : 'var(--text-muted)' }}>
+                    {a.name}
+                    {a.isYou && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', marginLeft: 6, background: 'var(--accent-dim)', padding: '1px 6px', borderRadius: 4 }}>YOU</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{a.role}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: matchColor }}>{a.match}%</div>
+                  {isCall
+                    ? <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.3)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.05em' }}>✓ CALL</div>
+                    : <div style={{ fontSize: 10, fontWeight: 700, color: 'oklch(0.55 0.18 25)', background: 'oklch(0.55 0.18 25 / 0.1)', border: '1px solid oklch(0.55 0.18 25 / 0.25)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.05em' }}>SKIP</div>
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Avg. recruiter time per resume: <strong style={{ color: 'var(--text-muted)' }}>7 sec</strong></span>
+          {tab === 'after' && <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, color: 'var(--green)', animation: 'rp-slideIn 0.4s ease' }}>+45% match ↑</span>}
+        </div>
+      </div>
+
+      {tab === 'after' && (
+        <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.72 0.17 155 / 0.3)', borderRadius: 10, padding: '10px 16px', display: 'flex', gap: 10, alignItems: 'flex-start', width: '100%', maxWidth: 420, animation: 'rp-fadeUp 0.4s ease' }}>
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}><path d="M2 7l4 4 6-6" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}><strong style={{ color: 'var(--text)' }}>3 achievements selected · 2 bullets rewritten</strong><br />Your resume now speaks the recruiter's language.</span>
+        </div>
       )}
     </div>
   );
 }
 
 function Hero({ onGetStarted, onCritique }) {
-  const [tab, setTab] = useState('after');
+  const [tab, setTab] = useState('before');
 
   return (
-    <section style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', padding: '80px 24px 60px', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: '20%', left: '50%', transform: 'translate(-30%,-50%)', width: 800, height: 500, background: 'radial-gradient(ellipse at center, oklch(0.62 0.19 248 / 0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '10%', right: '5%', width: 400, height: 400, background: 'radial-gradient(ellipse at center, oklch(0.72 0.17 155 / 0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
+    <section style={{ minHeight: '92vh', display: 'flex', alignItems: 'center', padding: '80px 24px 60px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: '20%', left: '42%', width: 700, height: 400, background: 'radial-gradient(ellipse, oklch(0.55 0.18 25 / 0.05) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '10%', right: '5%', width: 500, height: 400, background: 'radial-gradient(ellipse, oklch(0.62 0.19 248 / 0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
       <div className="rp-hero-grid" style={{ maxWidth: 1100, margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
-        <div>
-          <div className="rp-fade-up-1" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--accent-dim)', border: '1px solid oklch(0.62 0.19 248 / 0.25)', borderRadius: 20, padding: '5px 12px', marginBottom: 24 }}>
+        <div style={{ animation: 'rp-fadeUp 0.6s ease 0.1s both' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--accent-dim)', border: '1px solid oklch(0.62 0.19 248 / 0.25)', borderRadius: 20, padding: '5px 12px', marginBottom: 24 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'block', animation: 'rp-dotBlink 2s ease infinite' }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.03em' }}>Now in beta</span>
           </div>
 
-          <h1 className="rp-fade-up-2" style={{ fontSize: 'clamp(36px, 4.5vw, 58px)', fontWeight: 600, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 20 }}>
-            Your resume,<br />
-            <span style={{ background: 'linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>tailored for every role.</span>
+          <h1 style={{ fontSize: 'clamp(38px, 3.8vw, 60px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.04em', marginBottom: 20 }}>
+            Recruiters spend only{' '}
+            <span style={{ color: 'var(--red)' }}>7 seconds</span> on<br />
+            your resume.
           </h1>
 
-          <p className="rp-fade-up-3" style={{ fontSize: 'clamp(15px, 1.8vw, 18px)', color: 'var(--text-muted)', lineHeight: 1.65, maxWidth: 440, marginBottom: 36, fontWeight: 400 }}>
-            Paste a job link. Pilot reads the JD, picks your strongest achievements, and rewrites your bullets to match — in under 60 seconds.
+          <p style={{ fontSize: 'clamp(15px, 1.8vw, 17px)', fontWeight: 700, color: 'var(--text)', lineHeight: 1.5, maxWidth: 460, marginBottom: 12 }}>
+            Don't leave your career to chance.
           </p>
 
-          <div className="rp-fade-up-4" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <p style={{ fontSize: 'clamp(14px, 1.6vw, 16px)', color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 460, marginBottom: 36 }}>
+            Most resumes get skipped. Yours shouldn't be.<br />
+            Paste a job link — RolePitch picks your strongest achievements and rewrites to match the role. In 60 seconds.
+          </p>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 36 }}>
             <button style={{
               background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
-              padding: '13px 24px', borderRadius: 9, fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em',
+              padding: '14px 26px', borderRadius: 10, fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em',
               display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s ease',
               boxShadow: '0 4px 20px oklch(0.62 0.19 248 / 0.35)',
             }} onClick={onGetStarted}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-              Tailor my resume — free
+              Get shortlisted — free
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: 'rp-arrowMove 1.5s ease infinite' }}>
                 <path d="M1 7h12M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
             <button style={{
               background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', cursor: 'pointer',
-              padding: '13px 20px', borderRadius: 9, fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em',
+              padding: '14px 22px', borderRadius: 10, fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em',
               display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s ease',
             }} onClick={onCritique}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)'; }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M7 4.5v3M7 9.5h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+                <path d="M7 4.5v3M7 9.5h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Critique my resume
+              Roast my resume
             </button>
           </div>
 
-          <div className="rp-fade-up-4" style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 36 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ display: 'flex' }}>
-              {['#2563eb', '#16a34a', '#9333ea', '#ea580c'].map((c, i) => (
-                <div key={i} style={{ width: 26, height: 26, borderRadius: '50%', background: c, marginLeft: i > 0 ? -6 : 0, border: '2px solid var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'white', fontWeight: 700 }}>{String.fromCharCode(65 + i)}</div>
+              {[['#4f46e5', 'A'], ['#0e9f6e', 'B'], ['#9333ea', 'C'], ['#ea580c', 'D']].map(([c, l], i) => (
+                <div key={i} style={{ width: 28, height: 28, borderRadius: '50%', background: c, marginLeft: i > 0 ? -7 : 0, border: '2px solid var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'white', fontWeight: 700 }}>{l}</div>
               ))}
             </div>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text)' }}>10 free pitches</strong> · no card required
+              <strong style={{ color: 'var(--text)' }}>5 free pitches</strong> · no card required
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', borderRadius: 8, padding: 3, border: '1px solid var(--border-subtle)' }}>
-            {['before', 'after'].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                padding: '6px 18px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'capitalize',
-                background: tab === t ? (t === 'after' ? 'var(--green)' : 'var(--surface2)') : 'transparent',
-                color: tab === t ? (t === 'after' ? 'white' : 'var(--text)') : 'var(--text-muted)',
-                transition: 'all 0.2s ease',
-              }}>{t}</button>
-            ))}
-          </div>
+        <div style={{ animation: 'rp-fadeUp 0.6s ease 0.25s both' }}>
+          <RecruiterInbox tab={tab} setTab={setTab} />
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
-            <div className="rp-score-card" style={{
-              position: 'absolute', top: -16, right: -16, zIndex: 10,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 16, padding: '12px 16px',
-              boxShadow: '0 8px 32px oklch(0 0 0 / 0.15)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-            }}>
-              <ScoreCounter from={63} to={tab === 'after' ? 84 : 63} key={tab} />
-              {tab === 'after' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--mono)' }}>
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8V2M2 5l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  +21% improvement
-                </div>
-              )}
-            </div>
-
-            <div style={{ paddingTop: 24 }}>
-              <ResumeCard highlighted={tab === 'after'} label={tab === 'before' ? 'Generic resume' : 'Pitched resume'} score={tab === 'before' ? 63 : 84} />
-            </div>
-
-            {tab === 'after' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
-                <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.72 0.17 155 / 0.25)', borderRadius: 8, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}><path d="M2 7l4 4 6-6" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    <strong style={{ color: 'var(--text)' }}>3 achievements selected</strong> · 2 bullets rewritten to match Product Manager, Stripe
-                  </span>
-                </div>
-                <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.62 0.19 248 / 0.2)', borderRadius: 8, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}><rect x="2" y="2" width="10" height="10" rx="2" stroke="var(--accent)" strokeWidth="1.4" /><path d="M4 5h6M4 7.5h4" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" /></svg>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    <strong style={{ color: 'var(--text)' }}>Your original layout preserved</strong> — or switch to a clean template
-                  </span>
+function Testimonials() {
+  const quotes = [
+    { text: <span>Got <strong style={{ color: 'var(--accent)' }}>3 interview calls in one week</strong> after using RolePitch. Previously sending 30 apps with the same resume got me nothing.</span>, name: 'Shreya M.', role: 'Product Manager · Bangalore', color: '#4f46e5', init: 'S' },
+    { text: <span>I was applying to the same companies for months. RolePitch showed me <strong style={{ color: 'var(--accent)' }}>exactly why I wasn't getting picked</strong> — and fixed it in minutes.</span>, name: 'Arjun T.', role: 'Software Engineer · Hyderabad', color: '#0e9f6e', init: 'A' },
+    { text: <span>"Roast my resume" was brutal. And completely right. <strong style={{ color: 'var(--accent)' }}>Rewrote 4 bullets. Got a recruiter callback the same day.</strong></span>, name: 'Priya K.', role: 'Data Analyst · Mumbai', color: '#9333ea', init: 'P' },
+  ];
+  return (
+    <section style={{ padding: '80px 24px', borderTop: '1px solid var(--border-subtle)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 14 }}>What people are saying</span>
+        <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.12, marginBottom: 48, maxWidth: 460 }}>The callbacks<br />started showing up.</h2>
+        <div className="rp-testimonials-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+          {quotes.map((q, i) => (
+            <div key={i} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 2 }}>
+                {[1,2,3,4,5].map(s => <svg key={s} width="13" height="13" viewBox="0 0 12 12" fill="oklch(0.62 0.16 72)"><path d="M6 1l1.4 3h3.1l-2.5 1.8.9 3L6 7.1 3.1 8.8l.9-3L1.5 4H4.6z"/></svg>)}
+              </div>
+              <p style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--text)' }}>{q.text}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: q.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'white', fontWeight: 700, flexShrink: 0 }}>{q.init}</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{q.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 1 }}>{q.role}</div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -354,9 +357,9 @@ function Hero({ onGetStarted, onCritique }) {
 
 function HowItWorks() {
   const steps = [
-    { n: '01', title: 'Upload your resume once', desc: 'Pilot reads your work history and builds a personal vault of every achievement, metric, and skill you\'ve ever had.', tag: 'Vault built' },
-    { n: '02', title: 'Drop a job link or JD', desc: 'Pilot scores your fit, identifies gaps, and asks you 2–3 quick questions to fill context it can\'t find on your resume.', tag: 'Fit scored' },
-    { n: '03', title: 'Get your tailored resume', desc: 'Your best achievements are selected and bullets rewritten to match the role — in under 60 seconds. Download as PDF.', tag: 'Ready to apply' },
+    { n: '01', title: 'Upload your resume once', desc: 'RolePitch reads your career history and builds a vault of every achievement, metric, and skill. No more copy-paste jobs ever again.', tag: 'Your vault' },
+    { n: '02', title: 'Drop any job link', desc: "RolePitch scores your fit against the JD in seconds. Spots gaps, asks 2–3 quick questions — only what it can't figure out itself.", tag: 'Fit scored' },
+    { n: '03', title: 'Download. Apply. Win.', desc: 'Your best achievements, repositioned for this specific role. Not a rewrite from scratch — a precise selection. In under 60 seconds.', tag: 'Interview-ready' },
   ];
 
   return (
@@ -364,22 +367,22 @@ function HowItWorks() {
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ marginBottom: 60 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase' }}>How it works</span>
-          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 600, letterSpacing: '-0.03em', lineHeight: 1.15, maxWidth: 480, marginTop: 10 }}>
-            Three steps.<br />Under 60 seconds.
+          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.12, maxWidth: 380, marginTop: 10 }}>
+            Under 60 seconds.<br />Seriously.
           </h2>
         </div>
-        <div className="rp-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 2 }}>
+        <div className="rp-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4 }}>
           {steps.map((s, i) => (
-            <div key={i} style={{ padding: '32px 28px', borderRadius: 12, border: '1px solid transparent', position: 'relative' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 24, letterSpacing: '0.06em' }}>{s.n}</div>
+            <div key={i} style={{ padding: '32px 28px', borderRadius: 12, border: '1px solid var(--border-subtle)', position: 'relative', background: i === 2 ? 'var(--accent-dim)' : 'transparent' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 20, letterSpacing: '0.06em' }}>{s.n}</div>
               {i < 2 && (
-                <div style={{ position: 'absolute', top: 40, right: -16, zIndex: 1, color: 'var(--text-faint)' }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <div style={{ position: 'absolute', top: 42, right: -14, zIndex: 1, color: 'var(--text-faint)' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </div>
               )}
-              <div style={{ display: 'inline-block', background: 'var(--accent-dim)', border: '1px solid oklch(0.62 0.19 248 / 0.2)', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.03em', marginBottom: 16 }}>{s.tag}</div>
-              <h3 style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 10, lineHeight: 1.3 }}>{s.title}</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65 }}>{s.desc}</p>
+              <div style={{ display: 'inline-block', background: 'var(--accent-dim)', border: '1px solid oklch(0.62 0.19 248 / 0.2)', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.03em', marginBottom: 14 }}>{s.tag}</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.025em', marginBottom: 10, lineHeight: 1.3 }}>{s.title}</h3>
+              <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.7 }}>{s.desc}</p>
             </div>
           ))}
         </div>
@@ -433,13 +436,12 @@ function AtomizationBand() {
 
 function Differentiator() {
   const rows = [
-    { label: 'Remembers your career', us: true, them: false },
-    { label: 'Selects best-fit achievements', us: true, them: false },
-    { label: 'Shows match score delta', us: true, them: false },
-    { label: 'Asks gap questions', us: true, them: false },
-    { label: 'No subscription — pay per pack', us: true, them: false },
-    { label: 'Keep your original resume design', us: true, them: false },
-    { label: 'Generates new resume from scratch', us: false, them: true },
+    { label: 'Remembers your entire career', us: true, them: false },
+    { label: 'Selects your best achievements per role', us: true, them: false },
+    { label: 'Shows match score before and after', us: true, them: false },
+    { label: 'Keeps your original resume design', us: true, them: false },
+    { label: 'No subscription — pay only when you need', us: true, them: false },
+    { label: 'Generates resume from scratch', us: false, them: true },
   ];
 
   const Check = ({ on }) => on
@@ -451,11 +453,11 @@ function Differentiator() {
       <div className="rp-diff-grid" style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start' }}>
         <div>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 14 }}>Why RolePitch</span>
-          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 600, letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: 20 }}>
-            Most tools rewrite.<br />RolePitch <em style={{ fontStyle: 'normal', color: 'var(--green)' }}>selects.</em>
+          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.12, marginBottom: 20 }}>
+            Others rewrite.<br />RolePitch <em style={{ fontStyle: 'normal', color: 'var(--green)' }}>selects.</em>
           </h2>
-          <p style={{ fontSize: 15, color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 380 }}>
-            Generic AI rewrites are forgettable. RolePitch stores your real achievements and positions them specifically for each job — like a career coach who knows your whole story.
+          <p style={{ fontSize: 15, color: 'var(--text-muted)', lineHeight: 1.75, maxWidth: 380 }}>
+            A rewrite that forgets your best work is just noise. RolePitch stores your real achievements and positions them specifically for each role — like a career coach who's read every line of your CV.
           </p>
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -480,12 +482,11 @@ function Differentiator() {
 function Pricing({ onGetStarted }) {
   const [buyLoading, setBuyLoading] = useState(null);
   const [buyError, setBuyError] = useState('');
-  const [showUpgrade, setShowUpgrade] = useState(null); // plan id or null
 
   const plans = [
-    { id: 'free', name: 'Free',       price: '₹0',   sub: '10 pitches included', features: ['10 role pitches free', 'Full memory vault', 'PDF download', 'Gap chat questions'], cta: 'Start free', highlight: false, badge: null },
-    { id: '25',   name: '25 Pitches', price: '₹299', sub: '+ GST · one-time',    features: ['25 pitch credits', 'Never expires', 'Full memory vault', 'PDF download'], cta: 'Buy 25 pitches', highlight: true, badge: 'Most Popular' },
-    { id: '50',   name: '50 Pitches', price: '₹499', sub: '+ GST · one-time',    features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'], cta: 'Buy 50 pitches', highlight: false, badge: null },
+    { id: 'free', name: 'Free',       price: '₹0',   sub: '5 pitches to start',          features: ['5 role pitches', 'Achievement vault', 'PDF download', 'Match score feedback'], cta: 'Start free',      highlight: false, badge: null },
+    { id: '25',   name: '25 Pitches', price: '₹299', sub: '+ GST · one-time, never expires', features: ['25 pitch credits', 'Never expires', 'Achievement vault', 'PDF download'],      cta: 'Buy 25 pitches', highlight: true,  badge: 'Most Popular' },
+    { id: '50',   name: '50 Pitches', price: '₹499', sub: '+ GST · one-time, never expires', features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'],        cta: 'Buy 50 pitches', highlight: false, badge: null },
   ];
 
   const handleBuy = async (plan) => {
@@ -541,8 +542,8 @@ function Pricing({ onGetStarted }) {
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 14 }}>Pricing</span>
-          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 600, letterSpacing: '-0.03em' }}>Simple. No surprises.</h2>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 12 }}>Pay only when you need more pitches. No subscription.</p>
+          <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.035em' }}>Pay only when you need more.</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 12 }}>No subscription. No monthly pressure. Credits never expire.</p>
         </div>
         {buyError && <div style={{ textAlign: 'center', fontSize: 13, color: 'oklch(0.65 0.2 30)', marginBottom: 20 }}>{buyError}</div>}
         <div className="rp-pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'start' }}>
@@ -605,7 +606,12 @@ function Footer() {
           </div>
           <span style={{ fontWeight: 600, fontSize: 13 }}>RolePitch</span>
         </div>
-        <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>© 2026 RolePitch. All rights reserved.</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <a href="/blog" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none' }}>Blog</a>
+          <a href="/privacy" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none' }}>Privacy</a>
+          <a href="/terms" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none' }}>Terms</a>
+          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>© 2026 RolePitch. All rights reserved.</span>
+        </div>
       </div>
     </footer>
   );
@@ -615,6 +621,13 @@ export default function RolePitchLanding() {
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const [user, setUser] = useState(null);
+  const [campaign, setCampaign] = useState(null);
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+
+  // If we landed here mid-OAuth (Supabase Site-URL fallback for critique flow),
+  // we want to skip rendering the landing entirely and show a loader until the
+  // post-signup useEffect routes us out. Compute synchronously from URL.
+  const isOAuthHandoff = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
 
   useEffect(() => {
     const saved = localStorage.getItem('rp_theme');
@@ -622,14 +635,101 @@ export default function RolePitchLanding() {
     createClient().auth.getUser().then(({ data: { user } }) => setUser(user));
   }, []);
 
-  // Handle OAuth callback code landing on root (Supabase sometimes redirects here)
+  // Detect ?ref=CODE → fetch campaign details → show modal + persist code for OAuth roundtrip.
+  useEffect(() => {
+    if (isOAuthHandoff) return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (!ref) return;
+
+    fetch(`/api/rolepitch/campaign/${encodeURIComponent(ref)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(c => {
+        if (!c || c.error) return;
+        localStorage.setItem('rp_campaign_code', c.code);
+        setCampaign(c);
+        // Redirect-only campaigns (bonus_pitches === 0): track + persist code for attribution,
+        // but skip the bonus modal so the user lands on the normal homepage.
+        if (Number(c.bonus_pitches) > 0) {
+          setShowCampaignModal(true);
+        }
+        track('rp_campaign_landed', { code: c.code, name: c.name, bonus: c.bonus_pitches });
+      })
+      .catch(() => {});
+  }, [isOAuthHandoff]);
+
+  // Handle OAuth callback code landing on root.
+  // Supabase already exchanged the code and set the session cookie before redirecting here,
+  // so we just need to route the user — DON'T re-call /api/auth/callback (which would
+  // try to re-exchange a single-use code and fail with oauth_failed).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    if (code) {
-      const next = encodeURIComponent('/rolepitch/start?step=6&source=rolepitch');
-      window.location.replace(`/api/auth/callback?code=${code}&next=${next}`);
-    }
+    if (!code) return;
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) {
+        window.location.replace('/rolepitch/auth?error=oauth_failed');
+        return;
+      }
+
+      // Critique handoff: claim any pending critique, then route to start (JD input)
+      let critiqueId = null;
+      let fromCritique = false;
+      try {
+        const sess = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
+        const local = JSON.parse(localStorage.getItem('rp_session') || '{}');
+        critiqueId = sess.critiqueId || local.critiqueId || null;
+        fromCritique = !!(sess.fromCritique || local.fromCritique);
+      } catch {}
+
+      let critiqueClaimed = false;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (critiqueId && token) {
+        try {
+          const res = await fetch('/api/rolepitch/claim-critique', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ critique_id: critiqueId }),
+          });
+          const j = await res.json().catch(() => ({}));
+          critiqueClaimed = !!j.claimed;
+        } catch {}
+      }
+
+      // Campaign redemption — fire-and-forget; idempotent on the server.
+      try {
+        const refCode = localStorage.getItem('rp_campaign_code');
+        if (refCode && token) {
+          const res = await fetch('/api/rolepitch/campaign/redeem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ code: refCode }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (j?.granted || j?.already_redeemed) {
+            localStorage.removeItem('rp_campaign_code');
+            track('rp_campaign_redeemed', { code: refCode, granted: j.granted || 0 });
+          }
+        }
+      } catch {}
+
+      // If they came from critique AND we successfully claimed it → auto-tailor flow.
+      // Otherwise fall back to dashboard — user is signed in, no critique context to
+      // honor, so step=6 of /start with no parsedResume in session is a dead-end.
+      let dest;
+      if (fromCritique && critiqueId && critiqueClaimed) {
+        dest = `/rolepitch/tailoring?critique_id=${encodeURIComponent(critiqueId)}`;
+      } else if (fromCritique) {
+        dest = '/rolepitch/start?step=0&source=critique';
+      } else {
+        dest = '/rolepitch/dashboard';
+      }
+      window.location.replace(dest);
+    });
   }, []);
 
   useEffect(() => {
@@ -660,6 +760,33 @@ export default function RolePitchLanding() {
     });
   };
 
+  // OAuth handoff: don't flash the landing UI — show a loader until our
+  // post-OAuth useEffect routes the user to /tailoring or /start.
+  if (isOAuthHandoff) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+        background: 'oklch(0.98 0.006 248)',
+        fontFamily: 'DM Sans, sans-serif',
+        color: 'oklch(0.16 0.03 248)',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '2.5px solid oklch(0.86 0.015 248)',
+          borderTopColor: 'oklch(0.50 0.19 248)',
+          animation: 'rp-spin 0.8s linear infinite',
+        }} />
+        <div style={{ fontSize: 14, color: 'oklch(0.44 0.04 248)' }}>Signing you in…</div>
+        <style>{`@keyframes rp-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <>
       <style>{CSS_VARS}</style>
@@ -668,12 +795,126 @@ export default function RolePitchLanding() {
       <div className="rp-root">
         <Nav dark={dark} setDark={setDark} onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
         <Hero onGetStarted={handleGetStarted} onCritique={handleCritique} />
+        <Testimonials />
         <HowItWorks />
         <AtomizationBand />
         <Differentiator />
         <Pricing onGetStarted={handleGetStarted} />
         <Footer />
+        {showCampaignModal && campaign && (
+          <CampaignModal
+            campaign={campaign}
+            onClose={() => setShowCampaignModal(false)}
+            onClaim={() => {
+              track('rp_campaign_claim_clicked', { code: campaign.code });
+              // Route through /rolepitch/auth (implicit flow) — PKCE via /api/auth/callback
+              // loses the verifier cookie across paths. The auth page redeems the campaign
+              // from localStorage and writes the session cookie before sending the user to
+              // `redirect`, so dashboard reads the live credit total from the server.
+              const dest = '/rolepitch/dashboard?welcome=1';
+              window.location.href = `/rolepitch/auth?source=campaign&redirect=${encodeURIComponent(dest)}`;
+            }}
+          />
+        )}
       </div>
     </>
+  );
+}
+
+function CampaignModal({ campaign, onClose, onClaim }) {
+  const expiry = new Date(campaign.expires_at);
+  const expiryLabel = expiry.toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+  // ₹299 / 25 pitches = ₹11.96/pitch — round to ₹12 so the modal never claims
+  // a higher per-unit price than what the user can actually pay on the pricing page.
+  const inrValue = campaign.bonus_pitches * 12;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rp-camp-title"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'oklch(0 0 0 / 0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20, animation: 'rp-fadeUp 0.25s ease',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rp-camp-card"
+        style={{
+          background: 'var(--card-bg)', borderRadius: 16, padding: 28,
+          maxWidth: 420, width: '100%',
+          border: '1px solid var(--border)',
+          boxShadow: '0 20px 60px oklch(0 0 0 / 0.25)',
+          animation: 'rp-fadeUp 0.35s ease',
+        }}
+      >
+        <style>{`
+          @media (max-width: 480px) {
+            .rp-camp-card { padding: 22px 18px !important; }
+            .rp-camp-card h2 { font-size: 19px !important; line-height: 1.3 !important; }
+          }
+        `}</style>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 10px', borderRadius: 999,
+          background: 'var(--green-dim)', color: 'var(--green)',
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase',
+          marginBottom: 14,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
+          Exclusive referral
+        </div>
+        <h2 id="rp-camp-title" style={{
+          fontSize: 22, fontWeight: 600, color: 'var(--text)',
+          letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 10px',
+        }}>
+          Sign up to receive {campaign.bonus_pitches} additional pitches worth ₹{inrValue.toFixed(0)}/-
+        </h2>
+        <p style={{
+          fontSize: 14, lineHeight: 1.6, color: 'var(--text-muted)', margin: '0 0 18px',
+        }}>
+          You'll get <strong style={{ color: 'var(--text)' }}>5 free pitches + {campaign.bonus_pitches} bonus = {5 + campaign.bonus_pitches} total</strong> on signup.
+          Tailor your resume for any job in under 30 seconds.
+        </p>
+        <div style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+          fontSize: 12, color: 'var(--text-muted)', marginBottom: 18,
+          fontFamily: 'var(--mono)',
+        }}>
+          ⏱ Valid until {expiryLabel}
+        </div>
+        <button
+          onClick={onClaim}
+          style={{
+            width: '100%', padding: '12px 18px', borderRadius: 10,
+            background: 'var(--accent)', color: 'white', border: 'none',
+            fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', cursor: 'pointer',
+          }}
+        >
+          Claim my {campaign.bonus_pitches} bonus pitches →
+        </button>
+        <button
+          onClick={onClose}
+          style={{
+            width: '100%', marginTop: 8, padding: '10px',
+            background: 'transparent', color: 'var(--text-faint)', border: 'none',
+            fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          Maybe later
+        </button>
+      </div>
+    </div>
   );
 }
