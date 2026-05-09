@@ -2740,6 +2740,26 @@ function RolePitchStartInner() {
     const urlParams = new URLSearchParams(window.location.search);
     const forceReupload = urlParams.get('reupload') === '1';
 
+    // Hard short-circuit: when ?reupload=1 we wipe any cached resume state
+    // and drop the user at step 0 (upload). No DB lookup, no recovery
+    // save-resume, no returning-user shortcut — all of which previously
+    // resurrected parsedResume from session/DB and skipped the upload step.
+    if (forceReupload) {
+      console.log('[rolepitch/start mount] ?reupload=1 → wiping cached resume + forcing upload step');
+      saveSession({
+        parsedResume: null, parsedName: null, parsedSource: null,
+        detectedLinks: null, enrichSources: null,
+        tailoredResult: null, tailoredAt: null, tailoredResumeId: null,
+        jdId: null, jdTitle: null, jdCompany: null, jdDescription: null,
+        isAuthenticated: false,
+      });
+      setIsReturning(false);
+      setStep(0);
+      // Strip the params so refreshes don't re-trigger the wipe
+      window.history.replaceState({}, '', '/rolepitch/start');
+      return;
+    }
+
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         identify(user.id, { email: user.email });
@@ -2760,15 +2780,12 @@ function RolePitchStartInner() {
 
         const hasParsed = !!(prof?.parsed_json || prof?.structured_resume);
         const hasLayout = !!(prof?.original_html || prof?.original_pdf_path);
-        let parsedResume = (hasParsed && hasLayout && !forceReupload)
+        let parsedResume = (hasParsed && hasLayout)
           ? (prof.parsed_json || prof.structured_resume)
           : null;
         let hasDbProfile = !!parsedResume;
         if (hasParsed && !hasLayout) {
           console.log('[rolepitch/start mount] profile exists but layout missing → forcing upload step');
-        }
-        if (forceReupload) {
-          console.log('[rolepitch/start mount] ?reupload=1 → forcing upload step');
         }
 
         // Defensive recovery — covers the Vshrant case where step=6 didn't
