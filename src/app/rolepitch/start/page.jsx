@@ -1393,9 +1393,18 @@ function StepJobInput({ onNext, onBack, dir }) {
   const [files, setFiles] = useState([]);        // File[] for screenshots/PDF/DOCX
   const [fileStatus, setFileStatus] = useState(''); // 'reading' | 'done' | ''
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
-
+  // Two separate inputs: Android opens the Photos picker only when accept is
+  // purely image/*; mixing image+pdf forces the generic Files app, which on
+  // Pixel makes multi-select awkward (long-press required) and surprises
+  // users expecting their gallery. iOS behaves the same way for the same
+  // reason. Splitting the inputs gives each picker its native, clean UX.
+  const photoInputRef = useRef(null);
+  const docInputRef = useRef(null);
+  // Desktop drag-drop / fallback paste accept — used by the dropzone, not
+  // the touch buttons. Mixed types are fine here; OS file dialogs handle them.
   const ACCEPTED = 'image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const PHOTO_ACCEPT = 'image/*';
+  const DOC_ACCEPT = 'application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
   const addFiles = useCallback((incoming) => {
     const valid = Array.from(incoming).filter(f => {
@@ -1536,16 +1545,18 @@ function StepJobInput({ onNext, onBack, dir }) {
 
         {mode === 'file' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Drop zone */}
+            {/* Drop zone — drag/drop on desktop. Clicking the zone opens the
+                photo picker (the common case for JD screenshots). For PDF/DOCX
+                use the explicit button below. */}
             <div
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => photoInputRef.current?.click()}
               style={{
                 border: `2px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
                 borderRadius: 12,
-                padding: '28px 20px',
+                padding: '24px 20px',
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: dragOver ? 'var(--accent-dim)' : 'var(--surface)',
@@ -1554,20 +1565,52 @@ function StepJobInput({ onNext, onBack, dir }) {
             >
               <div style={{ fontSize: 28, marginBottom: 8 }}>📸</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
-                Drop screenshots here or tap to upload
+                Drop screenshots here, or pick below
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
-                PNG, JPG, WEBP screenshots · PDF or DOCX · up to 6 files
+                Up to 6 files
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED}
-                multiple
-                style={{ display: 'none' }}
-                onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
-              />
             </div>
+
+            {/* Two explicit buttons: photo picker vs document picker. Splitting
+                them keeps Android's intent resolver from defaulting to the
+                Files app when accept is mixed. */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: 'var(--text)' }}
+              >
+                <span style={{ fontSize: 18 }}>🖼️</span>
+                Add screenshots
+              </button>
+              <button
+                type="button"
+                onClick={() => docInputRef.current?.click()}
+                style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: 'var(--text)' }}
+              >
+                <span style={{ fontSize: 18 }}>📎</span>
+                Add PDF / DOCX
+              </button>
+            </div>
+
+            {/* Hidden inputs — one per type so each opens the correct OS picker */}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept={PHOTO_ACCEPT}
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+            />
+            <input
+              ref={docInputRef}
+              type="file"
+              accept={DOC_ACCEPT}
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+            />
 
             {/* File previews */}
             {files.length > 0 && (
@@ -1593,7 +1636,7 @@ function StepJobInput({ onNext, onBack, dir }) {
                 })}
                 {files.length < 6 && (
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => photoInputRef.current?.click()}
                     style={{ width: 72, height: 72, borderRadius: 8, border: '1.5px dashed var(--border)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--text-faint)' }}
                   >+</button>
                 )}

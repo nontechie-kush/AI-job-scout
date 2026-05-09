@@ -138,8 +138,13 @@ function StepUpload({ onParsed }) {
   const [stagedFiles, setStagedFiles] = useState([]); // [{ name, file|null, type:'file'|'image' }]
   const [countdown, setCountdown] = useState(COUNTDOWN_SECS);
   const countdownRef = useRef(null);
-  const fileRef = useRef();
-  const moreRef = useRef();
+  // Two inputs each, one per type. Mixed accept on Android forces the
+  // generic Files picker (multi-select requires long-press on Pixel),
+  // while pure image/* opens the Photos picker with clean tap-to-select.
+  const photoRef = useRef();
+  const docRef = useRef();
+  const morePhotoRef = useRef();
+  const moreDocRef = useRef();
 
   const startCountdown = () => {
     setCountdown(COUNTDOWN_SECS);
@@ -286,20 +291,41 @@ function StepUpload({ onParsed }) {
       </div>
 
       {!pasteMode && !urlMode && phase !== 'staged' && (
-        <div
-          className={`rc-upload-zone${drag ? ' drag' : ''}`}
-          onDragOver={e => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={e => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files); }}
-          onClick={() => fileRef.current?.click()}
-        >
-          <input ref={fileRef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.4 }}>
-            <path d="M10 22H8a6 6 0 010-12h1M22 22h2a6 6 0 000-12h-1M16 22V10M12 14l4-4 4 4" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Drop PDF or screenshots here</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Multiple files supported · click to browse</div>
-        </div>
+        <>
+          <div
+            className={`rc-upload-zone${drag ? ' drag' : ''}`}
+            onDragOver={e => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={e => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files); }}
+            onClick={() => photoRef.current?.click()}
+          >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.4 }}>
+              <path d="M10 22H8a6 6 0 010-12h1M22 22h2a6 6 0 000-12h-1M16 22V10M12 14l4-4 4 4" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Drop screenshots here, or pick below</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Multiple files supported</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => photoRef.current?.click()}
+              style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: 'var(--text)' }}
+            >
+              <span style={{ fontSize: 18 }}>🖼️</span>
+              Add screenshots
+            </button>
+            <button
+              type="button"
+              onClick={() => docRef.current?.click()}
+              style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: 'var(--text)' }}
+            >
+              <span style={{ fontSize: 18 }}>📎</span>
+              Add PDF
+            </button>
+          </div>
+          <input ref={photoRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+          <input ref={docRef} type="file" accept="application/pdf,.pdf" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+        </>
       )}
 
       {/* Staged files + countdown */}
@@ -358,13 +384,28 @@ function StepUpload({ onParsed }) {
                   setTimeout(() => { if (!countdownRef.current) startCountdown(); }, 200);
                 };
                 window.addEventListener('focus', onFocusBack);
-                moreRef.current?.click();
+                morePhotoRef.current?.click();
               }}
               style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 600, whiteSpace: 'nowrap' }}
             >
-              + Upload more
+              + Screenshots
             </button>
-            <input ref={moreRef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+            <button
+              onClick={() => {
+                cancelCountdown();
+                const onFocusBack = () => {
+                  window.removeEventListener('focus', onFocusBack);
+                  setTimeout(() => { if (!countdownRef.current) startCountdown(); }, 200);
+                };
+                window.addEventListener('focus', onFocusBack);
+                moreDocRef.current?.click();
+              }}
+              style={{ fontSize: 13, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              + PDF
+            </button>
+            <input ref={morePhotoRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+            <input ref={moreDocRef} type="file" accept="application/pdf,.pdf" multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
           </div>
         </div>
       )}
