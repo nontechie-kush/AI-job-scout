@@ -2755,6 +2755,7 @@ function RolePitchStartInner() {
       });
       setIsReturning(false);
       setStep(0);
+      setReady(true); // critical: without this the page stays on the spinner
       // Strip the params so refreshes don't re-trigger the wipe
       window.history.replaceState({}, '', '/rolepitch/start');
       return;
