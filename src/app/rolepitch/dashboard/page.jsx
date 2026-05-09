@@ -295,33 +295,17 @@ export default function RolePitchDashboard() {
       .catch(() => setCritiquesLoading(false));
   }, []);
 
-  const handleDownload = async (resumeId) => {
+  const handleDownload = (resumeId) => {
     setDownloading(resumeId);
     const resume = resumes.find(r => r.id === resumeId);
     track('rp_pdf_downloaded', { resume_id: resumeId, jd_title: resume?.jd?.title, jd_company: resume?.jd?.company });
-    // Probe with Accept: application/json so the route returns the 409 body
-    // instead of a 302 redirect. We use the structured response to decide
-    // between routing to reupload or opening the actual download.
-    try {
-      const probe = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-      if (probe.status === 409) {
-        const j = await probe.json().catch(() => ({}));
-        if (j?.error === 'LAYOUT_UNAVAILABLE') {
-          router.push(j.reupload_url || `/rolepitch/start?reupload=1&for=${resumeId}`);
-          setDownloading(null);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('[dashboard handleDownload probe]', e?.message);
-    }
-    // Probe was OK (or non-409 error) — open the real URL. Even if the
-    // server returns 409 here, the route now 302s browsers to /start.
+    // Direct navigation — no probe. The server redirects 302 to the reupload
+    // page when layout is unavailable, so browsers resolve to the right
+    // destination without us blocking on a probe call. window.open must run
+    // synchronously inside the click handler or mobile browsers swallow it.
     window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
-    setDownloading(null);
+    // Brief click-feedback flash, then reset so the spinner doesn't hang.
+    setTimeout(() => setDownloading(null), 1500);
   };
 
   const handleSignOut = async () => {
