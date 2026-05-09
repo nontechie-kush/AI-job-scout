@@ -299,7 +299,28 @@ export default function RolePitchDashboard() {
     setDownloading(resumeId);
     const resume = resumes.find(r => r.id === resumeId);
     track('rp_pdf_downloaded', { resume_id: resumeId, jd_title: resume?.jd?.title, jd_company: resume?.jd?.company });
-    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
+    // Probe first so we can surface the "reupload your CV" prompt instead of
+    // letting the user land on a JSON error page in a new tab.
+    try {
+      const probe = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, { method: 'GET' });
+      if (probe.status === 409) {
+        const j = await probe.json().catch(() => ({}));
+        if (j?.error === 'LAYOUT_UNAVAILABLE') {
+          const goReupload = window.confirm(
+            "We don't have your original CV layout on file yet, so we can't preserve your formatting on this download.\n\n" +
+            "Reupload your resume to fix this for all your pitches?"
+          );
+          if (goReupload) router.push(j.reupload_url || '/rolepitch/start?reupload=1');
+          setDownloading(null);
+          return;
+        }
+      }
+      // Probe succeeded (or non-409 error). Open the actual download.
+      window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
+    } catch (e) {
+      console.warn('[dashboard handleDownload]', e?.message);
+      window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
+    }
     setDownloading(null);
   };
 

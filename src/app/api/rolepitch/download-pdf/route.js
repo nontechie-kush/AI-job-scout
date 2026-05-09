@@ -1,19 +1,34 @@
 /**
  * GET /api/rolepitch/download-pdf?tailored_resume_id=xxx
  *
+ * Promise: the user's original CV layout, preserved.
+ * If we can't keep that promise, we refuse — we never silently fall back to
+ * the generic Georgia template. The client uses the 409 to prompt a reupload.
+ *
  * Pipeline:
- *   1. If tailored_resumes.tailored_html is cached → serve it instantly.
- *   2. Otherwise render once: vision-merge into original_html when available,
- *      else fall back to the fast Georgia template.
- *   3. Persist the result on the row so subsequent downloads are instant.
- *      The pre-render also runs proactively in claim-draft when possible.
+ *   1. If tailored_resumes.tailored_html is cached AND vision-merged → serve it.
+ *      (Cached fast-template HTML is treated as a miss — see isFastTemplate.)
+ *   2. If profile has original_html → run Sonnet merge, cache, serve.
+ *   3. If profile has only original_pdf_path (vision never ran) → fetch PDF,
+ *      run Gemini vision, write original_html to profile, then merge + cache.
+ *   4. If we have neither → respond 409 LAYOUT_UNAVAILABLE so the client can
+ *      route the user to /rolepitch/start to recapture their PDF.
  */
 
 import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service-client';
 import { renderTailoredHtml } from '@/lib/ai/render-tailored-html';
-import { buildFastHtml } from '@/lib/ai/build-fast-html';
+import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
+
+// Detects HTML from buildFastHtml() — fast template uses Georgia + a known
+// page-padding signature. Anything else (vision-merged, Times New Roman,
+// .page wrapper) is considered a layout-preserving render and reusable.
+function isFastTemplate(html) {
+  if (!html) return false;
+  const head = html.slice(0, 1500);
+  return /font-family:'Georgia',serif/.test(head) && !/class="page"/.test(html);
+}
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -50,8 +65,8 @@ export async function GET(request) {
 
     if (trErr || !tr) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // ── Fast path: pre-rendered HTML cached on the row ──────────────────
-    if (tr.tailored_html) {
+    // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
+    if (tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
       const cachedFilename = makeSafeFilename(
         (tr.tailored_version?.name || tr.base_version?.name || ''),
         '',
@@ -62,6 +77,45 @@ export async function GET(request) {
           'Content-Disposition': `inline; filename="${cachedFilename}.pdf"`,
         },
       });
+    }
+
+    const service = createServiceClient();
+
+    // ── Try to recover original_html if missing but a PDF is on file ──
+    let originalHtml = profileRow?.original_html || null;
+    let originalPageCount = profileRow?.original_page_count || 1;
+    const originalPdfPath = profileRow?.original_pdf_path || null;
+
+    if (!originalHtml && originalPdfPath) {
+      try {
+        const { data: pdfBlob } = await service.storage.from('resumes').download(originalPdfPath);
+        if (pdfBlob) {
+          const buffer = Buffer.from(await pdfBlob.arrayBuffer());
+          const { html, pageCount } = await pdfToVisionHtml(buffer);
+          originalHtml = html;
+          originalPageCount = pageCount;
+          await service.from('profiles').update({
+            original_html: html,
+            original_page_count: pageCount,
+          }).eq('user_id', user.id);
+          console.log('[download-pdf] vision recovered from stored PDF', { pageCount });
+        }
+      } catch (e) {
+        console.warn('[download-pdf] vision recovery failed', { message: e?.message });
+      }
+    }
+
+    // ── Refuse if we can't keep the layout-preserving promise ──
+    if (!originalHtml) {
+      console.warn('[download-pdf] 409: layout unavailable', {
+        user_id: user.id,
+        has_pdf_path: !!originalPdfPath,
+      });
+      return NextResponse.json({
+        error: 'LAYOUT_UNAVAILABLE',
+        message: "We don't have your original CV layout on file yet. Reupload your resume to get a layout-preserving PDF.",
+        reupload_url: '/rolepitch/start?reupload=1',
+      }, { status: 409 });
     }
 
     let jdTitle = '', jdCompany = '', jdDescription = '';
@@ -82,13 +136,8 @@ export async function GET(request) {
     // Resolve name/contact — tailored_version → base_version → profile fallback
     let profileName = '', profileContact = {};
     if (!tv.name && !bv.name) {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('structured_resume')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      profileName = prof?.structured_resume?.name || '';
-      profileContact = prof?.structured_resume?.contact || {};
+      profileName = profileRow?.structured_resume?.name || '';
+      profileContact = profileRow?.structured_resume?.contact || {};
     }
 
     const mergedResume = {
@@ -102,18 +151,20 @@ export async function GET(request) {
       skills: tv.skills || bv.skills || [],
     };
 
-    // ── Render once: vision-merged HTML when original_html exists, fast template otherwise ──
+    // Vision-merged path only — buildFastHtml is intentionally NOT passed.
+    // renderTailoredHtml falls back to it when buildFastHtml is provided AND
+    // originalHtml is null. Above we've already 409'd in that case, so by
+    // here originalHtml is guaranteed truthy.
     const finalHtml = await renderTailoredHtml({
-      originalHtml: profileRow?.original_html || null,
-      pageCount: profileRow?.original_page_count || 1,
+      originalHtml,
+      pageCount: originalPageCount,
       mergedResume,
       jobContext: { title: jdTitle, company: jdCompany, description: jdDescription },
-      buildFastHtml,
+      buildFastHtml: () => { throw new Error('fast template disabled in download-pdf'); },
     });
 
-    // Persist for instant subsequent downloads — service client bypasses RLS
+    // Persist for instant subsequent downloads
     try {
-      const service = createServiceClient();
       await service
         .from('tailored_resumes')
         .update({ tailored_html: finalHtml })

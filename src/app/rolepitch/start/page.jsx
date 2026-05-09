@@ -2735,6 +2735,11 @@ function RolePitchStartInner() {
     }
 
     const supabase = createClient();
+    // ?reupload=1 forces the new-user flow even if the user has a saved
+    // profile — used by the LAYOUT_UNAVAILABLE prompt in download-pdf.
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceReupload = urlParams.get('reupload') === '1';
+
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         identify(user.id, { email: user.email });
@@ -2742,14 +2747,29 @@ function RolePitchStartInner() {
         // DB profile is the source of truth for "does this user have a resume".
         // Always check it first — session/localStorage can be empty (cleared by
         // tailoring flow, fresh tab, signed-in on a different device).
+        //
+        // Critically: we also check whether the original CV LAYOUT is captured
+        // (original_html / original_pdf_path). Without it we can't honour the
+        // "your layout, preserved" promise, so we treat the user as new and
+        // route them through resume upload — even if parsed_json exists.
         const { data: prof } = await supabase
           .from('profiles')
-          .select('structured_resume, parsed_json')
+          .select('structured_resume, parsed_json, original_html, original_pdf_path')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        let parsedResume = prof?.parsed_json || prof?.structured_resume || null;
+        const hasParsed = !!(prof?.parsed_json || prof?.structured_resume);
+        const hasLayout = !!(prof?.original_html || prof?.original_pdf_path);
+        let parsedResume = (hasParsed && hasLayout && !forceReupload)
+          ? (prof.parsed_json || prof.structured_resume)
+          : null;
         let hasDbProfile = !!parsedResume;
+        if (hasParsed && !hasLayout) {
+          console.log('[rolepitch/start mount] profile exists but layout missing → forcing upload step');
+        }
+        if (forceReupload) {
+          console.log('[rolepitch/start mount] ?reupload=1 → forcing upload step');
+        }
 
         // Defensive recovery — covers the Vshrant case where step=6 didn't
         // execute (URL param lost / localStorage empty at OAuth return) but
