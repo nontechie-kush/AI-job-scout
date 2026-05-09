@@ -205,16 +205,40 @@ export async function POST(request) {
       }
     } else if (existingProfile) {
       console.log(`[rolepitch/claim-draft ${rid}] profile already exists, skipped insert`);
-      // Pull stored vision html so we can pre-render the tailored html below
+      // Pull stored vision html so we can pre-render the tailored html below.
       const { data: prof } = await service
         .from('profiles')
-        .select('original_html, original_page_count')
+        .select('original_html, original_page_count, original_pdf_path')
         .eq('user_id', user.id)
         .order('parsed_at', { ascending: false })
         .maybeSingle();
       if (prof?.original_html) {
         visionHtml = prof.original_html;
         visionPageCount = prof.original_page_count || 1;
+      } else if (draft.pdf_path) {
+        // Existing profile has no captured layout, but THIS draft has a fresh
+        // PDF — capture now and backfill so download-pdf can preserve layout.
+        // Covers users who claimed once without layout (legacy drafts) and
+        // came back via ?reupload=1 to upload a real CV.
+        try {
+          const { data: pdfBlob } = await service.storage.from('resumes').download(draft.pdf_path);
+          if (pdfBlob) {
+            const buffer = Buffer.from(await pdfBlob.arrayBuffer());
+            const { html, pageCount } = await pdfToVisionHtml(buffer);
+            visionHtml = html;
+            visionPageCount = pageCount;
+            await service.from('profiles').update({
+              original_html: html,
+              original_page_count: pageCount,
+              original_pdf_path: draft.pdf_path,
+              // Refresh parsed_json too so downstream reads pick up the latest CV
+              ...(parsed ? { parsed_json: parsed, structured_resume: buildStructuredResume(parsed) } : {}),
+            }).eq('user_id', user.id);
+            console.log(`[rolepitch/claim-draft ${rid}] vision backfilled on existing profile`, { pageCount });
+          }
+        } catch (e) {
+          console.error(`[rolepitch/claim-draft ${rid}] vision backfill failed (non-fatal)`, { message: e.message });
+        }
       }
     }
 
