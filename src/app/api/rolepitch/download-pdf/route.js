@@ -107,15 +107,25 @@ export async function GET(request) {
 
     // ── Refuse if we can't keep the layout-preserving promise ──
     if (!originalHtml) {
-      console.warn('[download-pdf] 409: layout unavailable', {
+      console.warn('[download-pdf] layout unavailable', {
         user_id: user.id,
         has_pdf_path: !!originalPdfPath,
       });
-      return NextResponse.json({
-        error: 'LAYOUT_UNAVAILABLE',
-        message: "We don't have your original CV layout on file yet. Reupload your resume to get a layout-preserving PDF.",
-        reupload_url: '/rolepitch/start?reupload=1',
-      }, { status: 409 });
+      // Browser navigation (window.open / direct visit) → redirect to the
+      // reupload flow so users never see a raw JSON error page.
+      // Programmatic clients (probes from the dashboard, fetch with Accept:
+      // application/json) get the structured 409 they can branch on.
+      const accept = request.headers.get('accept') || '';
+      const wantsJson = accept.includes('application/json') && !accept.includes('text/html');
+      const reuploadUrl = `/rolepitch/start?reupload=1&for=${encodeURIComponent(tailoredResumeId)}`;
+      if (wantsJson) {
+        return NextResponse.json({
+          error: 'LAYOUT_UNAVAILABLE',
+          message: "We don't have your original CV layout on file yet. Reupload your resume to get a layout-preserving PDF.",
+          reupload_url: reuploadUrl,
+        }, { status: 409 });
+      }
+      return NextResponse.redirect(new URL(reuploadUrl, request.url), 302);
     }
 
     let jdTitle = '', jdCompany = '', jdDescription = '';
