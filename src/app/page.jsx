@@ -791,6 +791,54 @@ function AlwaysRunningSection() {
   );
 }
 
+// ── Blog preview ─────────────────────────────────────────────
+const ATS_SLUG = 'why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies';
+
+function BlogPreview() {
+  const darkMode = useStore((s) => s.darkMode);
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/rolepitch/blog-preview')
+      .then((r) => r.ok ? r.json() : { posts: [] })
+      .then((d) => setPosts(d.posts || []))
+      .catch(() => {});
+  }, []);
+
+  if (!posts.length) return null;
+
+  // Always show ATS post; fill second slot with newest non-ATS post
+  const ats = posts.find((p) => p.slug === ATS_SLUG);
+  const others = posts.filter((p) => p.slug !== ATS_SLUG);
+  const cards = ats ? [ats, ...others].slice(0, 2) : posts.slice(0, 2);
+
+  return (
+    <section className="py-14 px-5 lg:px-8 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className={`text-[18px] font-bold tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          From the blog
+        </h2>
+        <a href="/blog" className={`text-[13px] font-medium ${darkMode ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
+          View all articles →
+        </a>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-4">
+        {cards.map((p) => (
+          <a key={p.slug} href={`/blog/${p.slug}`} style={{ textDecoration: 'none', flex: 1 }}>
+            <article className={`rounded-xl border p-5 h-full transition-all hover:-translate-y-0.5 ${darkMode ? 'border-white/[0.08] bg-[hsl(240,4%,8%)] hover:border-white/[0.14]' : 'border-gray-100 bg-white shadow-sm hover:shadow-md'}`}>
+              {p.tag && (
+                <span className={`text-[10px] font-bold uppercase tracking-wider mb-3 inline-block ${darkMode ? 'text-slate-400' : 'text-gray-400'}`}>{p.tag}</span>
+              )}
+              <h3 className={`text-[15px] font-semibold leading-snug mb-2 tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>{p.title}</h3>
+              <span className={`text-[12px] ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>{p.read_time || '5 min read'}</span>
+            </article>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Final CTA ────────────────────────────────────────────────
 function FinalCTA({ onCTA }) {
   const darkMode = useStore((s) => s.darkMode);
@@ -930,6 +978,11 @@ export default function LandingPage() {
 
       {/* Always running */}
       <AlwaysRunningSection />
+
+      <div className={`h-px mx-5 lg:max-w-6xl lg:mx-auto ${darkMode ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
+
+      {/* Blog preview */}
+      <BlogPreview />
 
       {/* Final CTA */}
       <FinalCTA onCTA={goSignup} />

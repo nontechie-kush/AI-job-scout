@@ -316,13 +316,22 @@ export async function POST(request) {
           tailoredResumeId = trRow.id;
           console.log(`[rolepitch/claim-draft ${rid}] tailored_resume inserted`, { tailored_resume_id: tailoredResumeId });
 
-          // 3c. Deduct credit (RPC) — non-fatal on failure
-          const { data: remaining, error: dedErr } = await service.rpc('deduct_pitch_credit', { p_user_id: user.id });
-          if (dedErr) {
-            console.error(`[rolepitch/claim-draft ${rid}] credit deduction failed (non-fatal)`, { message: dedErr.message });
+          // 3c+4. Deduct credit + mark draft claimed in parallel — both non-fatal, independent tables
+          const [dedResult, claimResult] = await Promise.all([
+            service.rpc('deduct_pitch_credit', { p_user_id: user.id }),
+            service
+              .from('rp_drafts')
+              .update({ user_id: user.id, status: 'claimed', claimed_at: new Date().toISOString() })
+              .eq('id', draft.id),
+          ]);
+          if (dedResult.error) {
+            console.error(`[rolepitch/claim-draft ${rid}] credit deduction failed (non-fatal)`, { message: dedResult.error.message });
           } else {
-            pitchCredits = remaining;
-            console.log(`[rolepitch/claim-draft ${rid}] credit deducted`, { remaining });
+            pitchCredits = dedResult.data;
+            console.log(`[rolepitch/claim-draft ${rid}] credit deducted`, { remaining: pitchCredits });
+          }
+          if (claimResult.error) {
+            console.error(`[rolepitch/claim-draft ${rid}] mark-claimed failed (non-fatal)`, { message: claimResult.error.message });
           }
 
           // 3d. Pre-render the final tailored HTML so first download is instant.
@@ -359,13 +368,15 @@ export async function POST(request) {
       }
     }
 
-    // 4. Mark draft claimed
-    const { error: claimErr } = await service
-      .from('rp_drafts')
-      .update({ user_id: user.id, status: 'claimed', claimed_at: new Date().toISOString() })
-      .eq('id', draft.id);
-    if (claimErr) {
-      console.error(`[rolepitch/claim-draft ${rid}] mark-claimed failed (non-fatal)`, { message: claimErr.message });
+    // 4. Mark draft claimed — only if not already done in the parallel block above
+    if (!tailoredResumeId) {
+      const { error: claimErr } = await service
+        .from('rp_drafts')
+        .update({ user_id: user.id, status: 'claimed', claimed_at: new Date().toISOString() })
+        .eq('id', draft.id);
+      if (claimErr) {
+        console.error(`[rolepitch/claim-draft ${rid}] mark-claimed failed (non-fatal)`, { message: claimErr.message });
+      }
     }
 
     console.log(`[rolepitch/claim-draft ${rid}] DONE 200`, {

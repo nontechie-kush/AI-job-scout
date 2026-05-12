@@ -12,10 +12,36 @@ import ReportClient from './ReportClient';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }) {
-  return {
-    title: 'Resume Critique — RolePitch',
-    description: 'Free resume critique powered by RolePitch AI',
+  const { id } = await params;
+  const generic = {
+    title: 'Resume Roast — RolePitch',
+    description: 'Free resume roast powered by RolePitch AI',
   };
+  try {
+    const supabase = createServiceClient();
+    const { data: row } = await supabase
+      .from('rp_critiques')
+      .select('name, critique_json, expires_at')
+      .eq('id', id)
+      .single();
+    if (!row || (row.expires_at && new Date(row.expires_at) < new Date())) return generic;
+    const firstName = (row.name || '').trim().split(/\s+/)[0] || 'Anonymous';
+    const score = row.critique_json?.overall_score;
+    const title = score != null
+      ? `${firstName}'s Resume Roast — ${score}/100 · RolePitch`
+      : `${firstName}'s Resume Roast · RolePitch`;
+    const description = score != null
+      ? `RolePitch scored ${firstName}'s resume ${score}/100. See the full roast — get yours free.`
+      : `See the full roast of ${firstName}'s resume — get yours free with RolePitch.`;
+    return {
+      title,
+      description,
+      openGraph: { title, description, type: 'article' },
+      twitter: { card: 'summary_large_image', title, description },
+    };
+  } catch {
+    return generic;
+  }
 }
 
 export default async function ReportPage({ params }) {
@@ -56,11 +82,11 @@ function ExpiredOrNotFound({ reason }) {
           </h1>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 24 }}>
             {reason === 'expired'
-              ? 'Critique reports are available for 7 days after creation. Get a fresh critique of your resume below.'
+              ? 'Roast reports are available for 7 days after creation. Get a fresh roast of your resume below.'
               : "We couldn't find this report. It may have been removed or the link is incorrect."}
           </p>
           <a href="/rolepitch/critique" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
-            Critique my resume — free →
+            Roast my resume — free →
           </a>
           <div style={{ marginTop: 16 }}>
             <a href="/rolepitch" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' }}>← Back to RolePitch</a>

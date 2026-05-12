@@ -288,6 +288,12 @@ function StepUpload({ onParsed }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Upload your resume</h2>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>PDF, screenshots, link, or paste — Pilot will read everything and give you a brutally honest roast.</p>
+        <p style={{ fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5, marginTop: 6 }}>
+          Not sure if your resume will pass ATS screening?{' '}
+          <a href="/blog/why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies" style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
+            Learn how ATS systems actually score resumes →
+          </a>
+        </p>
       </div>
 
       {!pasteMode && !urlMode && phase !== 'staged' && (

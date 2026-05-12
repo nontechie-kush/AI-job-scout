@@ -157,16 +157,18 @@ export async function GET(request) {
     }
 
     // ── Gap questions (from dropped atoms, max 3) ─────────────────────
-    // Dropped atoms are stored in tailored_version metadata if present,
-    // otherwise we surface generic gap questions based on the JD title.
+    // Dropped atoms are stored in tailored_version metadata if present.
+    // For auto-tailored welcome resumes, no questions were asked → empty array.
+    // For interactive flow with no dropped atoms, fall back to generic defaults
+    // (these reflect the questions the user actually answered).
     const droppedMeta = tr.tailored_version?._selection_dropped || [];
     const gapQuestions = droppedMeta.slice(0, 3).map((d) => ({
       atom_id: d.id,
       ...reasonToQuestion(d.reason, d.fact),
     }));
 
-    // If no dropped metadata, generate contextual defaults from JD
-    if (!gapQuestions.length) {
+    const isAutoTailored = !!tr.tailored_version?.auto_tailored;
+    if (!gapQuestions.length && !isAutoTailored) {
       const defaults = [
         { question: 'Do you have experience working directly with enterprise or B2B customers?', tip: 'e.g. customer calls, QBRs, pilots' },
         { question: 'Have you worked on payment systems or financial infrastructure?', tip: 'e.g. routing, fraud, settlement' },
@@ -183,6 +185,9 @@ export async function GET(request) {
       bullets_by_role: bulletsByRole,
       gap_questions: gapQuestions,
       stats,
+      auto_tailored: isAutoTailored,
+      source_label: tr.tailored_version?.source_label || null,
+      source_mode: tr.tailored_version?.source_mode || null,
     });
 
   } catch (err) {

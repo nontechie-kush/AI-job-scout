@@ -272,19 +272,27 @@ function ProgressBar({ step, total, onHome }) {
       : Math.max(0, meta.real - 1);
 
     return (
-      <div className="rp-sticky-header" style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--rp-border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={onHome} aria-label="Home" style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rp-text)', flexShrink: 0, padding: 0 }}>
-          <div style={{ width: 28, height: 28, background: 'var(--rp-primary)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-              <rect x="1" y="1" width="5" height="5" rx="1.2" />
-              <rect x="8" y="1" width="5" height="5" rx="1.2" />
-              <rect x="1" y="8" width="5" height="5" rx="1.2" />
-              <rect x="8" y="8" width="5" height="5" rx="1.2" />
-            </svg>
-          </div>
-          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--rp-text)' }}>RolePitch</span>
-        </button>
-        <div style={{ flex: 1, display: 'flex', gap: 3, margin: '0 4px' }}>
+      <div className="rp-sticky-header" style={{ padding: '10px 16px 10px', borderBottom: '1px solid var(--rp-border)' }}>
+        {/* Row 1: logo + name + step count */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <button onClick={onHome} aria-label="Home" style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rp-text)', flexShrink: 0, padding: 0 }}>
+            <div style={{ width: 26, height: 26, background: 'var(--rp-primary)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="white">
+                <rect x="1" y="1" width="5" height="5" rx="1.2" />
+                <rect x="8" y="1" width="5" height="5" rx="1.2" />
+                <rect x="1" y="8" width="5" height="5" rx="1.2" />
+                <rect x="8" y="8" width="5" height="5" rx="1.2" />
+              </svg>
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--rp-text)' }}>RolePitch</span>
+          </button>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: 'var(--rp-muted)', fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {isInterim ? meta.label : `${meta.real} of ${REAL_TOTAL_MOBILE}`}
+          </span>
+        </div>
+        {/* Row 2: progress bar */}
+        <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
           {Array.from({ length: REAL_TOTAL_MOBILE }).map((_, i) => {
             const isFilled = i < filledCount;
             const isShimmer = isInterim && i === filledCount;
@@ -293,7 +301,7 @@ function ProgressBar({ step, total, onHome }) {
                 key={i}
                 style={{
                   flex: 1,
-                  height: 3,
+                  height: 4,
                   borderRadius: 2,
                   background: isFilled ? 'var(--rp-primary)' : 'var(--rp-border)',
                   opacity: isFilled ? 1 : 0.3,
@@ -304,9 +312,6 @@ function ProgressBar({ step, total, onHome }) {
             );
           })}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--rp-muted)', fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}>
-          {isInterim ? meta.label : `${meta.real} of ${REAL_TOTAL_MOBILE}`}
-        </span>
       </div>
     );
   }
@@ -1774,7 +1779,7 @@ function StepProcessing({ onNext, dir }) {
             {done ? 'Done.' : 'Tailoring your resume'}
           </div>
           <div style={{ fontSize: 13, color: 'var(--rp-muted)', marginTop: 4 }}>
-            {done ? 'Your resume has been tailored.' : 'This takes about 20 seconds'}
+            {done ? 'Your resume has been tailored.' : 'This takes about 30–60 seconds'}
           </div>
         </div>
         <div
@@ -1827,7 +1832,7 @@ function StepProcessing({ onNext, dir }) {
     <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 40 }}>
       <div style={{ textAlign: 'center' }}>
         <h2 style={{ fontSize: 'clamp(24px,3vw,34px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 10 }}>{done ? 'Done.' : 'Analyzing your fit…'}</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{done ? 'Your resume has been tailored.' : 'This takes about 15 seconds'}</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{done ? 'Your resume has been tailored.' : 'This takes about 30–60 seconds'}</p>
       </div>
       <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {STEPS.map((s, i) => {
@@ -2314,40 +2319,43 @@ function StepGapQuestions({ onNext, onBack, dir }) {
         )}
       </div>
 
-      {/* Input bar */}
+      {/* Composer — sticky bottom pill */}
       {!done && !loadingQ && (
-        <div style={{ padding: '12px 32px 24px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ position: 'sticky', bottom: 0, background: 'var(--bg)', borderTop: '1px solid var(--border-subtle)', padding: '10px 16px 16px', flexShrink: 0 }}>
+          {/* Pill input row */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 22, padding: '6px 6px 6px 14px' }}>
             <textarea
               ref={inputRef}
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Type your answer… (Enter to send)"
-              rows={2}
-              style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 14, padding: '11px 14px', outline: 'none', resize: 'none', lineHeight: 1.5 }}
+              placeholder="Type your answer…"
+              rows={1}
+              style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 14, outline: 'none', resize: 'none', lineHeight: 1.5, maxHeight: 96, overflowY: 'auto', paddingTop: 5, paddingBottom: 5 }}
             />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <button onClick={() => sendAnswer(draft)} disabled={!draft.trim()} style={{ width: 40, height: 40, borderRadius: 9, border: 'none', background: draft.trim() ? 'var(--accent)' : 'var(--border)', cursor: draft.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <button onClick={() => sendAnswer('__skip__')} title="Skip this question" style={{ width: 40, height: 40, borderRadius: 9, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M8 3l3 3.5-3 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M11 2v9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
-              </button>
-            </div>
+            <button
+              onClick={() => sendAnswer(draft)}
+              disabled={!draft.trim()}
+              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: draft.trim() ? 'var(--accent)' : 'var(--border)', cursor: draft.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>
-            {typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-              ? 'Tap → to send · answers are saved to your vault'
-              : 'Press Enter to send · answers are saved to your vault'}
+          {/* Skip links row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <button
+              onClick={() => sendAnswer('__skip__')}
+              style={{ fontSize: 12, color: 'var(--text-faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}
+            >
+              Skip this question
+            </button>
+            <button
+              onClick={onNext}
+              style={{ fontSize: 12, color: 'var(--text-faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}
+            >
+              Skip all and continue →
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* Hidden submit area — just show skip all if user wants out */}
-      {!done && !loadingQ && (
-        <div style={{ padding: '0 32px 16px', flexShrink: 0 }}>
-          <button onClick={onNext} style={{ fontSize: 12, color: 'var(--text-faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0 }}>Skip all and continue →</button>
         </div>
       )}
     </div>
@@ -2378,7 +2386,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
     });
   }, []);
 
-  const finalScore = result ? Math.min(result.after_score + 7, 97) : 91;
+  const finalScore = result ? result.after_score : 78;
   const jdLabel = result?.jd?.title || 'your target role';
   const jdCompany = result?.jd?.company || '';
 
@@ -2587,7 +2595,7 @@ function StepReturningDone({ onTailorAnother, dir }) {
   useEffect(() => {
     const session = loadSession();
     const tr = session.tailoredResult;
-    if (tr) setScore(Math.min((tr.after_score || 78) + 7, 97));
+    if (tr) setScore(tr.after_score || 78);
     setJdLabel(session.jdTitle || '');
 
     fetch('/api/rolepitch/save-resume', {

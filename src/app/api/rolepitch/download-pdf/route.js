@@ -74,7 +74,7 @@ export async function GET(request) {
       return new Response(tr.tailored_html, {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
-          'Content-Disposition': `inline; filename="${cachedFilename}.pdf"`,
+          'Content-Disposition': `attachment; filename="${cachedFilename}.pdf"`,
         },
       });
     }
@@ -188,7 +188,7 @@ export async function GET(request) {
     return new Response(finalHtml, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="${filename}.pdf"`,
+        'Content-Disposition': `attachment; filename="${filename}.pdf"`,
       },
     });
   } catch (err) {

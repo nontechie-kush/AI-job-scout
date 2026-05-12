@@ -79,10 +79,16 @@ export default function ReportClient({ row }) {
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   const expiresDate = new Date(row.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API blocked (insecure origin, denied permission, iframe).
+      // Don't claim success — surface the URL so the user can copy manually.
+      window.prompt('Copy this link', shareUrl);
+    }
   };
 
   const handlePrint = () => window.print();
@@ -117,7 +123,7 @@ export default function ReportClient({ row }) {
           {/* Header */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 4 }}>
-              Resume critique{row.name ? ` for ${row.name}` : ''}{row.target_context ? ` · targeting: ${row.target_context}` : ''} · expires {expiresDate}
+              Resume roast{row.name ? ` for ${row.name}` : ''}{row.target_context ? ` · targeting: ${row.target_context}` : ''} · expires {expiresDate}
             </div>
           </div>
 
@@ -216,7 +222,7 @@ export default function ReportClient({ row }) {
             <a href="/rolepitch/start" className="rc-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '13px 28px', fontSize: 14 }}>
               Tailor my resume — free →
             </a>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 10 }}>10 free pitches · no credit card</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 10 }}>5 free pitches · no credit card</div>
           </div>
 
           {/* Print footer */}

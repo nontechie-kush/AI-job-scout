@@ -91,7 +91,7 @@ CREATE POLICY "users_own_row" ON public.users
 CREATE TABLE public.profiles (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  source          TEXT NOT NULL CHECK (source IN ('pdf','website','text','linkedin_pdf')),
+  source          TEXT NOT NULL CHECK (source IN ('pdf','website','text','linkedin_pdf','image')),
   raw_text        TEXT,
   storage_path    TEXT,             -- Supabase Storage path for PDF
   filename        TEXT,

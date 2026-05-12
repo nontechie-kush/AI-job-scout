@@ -7,6 +7,8 @@ Allow: /rolepitch/
 Allow: /rolepitch/critique
 Allow: /rolepitch/start
 Allow: /rolepitch/report/
+Allow: /blog
+Allow: /blog/
 Disallow: /dashboard/
 Disallow: /api/
 Disallow: /onboarding/

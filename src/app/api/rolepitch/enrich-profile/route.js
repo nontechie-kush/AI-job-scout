@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const MAX_URLS = 5;
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 5000;
 const MAX_CHARS_PER_URL = 6000;
 
 const HEADERS = {

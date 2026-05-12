@@ -13,15 +13,24 @@ import { NextResponse } from 'next/server';
 const ROLEPITCH_HOSTS = ['rolepitch.com', 'www.rolepitch.com'];
 
 export async function middleware(request) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
   const host = request.headers.get('host') || '';
   const isRolePitch = ROLEPITCH_HOSTS.some(h => host === h || host.startsWith(h));
+
+  // ── Apex → www redirect ─────────────────────────────────────────
+  // Supabase OAuth allowlist is `www.rolepitch.com`; on apex the redirect_to
+  // doesn't match and OAuth bounces with error=oauth_failed.
+  if (host === 'rolepitch.com') {
+    const url = request.nextUrl.clone();
+    url.host = 'www.rolepitch.com';
+    return NextResponse.redirect(url, 308);
+  }
 
   // ── RolePitch hostname routing ──────────────────────────────────
   // rolepitch.com/ → rewrite to /rolepitch
   // rolepitch.com/start → rewrite to /rolepitch/start
   // rolepitch.com/api/* → pass through without rewriting
-  if (isRolePitch && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/rolepitch')) {
+  if (isRolePitch && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/rolepitch') && !pathname.startsWith('/blog') && !pathname.startsWith('/r/') && pathname !== '/sitemap.xml' && pathname !== '/robots.txt' && pathname !== '/privacy' && pathname !== '/terms' && pathname !== '/manifest.json') {
     const rpPath = pathname === '/' ? '/rolepitch' : `/rolepitch${pathname}`;
     const url = request.nextUrl.clone();
     url.pathname = rpPath;

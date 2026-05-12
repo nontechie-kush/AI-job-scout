@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
+import { mirrorToDraft } from '@/lib/rolepitch-draft';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 65;
@@ -30,7 +31,7 @@ export async function POST(request) {
     // user may be null — pre-login RolePitch flow stores JD in session only
 
     const body = await request.json();
-    const { url, title, company = '', description } = body;
+    const { url, title, company = '', description, draft_id: draftId } = body;
 
     let jdTitle = title?.trim() || '';
     let jdCompany = company?.trim() || '';
@@ -80,6 +81,12 @@ export async function POST(request) {
 
     // ── Guest (pre-login) path: return JD inline, no DB insert ───────
     if (!user) {
+      // Mirror to draft so anonymous flow has server-side JD persistence.
+      if (draftId) {
+        await mirrorToDraft(draftId, {
+          jd_snapshot: { title: jdTitle, company: jdCompany, description: jdDescription },
+        }, 'init-match-guest');
+      }
       return NextResponse.json({
         jd_id: null,
         title: jdTitle,
@@ -106,6 +113,15 @@ export async function POST(request) {
     if (insertErr || !jd) {
       console.error('[rolepitch/init-match] insert error:', insertErr);
       return NextResponse.json({ error: 'Failed to save job description' }, { status: 500 });
+    }
+
+    // Mirror to draft if applicable (signed-in user mid-draft, e.g. they
+    // signed in mid-flow and we want the draft to track the new jd_id).
+    if (draftId) {
+      await mirrorToDraft(draftId, {
+        jd_id: jd.id,
+        jd_snapshot: { title: jd.title, company: jd.company, description: jd.description },
+      }, 'init-match-auth');
     }
 
     return NextResponse.json({

@@ -91,7 +91,7 @@ export default function UpgradeModal({ onClose, onSuccess, trigger = 'manual' })
           {trigger === 'no_credits'
             ? <><div style={{ fontSize: 24, marginBottom: 8 }}>🚀</div>
                 <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Out of pitches</h2>
-                <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>You've used all 10 free pitches. Top up to keep tailoring — your vault and memory are preserved.</p></>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>You've used all your free pitches. Top up to keep tailoring — your vault and memory are preserved.</p></>
             : <><h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Get more pitches</h2>
                 <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>One-time purchase — no subscription.</p></>
           }

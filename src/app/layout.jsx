@@ -14,10 +14,33 @@ export const metadata = {
   description: 'Paste a job link. Pilot reads the JD, picks your strongest achievements, and rewrites your bullets to match — in under 60 seconds.',
   manifest: '/manifest.json',
   metadataBase: new URL('https://www.rolepitch.com'),
+  alternates: { canonical: 'https://www.rolepitch.com/' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'RolePitch',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://www.rolepitch.com/',
+    siteName: 'RolePitch',
+    title: 'RolePitch — Your resume, pitched to every role.',
+    description: 'Paste a job link. Get a tailored resume in 60 seconds.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'RolePitch — Your resume, pitched to every role.',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RolePitch — Your resume, pitched to every role.',
+    description: 'Paste a job link. Get a tailored resume in 60 seconds.',
+    images: ['/og-image.png'],
   },
 };
 

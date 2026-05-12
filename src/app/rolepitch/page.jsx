@@ -63,6 +63,8 @@ const CSS_VARS = `
     .rp-pricing-grid { grid-template-columns: 1fr !important; }
     .rp-nav-links { display: none !important; }
     .rp-nav-signin { display: none !important; }
+    .rp-blog-preview { display: flex !important; }
+    .rp-blog-desktop { display: none !important; }
     .rp-score-card { top: -8px !important; right: -8px !important; padding: 8px 12px !important; }
     .rp-score-ring { width: 100px !important; height: 100px !important; }
     .rp-score-ring svg { width: 100px !important; height: 100px !important; }
@@ -76,7 +78,7 @@ const CSS_VARS = `
   }
 `;
 
-function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
+function Nav({ onGetStarted, onSignIn, user, onDashboard }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -103,19 +105,10 @@ function Nav({ dark, setDark, onGetStarted, onSignIn, user, onDashboard }) {
           </div>
           <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>RolePitch</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a href="#how" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How it works</a>
-          <a href="/blog" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Blog</a>
-          <a href="#pricing" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
-          <button onClick={() => setDark(d => !d)} style={{
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
-            width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {dark
-              ? <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="3" stroke="var(--text)" strokeWidth="1.4" /><path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M3.1 3.1l1.06 1.06M10.84 10.84l1.06 1.06M3.1 11.9l1.06-1.06M10.84 4.16l1.06-1.06" stroke="var(--text)" strokeWidth="1.4" strokeLinecap="round" /></svg>
-              : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.5 8.5A5.5 5.5 0 015.5 1.5a5.5 5.5 0 100 11 5.5 5.5 0 007-4z" stroke="var(--text)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            }
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <a href="#how" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>How it works</a>
+          <a href="/blog" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>Blog</a>
+          <a href="#pricing" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>Pricing</a>
           {user ? (
             <button onClick={onDashboard} style={{
               background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
@@ -596,6 +589,54 @@ function Pricing({ onGetStarted }) {
   );
 }
 
+const ATS_SLUG = 'why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies';
+
+function BlogPreview() {
+  const [posts, setPosts] = useState([]);
+  useEffect(() => {
+    fetch('/api/rolepitch/blog-preview')
+      .then((r) => r.ok ? r.json() : { posts: [] })
+      .then((d) => setPosts(d.posts || []))
+      .catch(() => {});
+  }, []);
+  if (!posts.length) return null;
+  const ats = posts.find((p) => p.slug === ATS_SLUG);
+  const others = posts.filter((p) => p.slug !== ATS_SLUG);
+  const cards = ats ? [ats, ...others].slice(0, 2) : posts.slice(0, 2);
+  return (
+    <section style={{ padding: '80px 24px', borderTop: '1px solid var(--border-subtle)' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>From the blog</h2>
+          <a href="/blog" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>View all →</a>
+        </div>
+        <div className="rp-blog-preview" style={{ display: 'none', flexDirection: 'column', gap: 12 }}>
+          {cards.map((p) => (
+            <a key={p.slug} href={`/blog/${p.slug}`} style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                {p.tag && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', display: 'block', marginBottom: 6 }}>{p.tag}</span>}
+                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)', lineHeight: 1.4, marginBottom: 6 }}>{p.title}</div>
+                <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{p.read_time || '5 min read'}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+        <div className="rp-blog-desktop" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {cards.map((p) => (
+            <a key={p.slug} href={`/blog/${p.slug}`} style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', height: '100%', boxSizing: 'border-box' }}>
+                {p.tag && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', display: 'block', marginBottom: 8 }}>{p.tag}</span>}
+                <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)', lineHeight: 1.4, marginBottom: 8 }}>{p.title}</div>
+                <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{p.read_time || '5 min read'}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer style={{ padding: '32px 24px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -619,7 +660,6 @@ function Footer() {
 
 export default function RolePitchLanding() {
   const router = useRouter();
-  const [dark, setDark] = useState(false);
   const [user, setUser] = useState(null);
   const [campaign, setCampaign] = useState(null);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -630,8 +670,6 @@ export default function RolePitchLanding() {
   const isOAuthHandoff = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
 
   useEffect(() => {
-    const saved = localStorage.getItem('rp_theme');
-    if (saved === 'dark') setDark(true);
     createClient().auth.getUser().then(({ data: { user } }) => setUser(user));
   }, []);
 
@@ -732,10 +770,6 @@ export default function RolePitchLanding() {
     });
   }, []);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-rp-theme', dark ? 'dark' : 'light');
-    localStorage.setItem('rp_theme', dark ? 'dark' : 'light');
-  }, [dark]);
 
   const isRolePitchDomain = typeof window !== 'undefined' && (window.location.hostname === 'rolepitch.com' || window.location.hostname === 'www.rolepitch.com');
   const handleGetStarted = () => {
@@ -793,13 +827,14 @@ export default function RolePitchLanding() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
-        <Nav dark={dark} setDark={setDark} onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
+        <Nav onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
         <Hero onGetStarted={handleGetStarted} onCritique={handleCritique} />
         <Testimonials />
         <HowItWorks />
         <AtomizationBand />
         <Differentiator />
         <Pricing onGetStarted={handleGetStarted} />
+        <BlogPreview />
         <Footer />
         {showCampaignModal && campaign && (
           <CampaignModal

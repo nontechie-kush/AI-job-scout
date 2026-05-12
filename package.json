@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@google/generative-ai": "^0.24.1",
     "@react-pdf/renderer": "^3.4.5",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",

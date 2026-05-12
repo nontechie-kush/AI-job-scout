@@ -67,7 +67,35 @@ export async function GET(request) {
     }
   }
 
-  // If it was a rolepitch OAuth attempt, bounce back to rolepitch auth (not /auth/login)
+  // Code exchange failed (or no code present). Before bouncing to oauth_failed,
+  // check if the user already has a valid session — if so, the code was already
+  // exchanged by Supabase elsewhere and we can route them through normally.
+  try {
+    const sessionCheckResponse = NextResponse.redirect(`${origin}/rolepitch/start`);
+    const probeSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() { return request.cookies.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              sessionCheckResponse.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
+    );
+    const { data: { user: existingUser } } = await probeSupabase.auth.getUser();
+    if (existingUser) {
+      const isRP = next.includes('source=rolepitch') || next.startsWith('/rolepitch') || next.includes('source=critique');
+      const dest = isRP ? (next.startsWith('/') ? next : '/rolepitch/start') : (next.startsWith('/') ? next : '/dashboard');
+      sessionCheckResponse.headers.set('location', `${origin}${dest}`);
+      return sessionCheckResponse;
+    }
+  } catch {}
+
+  // No session and no valid code → genuine failure
   const isRolePitchNext = next.includes('source=rolepitch') || next.startsWith('/rolepitch');
   const failDest = isRolePitchNext ? '/rolepitch/auth?error=oauth_failed' : '/auth/login?error=oauth_failed';
   return NextResponse.redirect(`${origin}${failDest}`);

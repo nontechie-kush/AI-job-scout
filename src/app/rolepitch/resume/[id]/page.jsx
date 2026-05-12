@@ -99,22 +99,13 @@ export default function ResumeDetailPage() {
       .catch(e => { setError(e.message); setLoading(false); });
   }, [id]);
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
+    // The /api/rolepitch/download-pdf route returns HTML with an embedded
+    // window.print() trigger — opening in a new tab lets the browser render
+    // it and pop the native "Save as PDF" dialog.
     setDownloading(true);
-    try {
-      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`);
-      if (!res.ok) throw new Error('failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `rolepitch-${id.slice(0, 8)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert('PDF generation coming soon.');
-    }
-    setDownloading(false);
+    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, '_blank');
+    setTimeout(() => setDownloading(false), 1200);
   };
 
   if (loading) return (
@@ -200,33 +191,43 @@ export default function ResumeDetailPage() {
               </div>
             </div>
 
-            {/* Gap questions summary */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Gap context added</div>
-                {data.gap_questions?.length > 0 && (
+            {/* Gap questions summary — only shown when we actually have answered questions */}
+            {data.gap_questions?.length > 0 && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Gap context added</div>
                   <button onClick={() => setShowAnswers(s => !s)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontWeight: 500 }}>
                     {showAnswers ? 'Hide' : 'Show'}
                   </button>
+                </div>
+                {showAnswers ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {data.gap_questions.map((q, i) => (
+                      <div key={i} style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 10, marginRight: 6 }}>Q{i + 1}</span>
+                        {q.question}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--text-faint)', lineHeight: 1.6 }}>
+                    {`${data.gap_questions.length} gap question${data.gap_questions.length > 1 ? 's' : ''} answered to improve context.`}
+                  </p>
                 )}
               </div>
-              {showAnswers && data.gap_questions?.length ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {data.gap_questions.map((q, i) => (
-                    <div key={i} style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                      <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 10, marginRight: 6 }}>Q{i + 1}</span>
-                      {q.question}
-                    </div>
-                  ))}
+            )}
+
+            {/* Auto-tailored welcome banner — replaces gap card on first auto-pitch */}
+            {data.auto_tailored && (
+              <div style={{ background: 'oklch(0.62 0.19 248 / 0.08)', border: '1px solid oklch(0.62 0.19 248 / 0.25)', borderRadius: 14, padding: '18px 22px' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: 'var(--accent)' }}>
+                  Your first pitch — on me.
                 </div>
-              ) : (
-                <p style={{ fontSize: 13, color: 'var(--text-faint)', lineHeight: 1.6 }}>
-                  {data.gap_questions?.length
-                    ? `${data.gap_questions.length} gap question${data.gap_questions.length > 1 ? 's' : ''} answered to improve context.`
-                    : 'No gap questions recorded for this pitch.'}
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  I built this based on {data.source_label ? <strong style={{ color: 'var(--text)' }}>{data.source_label}</strong> : 'your trajectory'}. Want to sharpen it for a specific job posting? Start a new pitch with the JD.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Before / After resume */}

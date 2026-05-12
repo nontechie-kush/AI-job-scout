@@ -26,6 +26,14 @@ export async function POST(request) {
 
     const trimmed = answer.trim();
 
+    // Noise/gibberish check — fewer than 4 unique words or no real word ≥3 chars
+    const words = trimmed.toLowerCase().split(/\s+/);
+    const uniqueWords = new Set(words);
+    const hasSubstance = uniqueWords.size >= 4 && /[a-z]{3,}/.test(trimmed);
+    if (!hasSubstance) {
+      return NextResponse.json({ action: 'followup', followup: "Give me something real — a situation, what you did, what happened. Even rough notes work." });
+    }
+
     // Short yes/no — use Haiku to generate a context-aware follow-up instead of canned response
     if (THIN_ANSWERS.test(trimmed) || trimmed.length < 20) {
       const isNegative = /^(no|nope|not really|none|never|nah|i don.t have|i dont have)/.test(trimmed.toLowerCase());
@@ -76,6 +84,6 @@ Output ONLY valid JSON. The followup should reference the specific gap topic, no
     const parsed = JSON.parse(raw);
     return NextResponse.json(parsed);
   } catch {
-    return NextResponse.json({ action: 'advance' });
+    return NextResponse.json({ action: 'followup', followup: "That didn't come through clearly — give me a concrete example: situation, what you did, what happened." });
   }
 }

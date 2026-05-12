@@ -39,27 +39,34 @@ export async function GET(request) {
 
     const jdMap = new Map((jds || []).map(j => [j.id, j]));
 
-    const totalAtoms = await supabase
-      .from('user_experience_memory')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('confidence', 0.5);
+    // Only the legacy (non rolepitch-v1) scoring path needs the atom count.
+    // Skip the COUNT query entirely when every row is rolepitch-v1.
+    const needsAtomCount = resumes.some(r => r.pipeline_version !== 'rolepitch-v1');
+    let totalAtomsCount = 0;
+    if (needsAtomCount) {
+      const totalAtoms = await supabase
+        .from('user_experience_memory')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('confidence', 0.5);
+      totalAtomsCount = totalAtoms.count || 0;
+    }
 
     const result = resumes.map(r => {
       const jd = jdMap.get(r.jd_id) || {};
       const exp = r.tailored_version?.experience || [];
       const bulletsRewritten = exp.reduce((n, role) => n + (role.bullets || []).length, 0);
 
-      // rolepitch-v1 rows store real scores inside tailored_version
+      // rolepitch-v1 and rolepitch-draft-v1 rows store real scores inside tailored_version
       let beforeScore, afterScore, highlightsUsed;
-      if (r.pipeline_version === 'rolepitch-v1') {
+      if (r.pipeline_version === 'rolepitch-v1' || r.pipeline_version === 'rolepitch-draft-v1') {
         beforeScore = r.tailored_version?.before_score || 55;
         afterScore = r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
         highlightsUsed = bulletsRewritten;
       } else {
         beforeScore = r.resume_strength || 63;
-        const usageRatio = (totalAtoms.count || 0) > 0
-          ? Math.min((r.selected_atom_ids || []).length / totalAtoms.count, 1)
+        const usageRatio = totalAtomsCount > 0
+          ? Math.min((r.selected_atom_ids || []).length / totalAtomsCount, 1)
           : 0.5;
         afterScore = Math.min(Math.round(beforeScore + 30 * usageRatio), 84);
         highlightsUsed = (r.selected_atom_ids || []).length;

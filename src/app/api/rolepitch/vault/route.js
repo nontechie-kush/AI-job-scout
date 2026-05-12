@@ -1,30 +1,11 @@
 /**
  * GET /api/rolepitch/vault
  *
- * Returns the user's career vault — atoms from user_experience_memory —
- * grouped by company + role, sorted newest first.
+ * Returns the user's career vault — derived from profiles.parsed_json.experience.
+ * Each role's bullets become achievements, grouped by company + role.
  *
- * Used by Step 2 (Vault Preview) of the RolePitch onboarding flow.
- *
- * Returns:
- *   {
- *     vault: [
- *       {
- *         company: string,
- *         role: string,
- *         period: string,          // "2022 – 2024"
- *         achievements: [
- *           {
- *             id: string,
- *             text: string,        // atom.fact
- *             metrics: string[],   // derived from atom.metric
- *             tags: string[],
- *           }
- *         ]
- *       }
- *     ],
- *     total: number
- *   }
+ * (Previously read from user_experience_memory which the RolePitch flow
+ * never populates — that table is from the legacy v2 atom pipeline.)
  */
 
 import { NextResponse } from 'next/server';
@@ -37,20 +18,27 @@ function formatPeriod(startDate, endDate) {
   const fmt = (d) => {
     if (!d) return 'Present';
     const date = new Date(d);
+    if (isNaN(date.getTime())) return String(d);
     return date.getFullYear().toString();
   };
   return `${fmt(startDate)} – ${fmt(endDate)}`;
 }
 
-function deriveMetrics(metric) {
-  if (!metric) return [];
-  const parts = [];
-  if (metric.value !== undefined && metric.unit) {
-    parts.push(`${metric.value}${metric.unit}`);
-  } else if (metric.value !== undefined) {
-    parts.push(String(metric.value));
+function extractMetrics(text) {
+  if (!text) return [];
+  const patterns = [
+    /\$[\d,.]+[KMB]?/gi,
+    /\d+(?:\.\d+)?%/g,
+    /\d+(?:,\d{3})+/g,
+    /\b\d+(?:\.\d+)?[KMB]\b/gi,
+    /\b\d+x\b/gi,
+  ];
+  const found = new Set();
+  for (const re of patterns) {
+    const matches = text.match(re) || [];
+    matches.forEach(m => found.add(m));
   }
-  return parts;
+  return [...found].slice(0, 3);
 }
 
 export async function GET(request) {
@@ -59,52 +47,48 @@ export async function GET(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { data: atoms, error } = await supabase
-      .from('user_experience_memory')
-      .select('id, company, role, start_date, end_date, fact, metric, tags, confidence, nugget_type')
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('parsed_json, structured_resume')
       .eq('user_id', user.id)
-      .gte('confidence', 0.5)
-      .order('end_date', { ascending: false, nullsFirst: true });
+      .maybeSingle();
 
     if (error) {
       console.error('[rolepitch/vault]', error);
       return NextResponse.json({ error: 'Failed to load vault' }, { status: 500 });
     }
 
-    if (!atoms?.length) {
+    const source = profile?.structured_resume || profile?.parsed_json || null;
+    const experience = source?.experience || [];
+
+    if (!experience.length) {
       return NextResponse.json({ vault: [], total: 0 });
     }
 
-    // Group by company + role
-    const groups = new Map();
-    for (const atom of atoms) {
-      const key = `${atom.company || ''}::${atom.role || ''}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          company: atom.company || 'Unknown Company',
-          role: atom.role || 'Unknown Role',
-          start_date: atom.start_date,
-          end_date: atom.end_date,
-          achievements: [],
-        });
-      }
-      groups.get(key).achievements.push({
-        id: atom.id,
-        text: atom.fact,
-        metrics: deriveMetrics(atom.metric),
-        tags: atom.tags || [],
-        nugget_type: atom.nugget_type,
-      });
-    }
+    let total = 0;
+    const vault = experience.map((role, roleIdx) => {
+      const bullets = role.bullets || [];
+      const achievements = bullets.map((b, i) => {
+        const text = typeof b === 'string' ? b : (b.text || '');
+        total += 1;
+        return {
+          id: `${roleIdx}-${i}`,
+          text,
+          metrics: extractMetrics(text),
+          tags: [],
+          nugget_type: typeof b === 'object' ? (b.type || 'achievement') : 'achievement',
+        };
+      }).filter(a => a.text);
 
-    const vault = [...groups.values()].map((g) => ({
-      company: g.company,
-      role: g.role,
-      period: formatPeriod(g.start_date, g.end_date),
-      achievements: g.achievements,
-    }));
+      return {
+        company: role.company || 'Unknown Company',
+        role: role.title || 'Unknown Role',
+        period: formatPeriod(role.start_date, role.end_date),
+        achievements,
+      };
+    }).filter(g => g.achievements.length);
 
-    return NextResponse.json({ vault, total: atoms.length });
+    return NextResponse.json({ vault, total });
 
   } catch (err) {
     console.error('[rolepitch/vault]', err);

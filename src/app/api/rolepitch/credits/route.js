@@ -24,11 +24,11 @@ export async function GET(request) {
 
     if (error || !data) {
       // User row may not exist yet (first sign-in) — return defaults
-      return NextResponse.json({ pitch_credits: 10, plan_tier: 'free' });
+      return NextResponse.json({ pitch_credits: 5, plan_tier: 'free' });
     }
 
     return NextResponse.json({
-      pitch_credits: data.pitch_credits ?? 10,
+      pitch_credits: data.pitch_credits ?? 5,
       plan_tier: data.plan_tier ?? 'free',
     });
   } catch (err) {

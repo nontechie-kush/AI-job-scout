@@ -51,29 +51,36 @@ const CSS_VARS = `
   .rp-scroll::-webkit-scrollbar { width: 4px; }
   .rp-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   @media (max-width: 600px) {
-    .rp-nav { padding: 14px 16px !important; }
+    .rp-nav { padding: 10px 14px !important; gap: 6px !important; }
     .rp-nav-label { display: none !important; }
     .rp-nav-memory { display: none !important; }
+    .rp-nav-signout { display: none !important; }
+    .rp-credits-badge { max-width: 110px; overflow: hidden; }
+    .rp-credits-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rp-btn-ghost { padding: 8px 12px !important; font-size: 12px !important; }
     .rp-btn-primary { padding: 8px 14px !important; font-size: 12px !important; }
-    .rp-card { padding: 16px !important; }
-    .rp-card-row { flex-direction: column !important; gap: 12px !important; }
-    .rp-card-meta { flex-direction: row !important; align-items: center !important; gap: 8px !important; }
+    .rp-card { padding: 13px 13px 11px !important; }
     .rp-card-stats { display: none !important; }
-    .rp-card-actions { width: 100% !important; justify-content: stretch !important; }
-    .rp-card-actions button { flex: 1 !important; }
-    .rp-card-score { flex-shrink: 0; }
+    .rp-pitch-avatar { display: none !important; }
+    .rp-pitch-score-col { display: none !important; }
+    .rp-pitch-meta-row { display: none !important; }
+    .rp-pitch-mobile-actions { display: flex !important; }
   }
 `;
 
 function ScorePill({ before, after }) {
   const diff = after - before;
+  const color = scoreColor(after);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)' }}>{before}%</span>
-      <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M2 5h10M8 1l4 4-4 4" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>{after}%</span>
-      <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--mono)' }}>+{diff}%</span>
+      {diff > 0 && (
+        <>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)' }}>{before}%</span>
+          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M2 5h10M8 1l4 4-4 4" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </>
+      )}
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 700, color }}>{after}%</span>
+      {diff > 0 && <span style={{ fontSize: 11, color, fontFamily: 'var(--mono)' }}>+{diff}%</span>}
     </div>
   );
 }
@@ -174,17 +181,14 @@ export default function RolePitchDashboard() {
   };
 
   useEffect(() => {
-    const theme = localStorage.getItem('rp_theme') || 'light';
-    document.documentElement.setAttribute('data-rp-theme', theme);
-
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => { setUser(user); if (user) fetchCredits(); });
+    supabase.auth.getUser().then(({ data: { user } }) => { setUser(user); });
 
-    // Welcome flow: came from campaign signup (?welcome=1).
-    // Auth page already redeemed the campaign code; we just read live credits
-    // from the server and derive `granted` = total − 5 (the free baseline).
     const params = new URLSearchParams(window.location.search);
-    if (params.get('welcome') === '1') {
+    const isWelcome = params.get('welcome') === '1';
+
+    // Welcome flow: came from campaign signup (?welcome=1) — read live credits only.
+    if (isWelcome) {
       fetch('/api/rolepitch/credits')
         .then(r => r.json())
         .then(d => {
@@ -266,33 +270,32 @@ export default function RolePitchDashboard() {
       });
     }
 
-    // Welcome flow = brand-new user just completed OAuth. Skip the my-resumes
-    // probe entirely — they have zero resumes and the cookie may not yet be
-    // readable by the API route on first redirect (race), which would 401 →
-    // wrongly bounce them to /start.
-    const isWelcome = params.get('welcome') === '1';
+    // Welcome flow = brand-new user just completed OAuth. Skip the data probe
+    // entirely — they have zero resumes and the cookie may not yet be readable
+    // by the API route on first redirect (race), which would 401 → bounce to /start.
     if (isWelcome) {
       setResumes([]);
       setLoading(false);
+      setCritiquesLoading(false);
     } else {
-      fetch('/api/rolepitch/my-resumes')
+      // Single fetch: one auth check, 3 parallel DB queries server-side
+      fetch('/api/rolepitch/dashboard-data')
         .then(r => {
           if (r.status === 401) { window.location.href = '/rolepitch/auth'; return null; }
           return r.json();
         })
         .then(data => {
           if (!data) return;
-          if (data.error) { setError(data.error); setLoading(false); return; }
+          if (data.error) { setError(data.error); setLoading(false); setCritiquesLoading(false); return; }
           setResumes(data.resumes || []);
+          setCritiques(data.critiques || []);
+          setCredits(data.pitch_credits ?? 5);
+          setPlanTier(data.plan_tier ?? 'free');
           setLoading(false);
+          setCritiquesLoading(false);
         })
-        .catch(err => { setError(err.message); setLoading(false); });
+        .catch(err => { setError(err.message); setLoading(false); setCritiquesLoading(false); });
     }
-
-    fetch('/api/rolepitch/my-critiques')
-      .then(r => r.ok ? r.json() : { critiques: [] })
-      .then(data => { setCritiques(data.critiques || []); setCritiquesLoading(false); })
-      .catch(() => setCritiquesLoading(false));
   }, []);
 
   const handleDownload = (resumeId) => {
@@ -332,36 +335,32 @@ export default function RolePitchDashboard() {
             {credits !== null && (
               <button
                 onClick={() => setShowUpgrade(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, background: credits <= 2 ? 'oklch(0.65 0.2 30 / 0.1)' : 'var(--surface)', border: `1px solid ${credits <= 2 ? 'oklch(0.65 0.2 30 / 0.4)' : 'var(--border)'}`, borderRadius: 20, padding: '4px 12px 4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: credits <= 2 ? 'oklch(0.65 0.2 30)' : 'var(--text-muted)', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+                className="rp-credits-badge"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, background: credits <= 2 ? 'oklch(0.65 0.2 30 / 0.1)' : 'var(--surface)', border: `1px solid ${credits <= 2 ? 'oklch(0.65 0.2 30 / 0.4)' : 'var(--border)'}`, borderRadius: 20, padding: '4px 9px 4px 7px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: credits <= 2 ? 'oklch(0.65 0.2 30)' : 'var(--text-muted)', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
               >
-                <span style={{ fontSize: 14 }}>🎯</span>
-                {credits} pitch{credits !== 1 ? 'es' : ''} left
-                {credits <= 2 && <span style={{ marginLeft: 2, fontSize: 10 }}>· Top up</span>}
+                <span style={{ fontSize: 13 }}>🎯</span>
+                <span className="rp-credits-text">{credits}</span>
               </button>
-            )}
-            {user && (
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
-                {(user.email || '?')[0].toUpperCase()}
-              </div>
             )}
             <button className="rp-btn-ghost rp-nav-memory" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
               🧠 <span className="rp-nav-label">Memory</span>
             </button>
-            <button className="rp-btn-ghost" onClick={() => router.push('/rolepitch/start')} style={{ fontSize: 12, padding: '7px 12px', whiteSpace: 'nowrap' }}>
-              + New pitch
+            <button onClick={() => router.push('/rolepitch/start')} style={{ fontSize: 16, padding: '7px 11px', background: 'none', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', color: 'var(--text)', lineHeight: 1, fontFamily: 'var(--sans)' }}>
+              ＋
             </button>
             {user && (
-              <button className="rp-btn-ghost rp-nav-label" onClick={handleSignOut} style={{ fontSize: 12, padding: '7px 12px', color: 'var(--text-faint)' }}>
-                Sign out
-              </button>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0, cursor: 'pointer' }}
+                onClick={handleSignOut} title="Sign out">
+                {(user.email || '?')[0].toUpperCase()}
+              </div>
             )}
           </div>
         </div>
 
         {/* Content */}
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '40px 24px' }}>
-          <div style={{ marginBottom: 28, animation: 'rp-fadeUp 0.4s ease both' }}>
-            <h1 style={{ fontSize: 'clamp(24px, 3vw, 34px)', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 20 }}>Your vault</h1>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: 'clamp(20px, 4vw, 40px) clamp(14px, 4vw, 24px)' }}>
+          <div style={{ marginBottom: 'clamp(16px, 3vw, 28px)', animation: 'rp-fadeUp 0.4s ease both' }}>
+            <h1 style={{ fontSize: 'clamp(20px, 3vw, 34px)', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 'clamp(12px, 2vw, 20px)' }}>Your vault</h1>
             {/* Tab switcher */}
             <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
               {[
@@ -413,30 +412,33 @@ export default function RolePitchDashboard() {
                 </div>
               )}
               {!loading && resumes.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(8px, 2vw, 14px)' }}>
                   {resumes.map((r, i) => {
                 const color = companyColor(r.jd.company);
+                const afterScore = r.after_score || 0;
+                const sc = scoreColor(afterScore);
                 return (
                   <div key={r.id} className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both` }}>
-                    {/* Top row: avatar + title + score */}
-                    <div className="rp-card-row" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: color + '22', border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {/* Top row: avatar (hidden mobile) + title/company + score (hidden mobile) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                      <div className="rp-pitch-avatar" style={{ width: 38, height: 38, borderRadius: 9, background: color + '22', border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color }}>{companyInitials(r.jd.company)}</span>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.jd.title}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.jd.title || 'Untitled role'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.jd.company && <span>{r.jd.company} · </span>}
                           <span>{formatDate(r.created_at)}</span>
                         </div>
                       </div>
-                      <div className="rp-card-score" style={{ flexShrink: 0 }}>
-                        <ScorePill before={r.before_score} after={r.after_score} />
+                      {/* Score badge — visible on desktop, hidden on mobile (shown inline below) */}
+                      <div className="rp-pitch-score-col" style={{ flexShrink: 0 }}>
+                        <ScorePill before={r.before_score} after={afterScore} />
                       </div>
                     </div>
 
-                    {/* Bottom row: stats + actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    {/* Desktop bottom row: stats + buttons */}
+                    <div className="rp-pitch-meta-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div className="rp-card-stats" style={{ display: 'flex', gap: 16 }}>
                         {[
                           [`${r.highlights_used}`, 'highlights'],
@@ -448,27 +450,55 @@ export default function RolePitchDashboard() {
                           </div>
                         ))}
                       </div>
-                      <div className="rp-card-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button
-                        className="rp-btn-ghost"
-                        onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
-                        style={{ fontSize: 12, padding: '7px 14px' }}
-                      >
-                        View
-                      </button>
+                      <div style={{ flex: 1 }} />
+                      {/* Desktop: ghost View + primary PDF side by side */}
+                      <div className="rp-card-actions rp-pitch-desktop-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
+                          style={{ fontSize: 12, padding: '8px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--sans)', minHeight: 36 }}
+                        >
+                          View
+                        </button>
+                        <button
+                          className="rp-btn-primary"
+                          onClick={() => handleDownload(r.id)}
+                          disabled={downloading === r.id}
+                          style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                          {downloading === r.id
+                            ? <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                            : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          }
+                          PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Mobile-only action row: score pill + full-width PDF + text View */}
+                    <div className="rp-pitch-mobile-actions" style={{ display: 'none', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: sc, background: `${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.1)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.1)' : 'oklch(0.65 0.2 30 / 0.1)'}`, padding: '3px 10px', borderRadius: 6, border: `1px solid ${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.25)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.25)' : 'oklch(0.65 0.2 30 / 0.25)'}` }}>
+                          {afterScore}% match
+                        </span>
+                        <button
+                          onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', padding: '3px 0', fontFamily: 'var(--sans)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                        >
+                          View
+                        </button>
+                      </div>
                       <button
                         className="rp-btn-primary"
                         onClick={() => handleDownload(r.id)}
                         disabled={downloading === r.id}
-                        style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                        style={{ width: '100%', fontSize: 13, padding: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
                       >
                         {downloading === r.id
-                          ? <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
-                          : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          ? <div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                          : <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         }
-                        PDF
+                        Download PDF
                       </button>
-                    </div>
                     </div>
                   </div>
                 );
