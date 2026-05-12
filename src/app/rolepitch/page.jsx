@@ -62,7 +62,7 @@ const CSS_VARS = `
     .rp-diff-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
     .rp-pricing-grid { grid-template-columns: 1fr !important; }
     .rp-nav-links { display: none !important; }
-    .rp-nav-signin { display: none !important; }
+    .rp-nav-signin { display: inline-flex !important; }
     .rp-blog-preview { display: flex !important; }
     .rp-blog-desktop { display: none !important; }
     .rp-score-card { top: -8px !important; right: -8px !important; padding: 8px 12px !important; }
@@ -78,7 +78,7 @@ const CSS_VARS = `
   }
 `;
 
-function Nav({ onGetStarted, onSignIn, user, onDashboard }) {
+function Nav({ onGetStarted, onSignIn, user, authChecked, onDashboard }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -131,8 +131,9 @@ function Nav({ onGetStarted, onSignIn, user, onDashboard }) {
               <button style={{
                 background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
                 padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
-              }} onClick={onGetStarted}>
-                Get started free
+                opacity: authChecked ? 1 : 0.65,
+              }} onClick={onGetStarted} disabled={!authChecked}>
+                {authChecked ? 'Get started free' : 'Checking...'}
               </button>
             </>
           )}
@@ -661,6 +662,7 @@ function Footer() {
 export default function RolePitchLanding() {
   const router = useRouter();
   const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [campaign, setCampaign] = useState(null);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
 
@@ -670,8 +672,15 @@ export default function RolePitchLanding() {
   const isOAuthHandoff = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
 
   useEffect(() => {
-    createClient().auth.getUser().then(({ data: { user } }) => setUser(user));
-  }, []);
+    if (isOAuthHandoff) return;
+    createClient().auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      setAuthChecked(true);
+      if (user) {
+        window.location.replace('/rolepitch/dashboard');
+      }
+    }).catch(() => setAuthChecked(true));
+  }, [isOAuthHandoff]);
 
   // Detect ?ref=CODE → fetch campaign details → show modal + persist code for OAuth roundtrip.
   useEffect(() => {
@@ -774,6 +783,10 @@ export default function RolePitchLanding() {
   const isRolePitchDomain = typeof window !== 'undefined' && (window.location.hostname === 'rolepitch.com' || window.location.hostname === 'www.rolepitch.com');
   const handleGetStarted = () => {
     track('rp_get_started_clicked', { source: 'landing', user_signed_in: !!user });
+    if (user) {
+      router.push('/rolepitch/dashboard');
+      return;
+    }
     router.push(isRolePitchDomain ? '/start' : '/rolepitch/start');
   };
   const handleCritique = () => {
@@ -827,7 +840,7 @@ export default function RolePitchLanding() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
-        <Nav onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} onDashboard={handleDashboard} />
+        <Nav onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} authChecked={authChecked} onDashboard={handleDashboard} />
         <Hero onGetStarted={handleGetStarted} onCritique={handleCritique} />
         <Testimonials />
         <HowItWorks />
