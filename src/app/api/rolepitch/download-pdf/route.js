@@ -77,7 +77,10 @@ export async function GET(request) {
     if (trErr || !tr) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
-    if (tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
+    // If the user has self-edits, always rebuild from edited_version. The cache
+    // predates the editor and has no source/version flag, so it may contain the
+    // original AI-tailored HTML.
+    if (!tr.edited_version && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
       const cachedFilename = makeSafeFilename(
         (tr.edited_version?.name || tr.tailored_version?.name || tr.base_version?.name || ''),
         '',

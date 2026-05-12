@@ -246,6 +246,7 @@ export default function ResumeEditPage() {
   const [resume, setResume] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [status, setStatus] = useState('pristine');
+  const [downloading, setDownloading] = useState(false);
   const [active, setActive] = useState('experience');
   const [mobileTab, setMobileTab] = useState('edit');
   const [showDiscard, setShowDiscard] = useState(false);
@@ -354,8 +355,41 @@ export default function ResumeEditPage() {
     }
   };
 
-  const download = () => {
-    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, '_blank');
+  const download = async () => {
+    setDownloading(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, {
+        headers: { Accept: 'text/html,application/json' },
+      });
+
+      if (res.redirected && res.url.includes('/rolepitch/start')) {
+        window.location.href = res.url;
+        return;
+      }
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.message || json.error || 'Could not prepare PDF');
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const filename = match?.[1] || 'RolePitch_resume.pdf';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      setSaveError(e.message || 'Could not prepare PDF');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleBack = () => {
@@ -383,11 +417,11 @@ export default function ResumeEditPage() {
           <div className="rp-actions">
             <StatusPill state={currentStatus} />
             <button className="rp-btn-text" onClick={handleBack}>Cancel</button>
-            {(currentStatus === 'pristine' || currentStatus === 'dirty' || currentStatus === 'saving') && <button className="rp-btn-secondary" onClick={download}>{icon('download')} Download current PDF</button>}
+            {(currentStatus === 'pristine' || currentStatus === 'dirty' || currentStatus === 'saving') && <button className="rp-btn-secondary" onClick={download} disabled={downloading}>{downloading ? <span className="rp-spinner" /> : icon('download')} {downloading ? 'Preparing PDF...' : 'Download current PDF'}</button>}
             {currentStatus !== 'pristine' && (
-              <button className="rp-btn-primary" onClick={currentStatus === 'saved' ? download : save} disabled={currentStatus === 'saving' || !!validation || (currentStatus !== 'saved' && data.migration_required)}>
-                {currentStatus === 'saving' ? <span className="rp-spinner" /> : currentStatus === 'saved' ? icon('download') : icon('check')}
-                {currentStatus === 'saved' ? 'Download updated PDF' : currentStatus === 'error' ? 'Retry save' : currentStatus === 'saving' ? 'Saving...' : 'Save changes'}
+              <button className="rp-btn-primary" onClick={currentStatus === 'saved' ? download : save} disabled={downloading || currentStatus === 'saving' || !!validation || (currentStatus !== 'saved' && data.migration_required)}>
+                {currentStatus === 'saving' || downloading ? <span className="rp-spinner" /> : currentStatus === 'saved' ? icon('download') : icon('check')}
+                {downloading ? 'Preparing PDF...' : currentStatus === 'saved' ? 'Download updated PDF' : currentStatus === 'error' ? 'Retry save' : currentStatus === 'saving' ? 'Saving...' : 'Save changes'}
               </button>
             )}
           </div>
@@ -432,10 +466,10 @@ export default function ResumeEditPage() {
         </div>
 
         <div className="rp-mobile-bottom">
-          <div className="rp-mobile-hint">{currentStatus === 'pristine' ? 'Tap a section to make edits' : currentStatus === 'dirty' ? 'Save before downloading the updated PDF' : ''}</div>
-          <button className="rp-btn-primary" onClick={currentStatus === 'dirty' || currentStatus === 'error' ? save : download} disabled={currentStatus === 'saving' || ((currentStatus === 'dirty' || currentStatus === 'error') && (!!validation || data.migration_required))}>
-            {currentStatus === 'saving' ? <span className="rp-spinner" /> : currentStatus === 'dirty' || currentStatus === 'error' ? icon('check') : icon('download')}
-            {currentStatus === 'dirty' ? 'Save changes' : currentStatus === 'error' ? 'Retry save' : currentStatus === 'saving' ? 'Saving...' : currentStatus === 'saved' ? 'Download updated PDF' : 'Download current PDF'}
+          <div className="rp-mobile-hint">{downloading ? 'Keeping this page open while the PDF is prepared' : currentStatus === 'pristine' ? 'Tap a section to make edits' : currentStatus === 'dirty' ? 'Save before downloading the updated PDF' : ''}</div>
+          <button className="rp-btn-primary" onClick={currentStatus === 'dirty' || currentStatus === 'error' ? save : download} disabled={downloading || currentStatus === 'saving' || ((currentStatus === 'dirty' || currentStatus === 'error') && (!!validation || data.migration_required))}>
+            {currentStatus === 'saving' || downloading ? <span className="rp-spinner" /> : currentStatus === 'dirty' || currentStatus === 'error' ? icon('check') : icon('download')}
+            {downloading ? 'Preparing PDF...' : currentStatus === 'dirty' ? 'Save changes' : currentStatus === 'error' ? 'Retry save' : currentStatus === 'saving' ? 'Saving...' : currentStatus === 'saved' ? 'Download updated PDF' : 'Download current PDF'}
           </button>
         </div>
       </div>
