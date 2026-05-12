@@ -237,7 +237,7 @@ function Hero({ onGetStarted, onCritique }) {
           </h1>
 
           <p style={{ fontSize: 'clamp(15px, 1.8vw, 17px)', fontWeight: 700, color: 'var(--text)', lineHeight: 1.5, maxWidth: 460, marginBottom: 12 }}>
-            RolePitch makes it shortlist-worthy for roles in the US, UAE, India, and beyond.
+            RolePitch makes it shortlist-worthy in 60 seconds.
           </p>
 
           <p style={{ fontSize: 'clamp(14px, 1.6vw, 16px)', color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 460, marginBottom: 36 }}>
@@ -280,7 +280,7 @@ function Hero({ onGetStarted, onCritique }) {
               ))}
             </div>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text)' }}>5 free pitches</strong> · no card required · built for global roles
+              <strong style={{ color: 'var(--text)' }}>5 free pitches</strong> · no card required
             </span>
           </div>
         </div>
@@ -329,7 +329,7 @@ function Testimonials() {
 function HowItWorks() {
   const steps = [
     { n: '01', title: 'Upload your resume once', desc: 'RolePitch reads your career history and builds a vault of every achievement, metric, and skill. No more copy-paste jobs ever again.', tag: 'Your vault' },
-    { n: '02', title: 'Drop any job link', desc: "RolePitch scores your fit against job descriptions from the US, UAE, India, Europe, or remote-first companies. It spots gaps and asks only the 2–3 questions it can't infer.", tag: 'Fit scored' },
+    { n: '02', title: 'Drop any job link', desc: "RolePitch scores your fit against the JD in seconds. Spots gaps, asks 2–3 quick questions — only what it can't figure out itself.", tag: 'Fit scored' },
     { n: '03', title: 'Download. Apply. Win.', desc: 'Your best achievements, repositioned for this specific role. Not a rewrite from scratch — a precise selection. In under 60 seconds.', tag: 'Interview-ready' },
   ];
 
