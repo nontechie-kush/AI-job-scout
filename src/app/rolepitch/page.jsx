@@ -237,12 +237,11 @@ function Hero({ onGetStarted, onCritique }) {
           </h1>
 
           <p style={{ fontSize: 'clamp(15px, 1.8vw, 17px)', fontWeight: 700, color: 'var(--text)', lineHeight: 1.5, maxWidth: 460, marginBottom: 12 }}>
-            Don't leave your career to chance.
+            RolePitch makes it shortlist-worthy in 60 seconds.
           </p>
 
           <p style={{ fontSize: 'clamp(14px, 1.6vw, 16px)', color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 460, marginBottom: 36 }}>
-            Most resumes get skipped. Yours shouldn't be.<br />
-            Paste a job link — RolePitch picks your strongest achievements and rewrites to match the role. In 60 seconds.
+            Paste a job link. We pick your strongest achievements, rewrite your bullets for that role, and keep your original layout.
           </p>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 36 }}>
@@ -254,7 +253,7 @@ function Hero({ onGetStarted, onCritique }) {
             }} onClick={onGetStarted}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-              Get shortlisted — free
+              Tailor my resume — free
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: 'rp-arrowMove 1.5s ease infinite' }}>
                 <path d="M1 7h12M8 3l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
