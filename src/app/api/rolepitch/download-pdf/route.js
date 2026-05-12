@@ -38,6 +38,19 @@ function makeSafeFilename(name, role) {
   return [sanitize(name), sanitize(role)].filter(Boolean).join('_') || 'Resume';
 }
 
+function cacheKeyFor(tr) {
+  if (!tr?.edited_version) return 'tailored';
+  return `edited:${tr.edited_at || tr.edit_count || 'unknown'}`;
+}
+
+function withCacheMarker(html, key) {
+  return `<!-- rolepitch-cache-key:${key} -->\n${html || ''}`;
+}
+
+function hasCacheMarker(html, key) {
+  return typeof html === 'string' && html.startsWith(`<!-- rolepitch-cache-key:${key} -->`);
+}
+
 export async function GET(request) {
   try {
     const supabase = await createClientFromRequest(request);
@@ -51,7 +64,7 @@ export async function GET(request) {
     let [{ data: tr, error: trErr }, { data: profileRow }] = await Promise.all([
       supabase
         .from('tailored_resumes')
-        .select('tailored_version, edited_version, base_version, jd_id, match_id, tailored_html')
+        .select('tailored_version, edited_version, edited_at, edit_count, base_version, jd_id, match_id, tailored_html')
         .eq('id', tailoredResumeId)
         .eq('user_id', user.id)
         .maybeSingle(),
@@ -76,11 +89,15 @@ export async function GET(request) {
 
     if (trErr || !tr) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    const cacheKey = cacheKeyFor(tr);
+
     // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
-    // If the user has self-edits, always rebuild from edited_version. The cache
-    // predates the editor and has no source/version flag, so it may contain the
-    // original AI-tailored HTML.
-    if (!tr.edited_version && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
+    // Edited resumes may use cache only when the embedded cache key matches
+    // the current edit. This avoids serving a stale original tailored render.
+    const cacheIsCurrent = tr.edited_version
+      ? hasCacheMarker(tr.tailored_html, cacheKey)
+      : !!tr.tailored_html;
+    if (cacheIsCurrent && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
       const cachedFilename = makeSafeFilename(
         (tr.edited_version?.name || tr.tailored_version?.name || tr.base_version?.name || ''),
         '',
@@ -179,13 +196,14 @@ export async function GET(request) {
     // renderTailoredHtml falls back to it when buildFastHtml is provided AND
     // originalHtml is null. Above we've already 409'd in that case, so by
     // here originalHtml is guaranteed truthy.
-    const finalHtml = await renderTailoredHtml({
+    const renderedHtml = await renderTailoredHtml({
       originalHtml,
       pageCount: originalPageCount,
       mergedResume,
       jobContext: { title: jdTitle, company: jdCompany, description: jdDescription },
       buildFastHtml: () => { throw new Error('fast template disabled in download-pdf'); },
     });
+    const finalHtml = withCacheMarker(renderedHtml, cacheKey);
 
     // Persist for instant subsequent downloads
     try {

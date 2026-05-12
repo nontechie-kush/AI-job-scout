@@ -90,10 +90,25 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatEditStamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  const day = sameDay(d, today)
+    ? 'Today'
+    : sameDay(d, yesterday)
+      ? 'Yesterday'
+      : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `${day}, ${time}`;
+}
+
 function downloadLabel(resume) {
   if (!resume?.has_edits || !resume?.edited_at) return '';
-  const time = new Date(resume.edited_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-  return `Edit ${resume.edit_count || 1} · ${time}`;
+  return `Edit ${resume.edit_count || 1} · ${formatEditStamp(resume.edited_at)}`;
 }
 
 function companyInitials(company) {
@@ -330,7 +345,7 @@ export default function RolePitchDashboard() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      if (resume) setDownloadPrompt(resume);
+      if (resume && !resume.has_edits) setDownloadPrompt(resume);
     } catch (e) {
       setError(e.message || 'Could not prepare PDF');
     } finally {

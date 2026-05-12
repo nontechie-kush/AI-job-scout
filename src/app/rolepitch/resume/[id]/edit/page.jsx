@@ -162,10 +162,25 @@ function bulletRows(text) {
   return textRows(text, 44, 5, 12);
 }
 
+function formatEditStamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  const day = sameDay(d, today)
+    ? 'Today'
+    : sameDay(d, yesterday)
+      ? 'Yesterday'
+      : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `${day}, ${time}`;
+}
+
 function editVersionLabel(data) {
   if (!data?.has_edits || !data?.edited_at) return '';
-  const time = new Date(data.edited_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-  return `Edit ${data.edit_count || 1} · ${time}`;
+  return `Edit ${data.edit_count || 1} · ${formatEditStamp(data.edited_at)}`;
 }
 
 function normalizeForState(resume) {
