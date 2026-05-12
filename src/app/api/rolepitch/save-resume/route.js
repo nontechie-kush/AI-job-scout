@@ -17,6 +17,57 @@ function makeRid() {
   return `sr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+async function ensureRolePitchUser(service, user, rid) {
+  const { data, error } = await service
+    .from('users')
+    .select('pitch_credits, plan_tier')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!error && data) return data;
+
+  if (error) {
+    console.warn(`[rolepitch/save-resume ${rid}] user row read failed; attempting repair`, {
+      message: error.message,
+      code: error.code,
+    });
+  } else {
+    console.warn(`[rolepitch/save-resume ${rid}] missing users row; creating free RolePitch balance`);
+  }
+
+  const { error: insertErr } = await service
+    .from('users')
+    .insert({
+      id: user.id,
+      email: user.email || `${user.id}@rolepitch.local`,
+      name: user.user_metadata?.name || user.email?.split('@')?.[0] || null,
+      avatar_url: user.user_metadata?.avatar_url || null,
+      pitch_credits: 5,
+      plan_tier: 'free',
+      onboarding_source: 'rolepitch',
+    });
+
+  if (insertErr?.code === '23505') {
+    const { data: reread } = await service
+      .from('users')
+      .select('pitch_credits, plan_tier')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (reread) return reread;
+  }
+
+  if (insertErr) {
+    console.error(`[rolepitch/save-resume ${rid}] users row repair failed`, {
+      message: insertErr.message,
+      code: insertErr.code,
+      details: insertErr.details,
+    });
+    throw new Error(`Failed to prepare user credits: ${insertErr.message}`);
+  }
+
+  return { pitch_credits: 5, plan_tier: 'free' };
+}
+
 export async function POST(request) {
   const rid = makeRid();
   const t0 = Date.now();
@@ -56,11 +107,7 @@ export async function POST(request) {
     // Prevents orphan deductions when the insert fails or the request is replayed without a JD.
     const service = tailored ? createServiceClient() : null;
     if (tailored) {
-      const { data: u, error: balErr } = await service.from('users').select('pitch_credits').eq('id', user.id).single();
-      if (balErr) {
-        console.error(`[rolepitch/save-resume ${rid}] balance read error`, { message: balErr.message, code: balErr.code });
-        return NextResponse.json({ error: 'Credit check failed' }, { status: 500 });
-      }
+      const u = await ensureRolePitchUser(service, user, rid);
       console.log(`[rolepitch/save-resume ${rid}] credit check`, { pitch_credits: u?.pitch_credits });
       if ((u?.pitch_credits ?? 0) <= 0) {
         console.warn(`[rolepitch/save-resume ${rid}] 402: no credits`);

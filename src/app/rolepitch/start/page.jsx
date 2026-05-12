@@ -2388,6 +2388,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     const session = loadSession();
@@ -2428,6 +2429,7 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
     const session = loadSession();
     if (session.parsedResume) {
       setSaving(true);
+      setSaveError('');
       fetch('/api/rolepitch/save-resume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2439,10 +2441,19 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
           tailored: session.tailoredResult,
         }),
       })
-        .then(() => { window.location.href = '/rolepitch/dashboard'; })
-        .catch(() => { window.location.href = '/rolepitch/dashboard'; });
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.error) {
+            throw new Error(data.message || data.error || 'Could not save your tailored resume. Your work is still here.');
+          }
+          window.location.href = '/rolepitch/dashboard?welcome=1';
+        })
+        .catch((err) => {
+          setSaving(false);
+          setSaveError(err.message || 'Could not save your tailored resume. Your work is still here.');
+        });
     } else {
-      window.location.href = '/rolepitch/dashboard';
+      setSaveError('Could not find the tailored resume in this browser session. Please stay on this page and retry.');
     }
   };
 
@@ -2486,6 +2497,11 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
           }
           {saving ? 'Saving…' : signedUp ? 'Go to dashboard →' : 'Download PDF'}
         </button>
+        {saveError && (
+          <div style={{ border: '1px solid oklch(0.65 0.2 30 / 0.25)', background: 'oklch(0.65 0.2 30 / 0.08)', color: 'oklch(0.48 0.16 30)', borderRadius: 10, padding: '10px 12px', fontSize: 12, lineHeight: 1.5 }}>
+            {saveError}
+          </div>
+        )}
         <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={onTailorAnother}>Tailor another role →</button>
         <button className="rp-btn-ghost" style={{ width: '100%' }} onClick={() => router.push('/rolepitch/dashboard')}>View all my pitches →</button>
         <button onClick={onHome} style={{ fontSize: 12, border: 'none', color: 'var(--text-faint)', background: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--sans)' }}>← Back to Home</button>

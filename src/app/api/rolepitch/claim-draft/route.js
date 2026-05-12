@@ -72,6 +72,57 @@ function buildStructuredResume(parsed) {
   };
 }
 
+async function ensureRolePitchUser(service, user, rid) {
+  const { data, error } = await service
+    .from('users')
+    .select('pitch_credits, plan_tier')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!error && data) return data;
+
+  if (error) {
+    console.warn(`[rolepitch/claim-draft ${rid}] user row read failed; attempting repair`, {
+      message: error.message,
+      code: error.code,
+    });
+  } else {
+    console.warn(`[rolepitch/claim-draft ${rid}] missing users row; creating free RolePitch balance`);
+  }
+
+  const { error: insertErr } = await service
+    .from('users')
+    .insert({
+      id: user.id,
+      email: user.email || `${user.id}@rolepitch.local`,
+      name: user.user_metadata?.name || user.email?.split('@')?.[0] || null,
+      avatar_url: user.user_metadata?.avatar_url || null,
+      pitch_credits: 5,
+      plan_tier: 'free',
+      onboarding_source: 'rolepitch',
+    });
+
+  if (insertErr?.code === '23505') {
+    const { data: reread } = await service
+      .from('users')
+      .select('pitch_credits, plan_tier')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (reread) return reread;
+  }
+
+  if (insertErr) {
+    console.error(`[rolepitch/claim-draft ${rid}] users row repair failed`, {
+      message: insertErr.message,
+      code: insertErr.code,
+      details: insertErr.details,
+    });
+    throw new Error(`Failed to prepare user credits: ${insertErr.message}`);
+  }
+
+  return { pitch_credits: 5, plan_tier: 'free' };
+}
+
 export async function POST(request) {
   const rid = makeRid();
   const t0 = Date.now();
@@ -124,9 +175,51 @@ export async function POST(request) {
         foundBy = 'email';
       }
     }
+    if (!draft && !draft_id) {
+      const recoveryWindow = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await service
+        .from('rp_drafts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'claimed')
+        .not('tailored', 'is', null)
+        .gt('claimed_at', recoveryWindow)
+        .order('claimed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        console.error(`[rolepitch/claim-draft ${rid}] recovery lookup error`, { message: error.message });
+      } else if (data) {
+        const { data: existingTr, error: existingErr } = await service
+          .from('tailored_resumes')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('tailored_version->>source_draft_id', data.id)
+          .maybeSingle();
+        if (existingErr) {
+          console.warn(`[rolepitch/claim-draft ${rid}] recovery duplicate check failed`, { message: existingErr.message });
+        }
+        if (existingTr?.id) {
+          console.log(`[rolepitch/claim-draft ${rid}] recovery draft already promoted`, {
+            draft_id: data.id,
+            tailored_resume_id: existingTr.id,
+          });
+          return NextResponse.json({
+            claimed: true,
+            has_tailored: true,
+            tailored_resume_id: existingTr.id,
+            pitch_credits: null,
+            draft_id: data.id,
+          });
+        }
+        draft = data;
+        foundBy = 'owned-claimed-recovery';
+      }
+    }
     // NOTE: removed recency fallback — it could claim another user's unclaimed
     // draft when run from dashboard mount or any retry path. Stick to draft_id
-    // (carried via URL through OAuth) and email match (draft.email = user.email).
+    // (carried via URL through OAuth), email match (draft.email = user.email),
+    // or a recovery draft already owned by the same authenticated user.
     if (!draft) {
       console.warn(`[rolepitch/claim-draft ${rid}] no draft found`, { draft_id, email: user.email });
       return NextResponse.json({ claimed: false, has_tailored: false, tailored_resume_id: null, pitch_credits: null, draft_id: null });
@@ -271,14 +364,21 @@ export async function POST(request) {
 
       if (resolvedJdId) {
         // 3b. Pitch credit pre-check (read-only — actual deduction is RPC after insert)
-        const { data: u, error: balErr } = await service.from('users').select('pitch_credits').eq('id', user.id).single();
-        if (balErr) {
-          console.error(`[rolepitch/claim-draft ${rid}] balance read error`, { message: balErr.message });
-        }
+        const u = await ensureRolePitchUser(service, user, rid);
         const credits = u?.pitch_credits ?? 0;
         if (credits <= 0) {
-          console.warn(`[rolepitch/claim-draft ${rid}] 402: no credits — skipping tailor insert, claiming profile only`);
-          // Still mark draft claimed so it doesn't sit around.
+          console.warn(`[rolepitch/claim-draft ${rid}] 402: no credits — leaving draft unclaimed so user can recover`, {
+            draft_id: draft.id,
+          });
+          return NextResponse.json({
+            error: 'no_credits',
+            message: 'You have no pitches remaining. Your tailored resume is still safe — add credits to save it.',
+            claimed: false,
+            has_tailored: false,
+            tailored_resume_id: null,
+            pitch_credits: credits,
+            draft_id: draft.id,
+          }, { status: 402 });
         } else {
           const beforeScore = draft.before_score || draft.tailored?.before_score || 55;
           const afterScore = draft.after_score || draft.tailored?.after_score || 78;
@@ -387,7 +487,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       claimed: true,
-      has_tailored: !!draft.tailored,
+      has_tailored: !!tailoredResumeId,
       tailored_resume_id: tailoredResumeId,
       pitch_credits: pitchCredits,
       draft_id: draft.id,
