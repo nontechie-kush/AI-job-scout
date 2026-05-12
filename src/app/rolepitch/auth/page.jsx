@@ -307,16 +307,31 @@ function RolePitchAuthInner() {
 
   // Context-aware copy
   const isCampaignFlow = source === 'campaign';
-  const isPricingFlow = !!redirect && source !== 'critique' && !isCampaignFlow;
+  const isPricingFlow = source === 'pricing' || source === 'checkout' || redirect.includes('#pricing');
   const isCritiqueFlow = source === 'critique';
-  const headline = isCampaignFlow ? 'Claim your bonus' : isCritiqueFlow ? 'Save your roast' : isPricingFlow ? 'Sign in to continue' : 'Save your pitch';
+  const isDashboardSignIn = redirect === '/rolepitch/dashboard' || redirect === 'rolepitch/dashboard';
+  const headline = isCampaignFlow
+    ? 'Claim your bonus'
+    : isCritiqueFlow
+    ? 'Save your roast'
+    : isPricingFlow
+    ? 'Continue to checkout'
+    : isDashboardSignIn
+    ? 'Welcome back'
+    : hasResume
+    ? 'Save your pitch'
+    : 'Continue to RolePitch';
   const subline = isCampaignFlow
     ? 'Sign up with Google — your bonus pitches will be added to your account instantly.'
     : isCritiqueFlow
     ? 'Sign up free — your roast will be saved to your dashboard and you can tailor your resume from there.'
     : isPricingFlow
     ? 'Sign in with Google, then we\'ll take you to checkout.'
-    : 'Free account — 10 pitches included. No credit card. Your vault is preserved forever.';
+    : isDashboardSignIn
+    ? 'Sign in to open your dashboard, saved pitches, resume roasts, and credits.'
+    : hasResume
+    ? 'Sign in to save your tailored resume and keep it in your dashboard.'
+    : 'Sign in to continue with your RolePitch dashboard.';
 
   return (
     <div style={{ fontFamily: 'var(--sans)', background: 'var(--bg)', color: 'var(--text)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -331,7 +346,7 @@ function RolePitchAuthInner() {
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 28px' }}>
           {/* Vault saved badge — only shown after a tailor flow, not for critique-only users */}
-          {hasResume && !isPricingFlow && !isCritiqueFlow && (
+          {hasResume && !isPricingFlow && !isCritiqueFlow && !isDashboardSignIn && (
             <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="var(--green-dim)" stroke="var(--green)" strokeWidth="1.2" /><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               <div>

@@ -760,7 +760,7 @@ export default function RolePitchLanding() {
   const isRolePitchDomain = typeof window !== 'undefined' && (window.location.hostname === 'rolepitch.com' || window.location.hostname === 'www.rolepitch.com');
   const handleGetStarted = () => {
     track('rp_get_started_clicked', { source: 'landing', user_signed_in: false });
-    router.push(isRolePitchDomain ? '/start' : '/rolepitch/start');
+    router.push(isRolePitchDomain ? '/start?fresh=1' : '/rolepitch/start?fresh=1');
   };
   const handleCritique = () => {
     track('rp_critique_clicked', { source: 'landing' });

@@ -2750,14 +2750,29 @@ function RolePitchStartInner() {
     const theme = localStorage.getItem('rp_theme') || 'light';
     document.documentElement.setAttribute('data-rp-theme', theme);
 
-    // Eagerly create draft row so claim-draft always has something to find
-    ensureDraftId().catch(() => {}); // non-blocking, best-effort
-
     // On return from OAuth, URL may carry ?step=N&tr=UUID
     const params = new URLSearchParams(window.location.search);
     const urlStep = parseInt(params.get('step') || '', 10);
     const urlTr = params.get('tr');
+    const freshStart = params.get('fresh') === '1';
     if (urlTr) saveSession({ tailoredResumeId: urlTr });
+
+    if (freshStart) {
+      console.log('[rolepitch/start mount] ?fresh=1 → clearing stale anonymous flow cache');
+      saveSession({
+        parsedResume: null, parsedName: null, parsedSource: null,
+        detectedLinks: null, enrichSources: null,
+        tailoredResult: null, tailoredAt: null, tailoredResumeId: null,
+        jdId: null, jdTitle: null, jdCompany: null, jdDescription: null,
+        step: 0,
+      });
+      clearDraftId();
+      window.history.replaceState({}, '', '/rolepitch/start');
+    }
+
+    // Eagerly create draft row so claim-draft always has something to find.
+    // For fresh landing entries this happens after stale draft state is cleared.
+    ensureDraftId().catch(() => {}); // non-blocking, best-effort
 
     const session = loadSession();
 

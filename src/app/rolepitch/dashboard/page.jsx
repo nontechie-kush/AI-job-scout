@@ -186,6 +186,7 @@ export default function RolePitchDashboard() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [welcome, setWelcome] = useState(null); // { granted, total }
   const [downloadPrompt, setDownloadPrompt] = useState(null);
+  const [accountSheet, setAccountSheet] = useState(false);
 
   const fetchCredits = () => {
     fetch('/api/rolepitch/credits')
@@ -379,12 +380,13 @@ export default function RolePitchDashboard() {
             <button className="rp-btn-ghost rp-nav-memory" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
               🧠 <span className="rp-nav-label">Memory</span>
             </button>
-            <button onClick={() => router.push('/rolepitch/start')} style={{ fontSize: 16, padding: '7px 11px', background: 'none', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', color: 'var(--text)', lineHeight: 1, fontFamily: 'var(--sans)' }}>
-              ＋
+            <button onClick={() => router.push('/rolepitch/start')} aria-label="Start a new pitch" style={{ fontSize: 12, padding: '7px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', color: 'var(--text)', lineHeight: 1, fontFamily: 'var(--sans)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>＋</span>
+              <span>Pitch</span>
             </button>
             {user && (
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0, cursor: 'pointer' }}
-                onClick={handleSignOut} title="Sign out">
+                onClick={() => setAccountSheet(true)} title="Account">
                 {(user.email || '?')[0].toUpperCase()}
               </div>
             )}
@@ -631,7 +633,92 @@ export default function RolePitchDashboard() {
           }}
         />
       )}
+
+      {accountSheet && (
+        <AccountSheet
+          user={user}
+          credits={credits}
+          planTier={planTier}
+          onClose={() => setAccountSheet(false)}
+          onSignOut={handleSignOut}
+        />
+      )}
     </>
+  );
+}
+
+function AccountSheet({ user, credits, planTier, onClose, onSignOut }) {
+  const email = user?.email || 'Signed in';
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Account"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 220,
+        background: 'oklch(0 0 0 / 0.45)',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: 14,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 'min(420px, 100%)',
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 18,
+          padding: 18,
+          boxShadow: '0 20px 60px oklch(0 0 0 / 0.24)',
+          animation: 'rp-fadeUp 0.22s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent-dim)', border: '1.5px solid var(--accent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+            {(email || '?')[0].toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Account</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close account menu" style={{ border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 22, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Credits</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 800 }}>{credits ?? '—'}</div>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Plan</div>
+            <div style={{ fontSize: 15, fontWeight: 800, textTransform: 'capitalize' }}>{planTier || 'free'}</div>
+          </div>
+        </div>
+
+        <button
+          onClick={onSignOut}
+          style={{
+            width: '100%',
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid oklch(0.65 0.2 30 / 0.25)',
+            background: 'oklch(0.65 0.2 30 / 0.08)',
+            color: 'oklch(0.55 0.18 30)',
+            cursor: 'pointer',
+            fontFamily: 'var(--sans)',
+            fontSize: 14,
+            fontWeight: 700,
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
   );
 }
 
