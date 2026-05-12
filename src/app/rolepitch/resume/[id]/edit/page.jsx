@@ -66,7 +66,8 @@ const CSS = `
   .rp-field { display: block; }
   .rp-label { display: block; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
   .rp-input, .rp-textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); color: var(--text); font: 14px var(--sans); outline: none; padding: 10px 12px; }
-  .rp-textarea { min-height: 120px; line-height: 1.55; resize: vertical; }
+  .rp-textarea { min-height: 120px; line-height: 1.55; resize: vertical; overflow: hidden; }
+  .rp-textarea-large { min-height: 220px; }
   .rp-input:focus, .rp-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
   .rp-input.error { border-color: var(--red); }
   .rp-error-text { margin-top: 5px; color: var(--red); font-size: 11.5px; font-weight: 600; }
@@ -75,7 +76,7 @@ const CSS = `
   .rp-bullets { display: flex; flex-direction: column; gap: 8px; }
   .rp-bullet { display: flex; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px; background: var(--paper); }
   .rp-bullet-num { color: var(--text-faint); font: 600 12px var(--mono); padding-top: 8px; width: 22px; flex-shrink: 0; }
-  .rp-bullet textarea { border: none; outline: none; background: transparent; color: var(--text); resize: none; width: 100%; min-height: 48px; line-height: 1.55; font: 13.5px var(--sans); }
+  .rp-bullet textarea { border: none; outline: none; background: transparent; color: var(--text); resize: vertical; width: 100%; min-height: 78px; line-height: 1.55; font: 13.5px var(--sans); overflow: hidden; }
   .rp-bullet-actions { display: flex; align-items: flex-start; }
   .rp-warning { display: flex; align-items: flex-start; gap: 10px; background: var(--amber-dim); border: 1px solid oklch(0.60 0.16 80 / 0.3); color: var(--text); border-radius: 11px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
   .rp-alert { display: flex; align-items: flex-start; gap: 10px; background: var(--red-dim); border: 1px solid oklch(0.60 0.18 28 / 0.3); border-radius: 11px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.5; }
@@ -105,7 +106,7 @@ const CSS = `
     .rp-mobile-tabs { display: flex; padding: 10px 14px 0; gap: 4px; }
     .rp-mobile-tabs button { flex: 1; border: 1px solid transparent; border-radius: 8px; padding: 9px 0; background: transparent; color: var(--text-muted); font: 700 13px var(--sans); }
     .rp-mobile-tabs button.active { background: var(--paper); color: var(--text); border-color: var(--border); }
-    .rp-editor-pane { display: block; padding: 14px 14px 112px; }
+    .rp-editor-pane { display: block; padding: 14px 14px 132px; }
     .rp-preview-pane { display: none; border-left: none; min-height: calc(100vh - 104px); }
     .rp-editor.mobile-preview .rp-editor-pane { display: none; }
     .rp-editor.mobile-preview .rp-preview-pane { display: flex; }
@@ -113,7 +114,12 @@ const CSS = `
     .rp-paper { width: 100%; max-width: 440px; transform-origin: top center; padding: 22px 24px; }
     .rp-role-head, .rp-grid { grid-template-columns: 1fr; }
     .rp-section-title { font-size: 17px; }
+    .rp-card, .rp-role { padding: 18px 16px !important; }
     .rp-input, .rp-textarea, .rp-bullet textarea { font-size: 16px; }
+    .rp-textarea { min-height: 260px; }
+    .rp-textarea-large { min-height: min(420px, 48vh); }
+    .rp-bullet { padding: 12px 10px; }
+    .rp-bullet textarea { min-height: 150px; }
     .rp-mobile-bottom { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 11px 14px calc(14px + env(safe-area-inset-bottom)); background: oklch(0.98 0.006 248 / .96); border-top: 1px solid var(--border-subtle); backdrop-filter: blur(12px); }
     .rp-mobile-bottom .rp-btn-primary { width: 100%; min-height: 48px; font-size: 14px; }
     .rp-mobile-hint { text-align: center; color: var(--text-muted); font-size: 11.5px; margin-bottom: 8px; }
@@ -140,6 +146,20 @@ function companyInitials(company) {
 
 function formatDateRange(role) {
   return [role.start_date, role.end_date].filter(Boolean).join(' - ');
+}
+
+function textRows(text, charsPerLine, minRows, maxRows) {
+  const lines = String(text || '').split('\n');
+  const visualRows = lines.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+  return Math.min(maxRows, Math.max(minRows, visualRows + 1));
+}
+
+function summaryRows(text) {
+  return textRows(text, 42, 8, 18);
+}
+
+function bulletRows(text) {
+  return textRows(text, 44, 5, 12);
 }
 
 function normalizeForState(resume) {
@@ -317,11 +337,8 @@ export default function ResumeEditPage() {
       const payload = trimResume(resume);
       const res = await fetch(`/api/rolepitch/tailored/${id}/edited`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(data?.updated_at ? { 'If-Unmodified-Since': data.updated_at } : {}),
-        },
-        body: JSON.stringify({ resume: payload, updated_at: data?.updated_at }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume: payload }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || json.error || 'Could not save edits');
@@ -479,7 +496,7 @@ function SummarySection({ resume, update }) {
       <h2 className="rp-section-title">Summary</h2>
       <p className="rp-section-sub">Keep it tight. Long summaries may push content to another line.</p>
       <div className="rp-card">
-        <label className="rp-field"><span className="rp-label">Professional summary</span><textarea className="rp-textarea" value={resume.summary} onChange={(e) => update({ summary: e.target.value })} /></label>
+        <label className="rp-field"><span className="rp-label">Professional summary</span><textarea className="rp-textarea rp-textarea-large" value={resume.summary} onChange={(e) => update({ summary: e.target.value })} rows={summaryRows(resume.summary)} /></label>
       </div>
     </section>
   );
@@ -514,7 +531,7 @@ function ExperienceSection({ resume, updateRole, updateBullet, setResume }) {
             {(role.bullets || []).map((bullet, bIdx) => (
               <div className="rp-bullet" key={bIdx}>
                 <div className="rp-bullet-num">{bIdx + 1}</div>
-                <textarea value={bullet.text || ''} onChange={(e) => updateBullet(idx, bIdx, e.target.value)} rows={Math.max(2, Math.ceil((bullet.text || '').length / 92))} />
+                <textarea value={bullet.text || ''} onChange={(e) => updateBullet(idx, bIdx, e.target.value)} rows={bulletRows(bullet.text)} />
                 <div className="rp-bullet-actions"><button className="rp-btn-text" title="Delete bullet" onClick={() => removeBullet(idx, bIdx)}>{icon('trash')}</button></div>
               </div>
             ))}

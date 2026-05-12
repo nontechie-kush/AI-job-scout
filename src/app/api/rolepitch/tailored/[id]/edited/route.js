@@ -175,16 +175,6 @@ export async function PUT(request, { params }) {
       }, { status: 503 });
     }
 
-    const currentUpdatedAt = loaded.tr.updated_at;
-    const ifUnmodifiedSince = request.headers.get('if-unmodified-since') || body.updated_at;
-    if (ifUnmodifiedSince && currentUpdatedAt && new Date(ifUnmodifiedSince).getTime() < new Date(currentUpdatedAt).getTime()) {
-      return NextResponse.json({
-        error: 'STALE_EDIT',
-        message: 'This resume was edited elsewhere. Reload to keep going.',
-        updated_at: currentUpdatedAt,
-      }, { status: 409 });
-    }
-
     const editedVersion = normalizeResume(body.resume, loaded.response.resume);
     const now = new Date().toISOString();
     const { data, error } = await supabase
