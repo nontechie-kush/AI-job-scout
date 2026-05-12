@@ -331,20 +331,12 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showLabels, setShowLabels] = useState(true);
-  const [dark, setDark] = useState(false);
+  const dark = false;
 
   useEffect(() => {
-    const theme = localStorage.getItem('rp_theme') || 'light';
-    setDark(theme === 'dark');
-    document.documentElement.setAttribute('data-rp-theme', theme);
+    document.documentElement.setAttribute('data-rp-theme', 'light');
+    localStorage.removeItem('rp_theme');
   }, []);
-
-  const toggleDark = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.setAttribute('data-rp-theme', next ? 'dark' : 'light');
-    localStorage.setItem('rp_theme', next ? 'dark' : 'light');
-  };
 
   useEffect(() => {
     fetch('/api/rolepitch/memory')
@@ -394,16 +386,6 @@ export default function MemoryPage() {
               borderRadius: 7, padding: '5px 12px', cursor: 'pointer',
               fontSize: 12, fontWeight: 600, fontFamily: 'var(--sans)',
             }}>Labels {showLabels ? 'on' : 'off'}</button>
-            <button onClick={toggleDark} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 8, width: 34, height: 34, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {dark
-                ? <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="3" stroke="var(--text)" strokeWidth="1.4"/><path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M3.1 3.1l1.06 1.06M10.84 10.84l1.06 1.06M3.1 11.9l1.06-1.06M10.84 4.16l1.06-1.06" stroke="var(--text)" strokeWidth="1.4" strokeLinecap="round"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.5 8.5A5.5 5.5 0 015.5 1.5a5.5 5.5 0 100 11 5.5 5.5 0 007-4z" stroke="var(--text)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              }
-            </button>
           </div>
         </div>
       </nav>

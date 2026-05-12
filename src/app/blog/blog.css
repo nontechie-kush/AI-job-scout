@@ -103,3 +103,19 @@
   .rp-blog .featured-grid { grid-template-columns: 1fr !important; }
   .rp-blog .related-grid { grid-template-columns: 1fr !important; }
 }
+
+@media (max-width: 640px) {
+  .rp-blog .blog-nav-links {
+    gap: 12px !important;
+  }
+
+  .rp-blog .blog-nav-links a[href="/rolepitch#how"],
+  .rp-blog .blog-nav-links a[href="/rolepitch#pricing"] {
+    display: none !important;
+  }
+
+  .rp-blog .blog-nav-divider,
+  .rp-blog .blog-nav-label {
+    display: none !important;
+  }
+}

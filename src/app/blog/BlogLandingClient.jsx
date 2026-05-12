@@ -16,13 +16,13 @@ function ReadingProgress() {
     return () => window.removeEventListener('scroll', h);
   }, []);
   return (
-    <div style={{ position: 'fixed', top: 56, left: 0, right: 0, zIndex: 99, height: 2, background: 'var(--border-subtle)' }}>
+    <div className="blog-reading-progress" style={{ position: 'fixed', top: 64, left: 0, right: 0, zIndex: 99, height: 2, background: 'var(--border-subtle)' }}>
       <div style={{ height: '100%', background: 'linear-gradient(90deg,var(--accent),var(--green))', width: `${pct}%`, transition: 'width 0.1s linear' }} />
     </div>
   );
 }
 
-function Nav({ dark, setDark }) {
+function Nav() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 10);
@@ -31,35 +31,27 @@ function Nav({ dark, setDark }) {
   }, []);
   return (
     <nav style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, padding: '0 24px',
-      background: scrolled ? (dark ? 'oklch(0.11 0.03 248/0.93)' : 'rgba(247,248,252,0.93)') : 'transparent',
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, padding: '0 16px',
+      background: scrolled ? 'rgba(247,248,252,0.96)' : 'rgba(247,248,252,0.88)',
       backdropFilter: scrolled ? 'blur(12px)' : 'none',
       borderBottom: `1px solid ${scrolled ? 'var(--border-subtle)' : 'transparent'}`,
       transition: 'all 0.3s',
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', height: 56, display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
         <Link href="/rolepitch" style={{ display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
-          <div style={{ width: 22, height: 22, background: 'var(--accent)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
           </div>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>RolePitch</span>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>RolePitch</span>
         </Link>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div className="blog-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <Link href="/blog" style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', borderBottom: '2px solid var(--accent)', paddingBottom: 2 }}>Blog</Link>
           <Link href="/rolepitch#how" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>How it works</Link>
           <Link href="/rolepitch#pricing" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>Pricing</Link>
-          <button onClick={() => setDark((d) => !d)} aria-label="Toggle theme" style={{
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
-            width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {dark
-              ? <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="3" stroke="currentColor" strokeWidth="1.4" /><path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M3.1 3.1l1.06 1.06M10.84 10.84l1.06 1.06M3.1 11.9l1.06-1.06M10.84 4.16l1.06-1.06" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-              : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.5 8.5A5.5 5.5 0 015.5 1.5a5.5 5.5 0 100 11 5.5 5.5 0 007-4z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-          </button>
-          <Link href="/rolepitch/start" style={{
-            background: 'var(--accent)', color: 'white', padding: '7px 16px', borderRadius: 8,
-            fontSize: 13, fontWeight: 600, textDecoration: 'none',
+          <Link href="/rolepitch/start?fresh=1" style={{
+            background: 'var(--accent)', color: 'white', padding: '10px 16px', borderRadius: 10,
+            fontSize: 14, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
           }}>Get Started</Link>
         </div>
       </div>
@@ -238,20 +230,14 @@ function Newsletter() {
 }
 
 export default function BlogLandingClient({ posts }) {
-  const [dark, setDark] = useState(false);
   const [activeTag, setActiveTag] = useState('All');
-
-  useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('rp_theme') : null;
-    if (stored === 'dark') setDark(true);
-  }, []);
 
   useEffect(() => {
     const root = document.querySelector('.rp-blog');
     if (!root) return;
-    root.setAttribute('data-theme', dark ? 'dark' : 'light');
-    localStorage.setItem('rp_theme', dark ? 'dark' : 'light');
-  }, [dark]);
+    root.setAttribute('data-theme', 'light');
+    localStorage.removeItem('rp_theme');
+  }, []);
 
   const ATS_SLUG = 'why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies';
   const featured = posts.find((p) => p.featured) || posts.find((p) => p.slug === ATS_SLUG) || posts[0];
@@ -262,21 +248,21 @@ export default function BlogLandingClient({ posts }) {
 
   return (
     <>
-      <Nav dark={dark} setDark={setDark} />
+      <Nav />
       <ReadingProgress />
 
       <section style={{
         paddingTop: 96, paddingBottom: 0, paddingLeft: 24, paddingRight: 24,
-        background: `linear-gradient(180deg, ${dark ? 'oklch(0.13 0.035 248)' : '#eef1fc'} 0%, var(--bg) 100%)`,
+        background: 'linear-gradient(180deg, #eef1fc 0%, var(--bg) 100%)',
         position: 'relative', overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(circle, ${dark ? 'rgba(79,110,247,0.07)' : 'rgba(79,110,247,0.06)'} 1px, transparent 1px)`, backgroundSize: '28px 28px', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, rgba(79,110,247,0.06) 1px, transparent 1px)', backgroundSize: '28px 28px', pointerEvents: 'none' }} />
         <div style={{ maxWidth: 1100, margin: '0 auto', position: 'relative', paddingBottom: 56 }}>
           <div className="fu" style={{ marginBottom: 40 }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: dark ? 'oklch(0.62 0.19 248/0.12)' : 'rgba(79,110,247,0.1)',
-              border: `1px solid ${dark ? 'oklch(0.62 0.19 248/0.25)' : 'rgba(79,110,247,0.2)'}`,
+              background: 'rgba(79,110,247,0.1)',
+              border: '1px solid rgba(79,110,247,0.2)',
               borderRadius: 20, padding: '5px 14px', marginBottom: 20,
             }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.03em' }}>The RolePitch Blog</span>
