@@ -25,15 +25,25 @@ export async function GET(request) {
     const service = createServiceClient();
 
     // One auth check — 3 parallel DB queries
-    const [resumesResult, critiquesResult, userResult] = await Promise.all([
-      service
-        .from('tailored_resumes')
-        .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
-        .eq('user_id', user.id)
-        .not('jd_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(50),
+    const resumesQuery = () => service
+      .from('tailored_resumes')
+      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, pipeline_version')
+      .eq('user_id', user.id)
+      .not('jd_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
 
+    const legacyResumesQuery = () => service
+      .from('tailored_resumes')
+      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
+      .eq('user_id', user.id)
+      .not('jd_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // One auth check — 3 parallel DB queries
+    let [resumesResult, critiquesResult, userResult] = await Promise.all([
+      resumesQuery(),
       service
         .from('rp_critiques')
         .select('id, name, target_context, critique_json, created_at, expires_at')
@@ -47,6 +57,10 @@ export async function GET(request) {
         .eq('id', user.id)
         .single(),
     ]);
+
+    if (resumesResult.error?.message?.includes('edited_version') || resumesResult.error?.message?.includes('edited_at')) {
+      resumesResult = await legacyResumesQuery();
+    }
 
     const resumes = resumesResult.data || [];
     const critiques = critiquesResult.data || [];
@@ -77,13 +91,14 @@ export async function GET(request) {
 
       shapedResumes = resumes.map(r => {
         const jd = jdMap.get(r.jd_id) || {};
-        const exp = r.tailored_version?.experience || [];
+        const effectiveVersion = r.edited_version || r.tailored_version || {};
+        const exp = effectiveVersion.experience || [];
         const bulletsRewritten = exp.reduce((n, role) => n + (role.bullets || []).length, 0);
 
         let beforeScore, afterScore, highlightsUsed;
         if (r.pipeline_version === 'rolepitch-v1' || r.pipeline_version === 'rolepitch-draft-v1') {
-          beforeScore = r.tailored_version?.before_score || 55;
-          afterScore = r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
+          beforeScore = effectiveVersion.before_score || r.tailored_version?.before_score || 55;
+          afterScore = effectiveVersion.after_score || r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
           highlightsUsed = bulletsRewritten;
         } else {
           beforeScore = r.resume_strength || 63;
@@ -102,6 +117,8 @@ export async function GET(request) {
           after_score: afterScore,
           highlights_used: highlightsUsed,
           bullets_rewritten: bulletsRewritten,
+          has_edits: !!r.edited_version,
+          edited_at: r.edited_at,
         };
       });
     }

@@ -88,6 +88,7 @@ export default function ResumeDetailPage() {
   const [tab, setTab] = useState('after');
   const [showAnswers, setShowAnswers] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showEditPrompt, setShowEditPrompt] = useState(false);
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
@@ -100,11 +101,11 @@ export default function ResumeDetailPage() {
   }, [id]);
 
   const handleDownload = () => {
-    // The /api/rolepitch/download-pdf route returns HTML with an embedded
-    // window.print() trigger — opening in a new tab lets the browser render
-    // it and pop the native "Save as PDF" dialog.
+    // Direct download; the server returns attachment headers and handles
+    // layout-missing fallback without a blocking probe.
     setDownloading(true);
     window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, '_blank');
+    setShowEditPrompt(true);
     setTimeout(() => setDownloading(false), 1200);
   };
 
@@ -144,18 +145,23 @@ export default function ResumeDetailPage() {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2L4 7l6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             All pitches
           </button>
-          <button
-            className="rp-btn-primary"
-            onClick={handleDownload}
-            disabled={downloading}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 20px' }}
-          >
-            {downloading
-              ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
-              : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 9V2M4 6.5l3 3 3-3M2 12h10" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            }
-            Download PDF
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="rp-btn-ghost" onClick={() => router.push(`/rolepitch/resume/${id}/edit`)} style={{ padding: '9px 16px' }}>
+              Edit
+            </button>
+            <button
+              className="rp-btn-primary"
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 20px' }}
+            >
+              {downloading
+                ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 9V2M4 6.5l3 3 3-3M2 12h10" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              }
+              Download PDF
+            </button>
+          </div>
         </div>
 
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '36px 24px' }}>
@@ -168,6 +174,11 @@ export default function ResumeDetailPage() {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {data.jd?.company && <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{data.jd.company}</span>}
               <span style={{ fontSize: 12, color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{formatDate(new Date().toISOString())}</span>
+              {data.has_edits && (
+                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 999, padding: '3px 9px' }}>
+                  Edited
+                </span>
+              )}
             </div>
           </div>
 
@@ -228,6 +239,16 @@ export default function ResumeDetailPage() {
                 </p>
               </div>
             )}
+
+            {data.has_edits && (
+              <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, color: 'var(--green)' }}>This version includes your edits.</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>Download uses the edited copy while keeping the original tailored version in history.</div>
+                </div>
+                <button className="rp-btn-ghost" onClick={() => router.push(`/rolepitch/resume/${id}/edit`)}>Edit again</button>
+              </div>
+            )}
           </div>
 
           {/* Before / After resume */}
@@ -237,7 +258,7 @@ export default function ResumeDetailPage() {
                 <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 8, padding: 3, border: '1px solid var(--border-subtle)' }}>
                   {['before', 'after'].map(t => (
                     <button key={t} onClick={() => setTab(t)} style={{ padding: '6px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 600, background: tab === t ? (t === 'after' ? 'var(--green)' : 'var(--surface2)') : 'transparent', color: tab === t ? (t === 'after' ? 'white' : 'var(--text)') : 'var(--text-muted)', transition: 'all 0.2s' }}>
-                      {t === 'after' ? 'After — tailored' : 'Before — original'}
+                      {t === 'after' ? (data.has_edits ? 'After — edited' : 'After — tailored') : 'Before — original'}
                     </button>
                   ))}
                 </div>
@@ -291,6 +312,42 @@ export default function ResumeDetailPage() {
           </div>
         </div>
       </div>
+      {showEditPrompt && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            right: 18,
+            bottom: 18,
+            zIndex: 180,
+            width: 'min(380px, calc(100vw - 28px))',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 14,
+            boxShadow: '0 16px 44px oklch(0 0 0 / 0.18)',
+            padding: 16,
+            animation: 'rp-fadeUp 0.25s ease',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Need to change a line?</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>Edit the saved resume here, then download a rebuilt PDF with the same layout flow.</div>
+            </div>
+            <button
+              onClick={() => setShowEditPrompt(false)}
+              aria-label="Close"
+              style={{ border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+            <button className="rp-btn-ghost" style={{ fontSize: 12, padding: '8px 12px' }} onClick={() => setShowEditPrompt(false)}>Later</button>
+            <button className="rp-btn-primary" style={{ fontSize: 12, padding: '8px 13px' }} onClick={() => router.push(`/rolepitch/resume/${id}/edit`)}>Edit this resume</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

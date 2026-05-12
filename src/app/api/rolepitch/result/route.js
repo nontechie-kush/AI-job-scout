@@ -75,12 +75,23 @@ export async function GET(request) {
     }
 
     // ── Load tailored resume ──────────────────────────────────────────
-    const { data: tr, error: trErr } = await supabase
+    let { data: tr, error: trErr } = await supabase
       .from('tailored_resumes')
-      .select('id, user_id, jd_id, match_id, base_version, tailored_version, selected_atom_ids, resume_strength, pipeline_version')
+      .select('id, user_id, jd_id, match_id, base_version, tailored_version, edited_version, edited_at, selected_atom_ids, resume_strength, pipeline_version')
       .eq('id', tailoredResumeId)
       .eq('user_id', user.id)
       .maybeSingle();
+
+    if (trErr?.message?.includes('edited_version') || trErr?.message?.includes('edited_at')) {
+      const legacy = await supabase
+        .from('tailored_resumes')
+        .select('id, user_id, jd_id, match_id, base_version, tailored_version, selected_atom_ids, resume_strength, pipeline_version')
+        .eq('id', tailoredResumeId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      tr = legacy.data;
+      trErr = legacy.error;
+    }
 
     if (trErr || !tr) {
       return NextResponse.json({ error: 'Tailored resume not found' }, { status: 404 });
@@ -108,7 +119,8 @@ export async function GET(request) {
 
     // ── Build bullets_by_role diff ────────────────────────────────────
     const base = tr.base_version?.experience || [];
-    const tailored = tr.tailored_version?.experience || [];
+    const effectiveVersion = tr.edited_version || tr.tailored_version || {};
+    const tailored = effectiveVersion.experience || [];
 
     const bulletsByRole = base.map((baseRole) => {
       const tailoredRole = tailored.find(
@@ -144,10 +156,10 @@ export async function GET(request) {
 
     // ── Score calculation ─────────────────────────────────────────────
     let beforeScore, afterScore;
-    if (tr.pipeline_version === 'rolepitch-v1') {
+    if (tr.pipeline_version === 'rolepitch-v1' || tr.pipeline_version === 'rolepitch-draft-v1') {
       // RolePitch stores scores inside tailored_version JSON
-      beforeScore = tr.tailored_version?.before_score || tr.resume_strength || 63;
-      afterScore = tr.tailored_version?.after_score || beforeScore;
+      beforeScore = effectiveVersion.before_score || tr.tailored_version?.before_score || tr.resume_strength || 63;
+      afterScore = effectiveVersion.after_score || tr.tailored_version?.after_score || beforeScore;
     } else {
       beforeScore = tr.resume_strength || 63;
       const usageRatio = stats.total_achievements > 0
@@ -186,6 +198,8 @@ export async function GET(request) {
       gap_questions: gapQuestions,
       stats,
       auto_tailored: isAutoTailored,
+      has_edits: !!tr.edited_version,
+      edited_at: tr.edited_at,
       source_label: tr.tailored_version?.source_label || null,
       source_mode: tr.tailored_version?.source_mode || null,
     });

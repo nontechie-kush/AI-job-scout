@@ -48,10 +48,10 @@ export async function GET(request) {
     const tailoredResumeId = searchParams.get('tailored_resume_id');
     if (!tailoredResumeId) return NextResponse.json({ error: 'tailored_resume_id required' }, { status: 400 });
 
-    const [{ data: tr, error: trErr }, { data: profileRow }] = await Promise.all([
+    let [{ data: tr, error: trErr }, { data: profileRow }] = await Promise.all([
       supabase
         .from('tailored_resumes')
-        .select('tailored_version, base_version, jd_id, match_id, tailored_html')
+        .select('tailored_version, edited_version, base_version, jd_id, match_id, tailored_html')
         .eq('id', tailoredResumeId)
         .eq('user_id', user.id)
         .maybeSingle(),
@@ -63,12 +63,23 @@ export async function GET(request) {
         .maybeSingle(),
     ]);
 
+    if (trErr?.message?.includes('edited_version')) {
+      const legacy = await supabase
+        .from('tailored_resumes')
+        .select('tailored_version, base_version, jd_id, match_id, tailored_html')
+        .eq('id', tailoredResumeId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      tr = legacy.data;
+      trErr = legacy.error;
+    }
+
     if (trErr || !tr) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
     if (tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
       const cachedFilename = makeSafeFilename(
-        (tr.tailored_version?.name || tr.base_version?.name || ''),
+        (tr.edited_version?.name || tr.tailored_version?.name || tr.base_version?.name || ''),
         '',
       );
       return new Response(tr.tailored_html, {
@@ -140,7 +151,7 @@ export async function GET(request) {
       jdDescription = (jd?.description || '').slice(0, 3000);
     }
 
-    const tv = tr.tailored_version || {};
+    const tv = tr.edited_version || tr.tailored_version || {};
     const bv = tr.base_version || {};
 
     // Resolve name/contact — tailored_version → base_version → profile fallback

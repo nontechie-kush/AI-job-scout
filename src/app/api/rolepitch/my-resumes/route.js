@@ -19,13 +19,25 @@ export async function GET(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { data: resumes, error } = await supabase
+    let { data: resumes, error } = await supabase
       .from('tailored_resumes')
-      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
+      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, pipeline_version')
       .eq('user_id', user.id)
       .not('jd_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(50);
+
+    if (error?.message?.includes('edited_version') || error?.message?.includes('edited_at')) {
+      const legacy = await supabase
+        .from('tailored_resumes')
+        .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
+        .eq('user_id', user.id)
+        .not('jd_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      resumes = legacy.data;
+      error = legacy.error;
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!resumes?.length) return NextResponse.json({ resumes: [] });
@@ -54,14 +66,15 @@ export async function GET(request) {
 
     const result = resumes.map(r => {
       const jd = jdMap.get(r.jd_id) || {};
-      const exp = r.tailored_version?.experience || [];
+      const effectiveVersion = r.edited_version || r.tailored_version || {};
+      const exp = effectiveVersion.experience || [];
       const bulletsRewritten = exp.reduce((n, role) => n + (role.bullets || []).length, 0);
 
       // rolepitch-v1 and rolepitch-draft-v1 rows store real scores inside tailored_version
       let beforeScore, afterScore, highlightsUsed;
       if (r.pipeline_version === 'rolepitch-v1' || r.pipeline_version === 'rolepitch-draft-v1') {
-        beforeScore = r.tailored_version?.before_score || 55;
-        afterScore = r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
+        beforeScore = effectiveVersion.before_score || r.tailored_version?.before_score || 55;
+        afterScore = effectiveVersion.after_score || r.tailored_version?.after_score || Math.min(beforeScore + 18, 90);
         highlightsUsed = bulletsRewritten;
       } else {
         beforeScore = r.resume_strength || 63;
@@ -80,6 +93,8 @@ export async function GET(request) {
         after_score: afterScore,
         highlights_used: highlightsUsed,
         bullets_rewritten: bulletsRewritten,
+        has_edits: !!r.edited_version,
+        edited_at: r.edited_at,
       };
     });
 

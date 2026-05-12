@@ -172,6 +172,7 @@ export default function RolePitchDashboard() {
   const [planTier, setPlanTier] = useState('free');
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [welcome, setWelcome] = useState(null); // { granted, total }
+  const [downloadPrompt, setDownloadPrompt] = useState(null);
 
   const fetchCredits = () => {
     fetch('/api/rolepitch/credits')
@@ -241,8 +242,8 @@ export default function RolePitchDashboard() {
 
     // Belt-and-suspenders: try to claim any pending draft on dashboard mount.
     // Catches the case where auth-page claim was interrupted by user navigation,
-    // mobile tab eviction, or transient errors. Recency fallback inside
-    // claim-draft finds the user's most recent unclaimed draft.
+    // mobile tab eviction, or transient errors. claim-draft must only claim by
+    // explicit draft_id or email; never re-add the old recency fallback.
     {
       let pendingDraftId = null;
       try { pendingDraftId = localStorage.getItem('rp_draft_id') || null; } catch {}
@@ -307,6 +308,7 @@ export default function RolePitchDashboard() {
     // destination without us blocking on a probe call. window.open must run
     // synchronously inside the click handler or mobile browsers swallow it.
     window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
+    if (resume) setDownloadPrompt(resume);
     // Brief click-feedback flash, then reset so the spinner doesn't hang.
     setTimeout(() => setDownloading(null), 1500);
   };
@@ -429,6 +431,11 @@ export default function RolePitchDashboard() {
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.jd.company && <span>{r.jd.company} · </span>}
                           <span>{formatDate(r.created_at)}</span>
+                          {r.has_edits && (
+                            <span style={{ marginLeft: 6, color: 'var(--green)', fontWeight: 700 }}>
+                              · Edited
+                            </span>
+                          )}
                         </div>
                       </div>
                       {/* Score badge — visible on desktop, hidden on mobile (shown inline below) */}
@@ -451,13 +458,19 @@ export default function RolePitchDashboard() {
                         ))}
                       </div>
                       <div style={{ flex: 1 }} />
-                      {/* Desktop: ghost View + primary PDF side by side */}
+                      {/* Desktop: View/Edit + primary PDF side by side */}
                       <div className="rp-card-actions rp-pitch-desktop-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                         <button
                           onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
                           style={{ fontSize: 12, padding: '8px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--sans)', minHeight: 36 }}
                         >
                           View
+                        </button>
+                        <button
+                          onClick={() => router.push(`/rolepitch/resume/${r.id}/edit`)}
+                          style={{ fontSize: 12, padding: '8px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--sans)', minHeight: 36 }}
+                        >
+                          Edit
                         </button>
                         <button
                           className="rp-btn-primary"
@@ -480,12 +493,20 @@ export default function RolePitchDashboard() {
                         <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: sc, background: `${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.1)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.1)' : 'oklch(0.65 0.2 30 / 0.1)'}`, padding: '3px 10px', borderRadius: 6, border: `1px solid ${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.25)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.25)' : 'oklch(0.65 0.2 30 / 0.25)'}` }}>
                           {afterScore}% match
                         </span>
-                        <button
-                          onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', padding: '3px 0', fontFamily: 'var(--sans)', textDecoration: 'underline', textUnderlineOffset: 2 }}
-                        >
-                          View
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <button
+                            onClick={() => router.push(`/rolepitch/resume/${r.id}`)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', padding: '3px 0', fontFamily: 'var(--sans)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => router.push(`/rolepitch/resume/${r.id}/edit`)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', padding: '3px 0', fontFamily: 'var(--sans)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
                       <button
                         className="rp-btn-primary"
@@ -559,7 +580,65 @@ export default function RolePitchDashboard() {
           onCritique={() => { setWelcome(null); router.push('/rolepitch/critique'); }}
         />
       )}
+
+      {downloadPrompt && (
+        <DownloadEditPrompt
+          resume={downloadPrompt}
+          onClose={() => setDownloadPrompt(null)}
+          onEdit={() => {
+            const resumeId = downloadPrompt.id;
+            setDownloadPrompt(null);
+            router.push(`/rolepitch/resume/${resumeId}/edit`);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function DownloadEditPrompt({ resume, onClose, onEdit }) {
+  useEffect(() => {
+    const id = setTimeout(onClose, 9000);
+    return () => clearTimeout(id);
+  }, [onClose]);
+
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        right: 18,
+        bottom: 18,
+        zIndex: 180,
+        width: 'min(380px, calc(100vw - 28px))',
+        background: 'var(--bg)',
+        border: '1px solid var(--border)',
+        borderRadius: 14,
+        boxShadow: '0 16px 44px oklch(0 0 0 / 0.18)',
+        padding: 16,
+        animation: 'rp-fadeUp 0.25s ease',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Review the PDF, then tweak it here</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {resume?.jd?.title || 'This resume'} is ready. If you spot a number, phrase, or bullet you want to change, use the editor and download the updated PDF.
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{ border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}
+        >
+          ×
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+        <button className="rp-btn-ghost" style={{ fontSize: 12, padding: '8px 12px' }} onClick={onClose}>Later</button>
+        <button className="rp-btn-primary" style={{ fontSize: 12, padding: '8px 13px' }} onClick={onEdit}>Edit this resume</button>
+      </div>
+    </div>
   );
 }
 
