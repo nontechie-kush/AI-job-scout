@@ -335,6 +335,22 @@ function ProgressBar({ step, total, onHome }) {
   );
 }
 
+function downloadBlobFromResponse(res, fallbackName = 'RolePitch_resume.pdf') {
+  return res.blob().then((blob) => {
+    const disposition = res.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] || fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  });
+}
+
 // ── Link source label helper ───────────────────────────────────────────────────
 function linkLabel(url) {
   if (url.includes('linkedin.com')) return 'LinkedIn';
@@ -2587,15 +2603,21 @@ function StepFinalOutput({ onBack, onHome, onTailorAnother, dir }) {
 function StepReturningDone({ onTailorAnother, dir }) {
   const router = useRouter();
   const [saving, setSaving] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [savedId, setSavedId] = useState(null);
   const [score, setScore] = useState(null);
+  const [beforeScore, setBeforeScore] = useState(null);
   const [jdLabel, setJdLabel] = useState('');
   const [noCredits, setNoCredits] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     const session = loadSession();
     const tr = session.tailoredResult;
-    if (tr) setScore(tr.after_score || 78);
+    if (tr) {
+      setScore(tr.after_score || 78);
+      setBeforeScore(tr.before_score || null);
+    }
     setJdLabel(session.jdTitle || '');
 
     fetch('/api/rolepitch/save-resume', {
@@ -2617,12 +2639,41 @@ function StepReturningDone({ onTailorAnother, dir }) {
       .finally(() => setSaving(false));
   }, []);
 
+  const handleDownload = async () => {
+    if (!savedId) return;
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${savedId}`, {
+        headers: { Accept: 'text/html,application/json' },
+      });
+      if (res.redirected && res.url.includes('/rolepitch/start')) {
+        window.location.href = res.url;
+        return;
+      }
+      if (!res.ok) throw new Error('Could not prepare PDF');
+      await downloadBlobFromResponse(res);
+    } catch (e) {
+      setDownloadError(e.message || 'Could not prepare PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const improvement = beforeScore && score ? Math.max(0, score - beforeScore) : null;
+
   return (
     <div className={dir === 1 ? 'rp-anim-in' : 'rp-anim-in-left'} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 28 }}>
       <div style={{ textAlign: 'center', maxWidth: 420 }}>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--green)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>Done</div>
         {score && <div style={{ fontSize: 52, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--green)', letterSpacing: '-0.04em', marginBottom: 6, lineHeight: 1 }}>{score}%</div>}
         {score && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>match score</div>}
+        {improvement ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--green)', background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 999, padding: '5px 10px', fontSize: 12, fontWeight: 700, marginBottom: 14 }}>
+            <span>{beforeScore}% → {score}%</span>
+            <span>+{improvement}% improvement</span>
+          </div>
+        ) : null}
         <h2 style={{ fontSize: 'clamp(22px,2.5vw,30px)', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: 8 }}>Your resume is tailored</h2>
         {jdLabel && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>For <strong style={{ color: 'var(--text)' }}>{jdLabel}</strong></p>}
       </div>
@@ -2632,11 +2683,25 @@ function StepReturningDone({ onTailorAnother, dir }) {
           <button
             className="rp-btn-primary"
             style={{ width: '100%', padding: 14, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            onClick={() => window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${savedId}`, '_blank')}
+            onClick={handleDownload}
+            disabled={downloading}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 7l3 3 3-3M3 13h10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            Download PDF
+            {downloading
+              ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+              : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 7l3 3 3-3M3 13h10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            }
+            {downloading ? 'Preparing PDF...' : 'Download PDF'}
           </button>
+        )}
+        {savedId && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, textAlign: 'center' }}>
+            Review the PDF first. If you spot a number, phrase, or bullet to change, use <button onClick={() => router.push(`/rolepitch/resume/${savedId}/edit`)} style={{ border: 'none', background: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 700, padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}>Edit this resume</button>.
+          </div>
+        )}
+        {downloadError && (
+          <div style={{ fontSize: 12, color: 'oklch(0.55 0.18 28)', background: 'oklch(0.96 0.04 28)', border: '1px solid oklch(0.82 0.09 28)', borderRadius: 9, padding: '9px 11px', textAlign: 'center' }}>
+            {downloadError}
+          </div>
         )}
         <button
           className={savedId ? 'rp-btn-ghost' : 'rp-btn-primary'}
@@ -3071,22 +3136,42 @@ function RolePitchStartInner() {
           </div>
         )}
         {isReturning ? (
-          // Returning users: minimal nav with back-to-dashboard link.
-          // Sticky so it stays pinned while the page scrolls.
-          <div className="rp-sticky-header" style={{ padding: '16px 32px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <button onClick={() => router.push('/rolepitch/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 0 }}>
-              <div style={{ width: 22, height: 22, background: 'var(--accent)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
+          // Returning users: keep the progress rail below the brand on mobile
+          // so it never collides with the RolePitch wordmark.
+          isMobile ? (
+            <div className="rp-sticky-header" style={{ padding: '10px 16px 10px', borderBottom: '1px solid var(--rp-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <button onClick={() => router.push('/rolepitch/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rp-text)', padding: 0, flexShrink: 0 }}>
+                  <div style={{ width: 26, height: 26, background: 'var(--rp-primary)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>RolePitch</span>
+                </button>
+                <div style={{ flex: 1 }} />
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--rp-muted)', flexShrink: 0 }}>{step + 1} of {TOTAL_RETURNING}</span>
               </div>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>RolePitch</span>
-            </button>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {Array.from({ length: TOTAL_RETURNING }).map((_, i) => (
-                <div key={i} style={{ height: 3, width: 48, borderRadius: 2, background: i < step ? 'var(--accent)' : i === step ? 'var(--border)' : 'var(--border-subtle)', transition: 'background 0.3s' }} />
-              ))}
+              <div style={{ display: 'flex', gap: 7, marginTop: 10, paddingLeft: 35 }}>
+                {Array.from({ length: TOTAL_RETURNING }).map((_, i) => (
+                  <div key={i} style={{ height: 4, flex: 1, borderRadius: 3, background: i <= step ? 'var(--rp-primary)' : 'var(--rp-border)', opacity: i <= step ? 1 : 0.45, transition: 'background 0.3s' }} />
+                ))}
+              </div>
             </div>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{step + 1}/{TOTAL_RETURNING}</span>
-          </div>
+          ) : (
+            <div className="rp-sticky-header" style={{ padding: '16px 32px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button onClick={() => router.push('/rolepitch/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 0 }}>
+                <div style={{ width: 22, height: 22, background: 'var(--accent)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                </div>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>RolePitch</span>
+              </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {Array.from({ length: TOTAL_RETURNING }).map((_, i) => (
+                  <div key={i} style={{ height: 3, width: 48, borderRadius: 2, background: i < step ? 'var(--accent)' : i === step ? 'var(--border)' : 'var(--border-subtle)', transition: 'background 0.3s' }} />
+                ))}
+              </div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{step + 1}/{TOTAL_RETURNING}</span>
+            </div>
+          )
         ) : (
           // ProgressBar is rendered inline; we wrap it so it sticks at top while
           // the body of the page scrolls naturally.

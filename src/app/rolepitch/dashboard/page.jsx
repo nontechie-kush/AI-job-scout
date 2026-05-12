@@ -450,6 +450,7 @@ export default function RolePitchDashboard() {
                   {resumes.map((r, i) => {
                 const color = companyColor(r.jd.company);
                 const afterScore = r.after_score || 0;
+                const improvement = Math.max(0, afterScore - (r.before_score || 0));
                 const sc = scoreColor(afterScore);
                 return (
                   <div key={r.id} className="rp-card" style={{ animation: `rp-fadeUp 0.35s ${i * 0.05}s ease both` }}>
@@ -463,11 +464,6 @@ export default function RolePitchDashboard() {
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.jd.company && <span>{r.jd.company} · </span>}
                           <span>{formatDate(r.created_at)}</span>
-                          {r.has_edits && (
-                            <span style={{ marginLeft: 6, color: 'var(--green)', fontWeight: 700 }}>
-                              · {downloadLabel(r) || 'Edited'}
-                            </span>
-                          )}
                         </div>
                       </div>
                       {/* Score badge — visible on desktop, hidden on mobile (shown inline below) */}
@@ -525,9 +521,16 @@ export default function RolePitchDashboard() {
                     {/* Mobile-only action row: score pill + full-width PDF + text View */}
                     <div className="rp-pitch-mobile-actions" style={{ display: 'none', flexDirection: 'column', gap: 8, marginTop: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: sc, background: `${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.1)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.1)' : 'oklch(0.65 0.2 30 / 0.1)'}`, padding: '3px 10px', borderRadius: 6, border: `1px solid ${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.25)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.25)' : 'oklch(0.65 0.2 30 / 0.25)'}` }}>
-                          {afterScore}% match
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: sc, background: `${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.1)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.1)' : 'oklch(0.65 0.2 30 / 0.1)'}`, padding: '3px 10px', borderRadius: 6, border: `1px solid ${sc === 'var(--green)' ? 'oklch(0.55 0.17 155 / 0.25)' : sc === 'var(--amber)' ? 'oklch(0.60 0.16 80 / 0.25)' : 'oklch(0.65 0.2 30 / 0.25)'}` }}>
+                            {afterScore}% match
+                          </span>
+                          {improvement > 0 && (
+                            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, color: 'var(--green)', background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.22)', borderRadius: 999, padding: '3px 8px' }}>
+                              +{improvement}%
+                            </span>
+                          )}
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <button
                             onClick={() => router.push(`/rolepitch/resume/${r.id}`)}

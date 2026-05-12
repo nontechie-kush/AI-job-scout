@@ -79,6 +79,21 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+async function downloadBlobFromResponse(res, fallbackName = 'RolePitch_resume.pdf') {
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const filename = match?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 export default function ResumeDetailPage() {
   const router = useRouter();
   const { id } = useParams();
@@ -89,6 +104,7 @@ export default function ResumeDetailPage() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showEditPrompt, setShowEditPrompt] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     const theme = localStorage.getItem('rp_theme') || 'light';
@@ -100,13 +116,25 @@ export default function ResumeDetailPage() {
       .catch(e => { setError(e.message); setLoading(false); });
   }, [id]);
 
-  const handleDownload = () => {
-    // Direct download; the server returns attachment headers and handles
-    // layout-missing fallback without a blocking probe.
+  const handleDownload = async () => {
     setDownloading(true);
-    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, '_blank');
-    setShowEditPrompt(true);
-    setTimeout(() => setDownloading(false), 1200);
+    setDownloadError('');
+    try {
+      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${id}`, {
+        headers: { Accept: 'text/html,application/json' },
+      });
+      if (res.redirected && res.url.includes('/rolepitch/start')) {
+        window.location.href = res.url;
+        return;
+      }
+      if (!res.ok) throw new Error('Could not prepare PDF');
+      await downloadBlobFromResponse(res);
+      if (!data?.has_edits) setShowEditPrompt(true);
+    } catch (e) {
+      setDownloadError(e.message || 'Could not prepare PDF');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (loading) return (
@@ -133,6 +161,7 @@ export default function ResumeDetailPage() {
   const displayRole = data.bullets_by_role?.find(r => r.before?.length && r.after?.length) || data.bullets_by_role?.[0];
   const beforeScore = data.before_score;
   const afterScore = data.after_score;
+  const improvement = Math.max(0, (afterScore || 0) - (beforeScore || 0));
 
   return (
     <>
@@ -159,7 +188,7 @@ export default function ResumeDetailPage() {
                 ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
                 : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 9V2M4 6.5l3 3 3-3M2 12h10" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               }
-              Download PDF
+              {downloading ? 'Preparing PDF...' : 'Download PDF'}
             </button>
           </div>
         </div>
@@ -181,12 +210,22 @@ export default function ResumeDetailPage() {
               )}
             </div>
           </div>
+          {downloadError && (
+            <div style={{ marginBottom: 18, background: 'oklch(0.96 0.04 28)', border: '1px solid oklch(0.82 0.09 28)', borderRadius: 10, padding: '10px 12px', color: 'oklch(0.48 0.16 28)', fontSize: 13 }}>
+              {downloadError}
+            </div>
+          )}
 
           {/* Score + stats row */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32, animation: 'rp-fadeUp 0.35s 0.05s ease both' }}>
             {/* Score card */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <ScoreBar before={beforeScore} after={afterScore} />
+              {improvement > 0 && (
+                <div style={{ alignSelf: 'center', color: 'var(--green)', background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.25)', borderRadius: 999, padding: '5px 11px', fontSize: 12, fontWeight: 700 }}>
+                  +{improvement}% improvement after RolePitch
+                </div>
+              )}
               <div style={{ height: 1, background: 'var(--border-subtle)' }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center' }}>
                 {[
@@ -247,6 +286,15 @@ export default function ResumeDetailPage() {
                   <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>Download uses the edited copy while keeping the original tailored version in history.</div>
                 </div>
                 <button className="rp-btn-ghost" onClick={() => router.push(`/rolepitch/resume/${id}/edit`)}>Edit again</button>
+              </div>
+            )}
+            {!data.has_edits && (
+              <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, color: 'var(--accent)' }}>Review first, then tweak here.</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>After downloading, you can edit any number, phrase, bullet, role, or skill and rebuild the PDF.</div>
+                </div>
+                <button className="rp-btn-ghost" onClick={() => router.push(`/rolepitch/resume/${id}/edit`)}>Edit this resume</button>
               </div>
             )}
           </div>
