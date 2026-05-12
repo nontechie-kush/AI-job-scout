@@ -28,6 +28,7 @@ import { createServiceClient } from '@/lib/supabase/service-client';
 import { renderTailoredHtml } from '@/lib/ai/render-tailored-html';
 import { renderEditedResumeHtml } from '@/lib/ai/render-edited-resume-html';
 import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
+import { htmlToPdf } from '@/lib/pdf-service';
 
 // Detects HTML from buildFastHtml() — fast template uses Georgia + a known
 // page-padding signature. Anything else (vision-merged, Times New Roman,
@@ -61,6 +62,17 @@ function withCacheMarker(html, key) {
 
 function hasCacheMarker(html, key) {
   return typeof html === 'string' && html.startsWith(`<!-- rolepitch-cache-key:${key} -->`);
+}
+
+async function pdfAttachmentResponse(html, filename) {
+  const pdfBuffer = await htmlToPdf(html, { format: 'Letter' });
+  return new Response(pdfBuffer, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}.pdf"`,
+      'Cache-Control': 'no-store',
+    },
+  });
 }
 
 export async function GET(request) {
@@ -145,12 +157,7 @@ export async function GET(request) {
       const cacheIsCurrent = hasCacheMarker(tr.tailored_html, cacheKey);
       if (cacheIsCurrent && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
         const cachedFilename = makeSafeFilename(mergedResume.name, jdTitle);
-        return new Response(tr.tailored_html, {
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Content-Disposition': `attachment; filename="${cachedFilename}.pdf"`,
-          },
-        });
+        return pdfAttachmentResponse(tr.tailored_html, cachedFilename);
       }
 
       const renderedHtml = renderEditedResumeHtml({ resume: mergedResume, jobTitle: jdTitle });
@@ -166,12 +173,7 @@ export async function GET(request) {
       }
 
       const filename = makeSafeFilename(mergedResume.name, jdTitle);
-      return new Response(finalHtml, {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${filename}.pdf"`,
-        },
-      });
+      return pdfAttachmentResponse(finalHtml, filename);
     }
 
     // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
@@ -180,12 +182,7 @@ export async function GET(request) {
         (tr.tailored_version?.name || tr.base_version?.name || ''),
         jdTitle,
       );
-      return new Response(tr.tailored_html, {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${cachedFilename}.pdf"`,
-        },
-      });
+      return pdfAttachmentResponse(tr.tailored_html, cachedFilename);
     }
 
     // ── Try to recover original_html if missing but a PDF is on file ──
@@ -261,12 +258,7 @@ export async function GET(request) {
 
     const filename = makeSafeFilename(mergedResume.name, jdTitle);
 
-    return new Response(finalHtml, {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}.pdf"`,
-      },
-    });
+    return pdfAttachmentResponse(finalHtml, filename);
   } catch (err) {
     console.error('[download-pdf]', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

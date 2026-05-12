@@ -123,6 +123,28 @@ async function ensureRolePitchUser(service, user, rid) {
   return { pitch_credits: 5, plan_tier: 'free' };
 }
 
+async function findExistingTailoredResumeForDraft(service, userId, draftId, rid) {
+  if (!draftId) return null;
+  const { data, error } = await service
+    .from('tailored_resumes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('tailored_version->>source_draft_id', draftId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`[rolepitch/claim-draft ${rid}] idempotency check failed`, {
+      draft_id: draftId,
+      message: error.message,
+      code: error.code,
+    });
+    return null;
+  }
+  return data || null;
+}
+
 export async function POST(request) {
   const rid = makeRid();
   const t0 = Date.now();
@@ -240,6 +262,27 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Draft owned by another user', rid }, { status: 403 });
     }
 
+    // Idempotency guard: a stale rp_draft_id can survive in localStorage and
+    // dashboard/auth recovery may call this route again. If the draft has
+    // already produced a tailored_resume for this user, return it without
+    // inserting a duplicate row or deducting another credit.
+    const existingTailoredResume = await findExistingTailoredResumeForDraft(service, user.id, draft.id, rid);
+    if (existingTailoredResume?.id) {
+      const u = await ensureRolePitchUser(service, user, rid).catch(() => null);
+      console.log(`[rolepitch/claim-draft ${rid}] draft already promoted`, {
+        draft_id: draft.id,
+        tailored_resume_id: existingTailoredResume.id,
+      });
+      return NextResponse.json({
+        claimed: true,
+        has_tailored: true,
+        tailored_resume_id: existingTailoredResume.id,
+        pitch_credits: u?.pitch_credits ?? null,
+        draft_id: draft.id,
+        already_promoted: true,
+      });
+    }
+
     // 2. Promote profile (if user doesn't already have one)
     const parsed = draft.parsed_resume;
     if (!parsed) {
@@ -250,6 +293,8 @@ export async function POST(request) {
       .from('profiles')
       .select('id')
       .eq('user_id', user.id)
+      .order('parsed_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     let visionHtml = null;
