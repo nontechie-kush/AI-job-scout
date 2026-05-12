@@ -78,7 +78,7 @@ const CSS_VARS = `
   }
 `;
 
-function Nav({ onGetStarted, onSignIn, user, authChecked, onDashboard }) {
+function Nav({ onSignIn }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -109,34 +109,12 @@ function Nav({ onGetStarted, onSignIn, user, authChecked, onDashboard }) {
           <a href="#how" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>How it works</a>
           <a href="/blog" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>Blog</a>
           <a href="#pricing" className="rp-nav-links" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: 14, fontWeight: 500, padding: '0 8px' }}>Pricing</a>
-          {user ? (
-            <button onClick={onDashboard} style={{
-              background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
-              padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'oklch(1 0 0 / 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                {(user.email || '?')[0].toUpperCase()}
-              </div>
-              <span className="rp-nav-links" style={{ display: 'inline' }}>My Dashboard</span>
-            </button>
-          ) : (
-            <>
-              <button onClick={onSignIn} className="rp-nav-signin" style={{
-                background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)',
-                cursor: 'pointer', padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-              }}>
-                Sign in
-              </button>
-              <button style={{
-                background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
-                padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em',
-                opacity: authChecked ? 1 : 0.65,
-              }} onClick={onGetStarted} disabled={!authChecked}>
-                {authChecked ? 'Get started free' : 'Checking...'}
-              </button>
-            </>
-          )}
+          <button onClick={onSignIn} className="rp-nav-signin" style={{
+            background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)',
+            cursor: 'pointer', padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+          }}>
+            Sign in
+          </button>
         </div>
       </div>
     </nav>
@@ -661,7 +639,6 @@ function Footer() {
 
 export default function RolePitchLanding() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [campaign, setCampaign] = useState(null);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -674,11 +651,11 @@ export default function RolePitchLanding() {
   useEffect(() => {
     if (isOAuthHandoff) return;
     createClient().auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setAuthChecked(true);
       if (user) {
         window.location.replace('/rolepitch/dashboard');
+        return;
       }
+      setAuthChecked(true);
     }).catch(() => setAuthChecked(true));
   }, [isOAuthHandoff]);
 
@@ -782,29 +759,16 @@ export default function RolePitchLanding() {
 
   const isRolePitchDomain = typeof window !== 'undefined' && (window.location.hostname === 'rolepitch.com' || window.location.hostname === 'www.rolepitch.com');
   const handleGetStarted = () => {
-    track('rp_get_started_clicked', { source: 'landing', user_signed_in: !!user });
-    if (user) {
-      router.push('/rolepitch/dashboard');
-      return;
-    }
+    track('rp_get_started_clicked', { source: 'landing', user_signed_in: false });
     router.push(isRolePitchDomain ? '/start' : '/rolepitch/start');
   };
   const handleCritique = () => {
     track('rp_critique_clicked', { source: 'landing' });
     router.push(isRolePitchDomain ? '/critique' : '/rolepitch/critique');
   };
-  const handleDashboard = () => router.push('/rolepitch/dashboard');
   const handleSignIn = () => {
     track('rp_sign_in_clicked', { source: 'landing' });
-    // Reuse the auth page, redirect to dashboard after sign-in
-    const supabase = createClient();
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/rolepitch/dashboard')}`,
-        scopes: 'email profile',
-      },
-    });
+    router.push(`/rolepitch/auth?redirect=${encodeURIComponent('/rolepitch/dashboard')}`);
   };
 
   // OAuth handoff: don't flash the landing UI — show a loader until our
@@ -834,13 +798,38 @@ export default function RolePitchLanding() {
     );
   }
 
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+        background: 'oklch(0.98 0.006 248)',
+        fontFamily: 'DM Sans, sans-serif',
+        color: 'oklch(0.16 0.03 248)',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '2.5px solid oklch(0.86 0.015 248)',
+          borderTopColor: 'oklch(0.50 0.19 248)',
+          animation: 'rp-spin 0.8s linear infinite',
+        }} />
+        <div style={{ fontSize: 14, color: 'oklch(0.44 0.04 248)' }}>Opening RolePitch…</div>
+        <style>{`@keyframes rp-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <>
       <style>{CSS_VARS}</style>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
       <div className="rp-root">
-        <Nav onGetStarted={handleGetStarted} onSignIn={handleSignIn} user={user} authChecked={authChecked} onDashboard={handleDashboard} />
+        <Nav onSignIn={handleSignIn} />
         <Hero onGetStarted={handleGetStarted} onCritique={handleCritique} />
         <Testimonials />
         <HowItWorks />
