@@ -21,13 +21,13 @@ export async function GET(request) {
 
     let { data: resumes, error } = await supabase
       .from('tailored_resumes')
-      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, pipeline_version')
+      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, edit_count, pipeline_version')
       .eq('user_id', user.id)
       .not('jd_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (error?.message?.includes('edited_version') || error?.message?.includes('edited_at')) {
+    if (error?.message?.includes('edited_version') || error?.message?.includes('edited_at') || error?.message?.includes('edit_count')) {
       const legacy = await supabase
         .from('tailored_resumes')
         .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, pipeline_version')
@@ -95,6 +95,7 @@ export async function GET(request) {
         bullets_rewritten: bulletsRewritten,
         has_edits: !!r.edited_version,
         edited_at: r.edited_at,
+        edit_count: r.edit_count || 0,
       };
     });
 

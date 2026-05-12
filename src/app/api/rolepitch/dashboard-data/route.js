@@ -27,7 +27,7 @@ export async function GET(request) {
     // One auth check — 3 parallel DB queries
     const resumesQuery = () => service
       .from('tailored_resumes')
-      .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, pipeline_version')
+        .select('id, jd_id, created_at, resume_strength, selected_atom_ids, tailored_version, edited_version, edited_at, edit_count, pipeline_version')
       .eq('user_id', user.id)
       .not('jd_id', 'is', null)
       .order('created_at', { ascending: false })
@@ -58,7 +58,7 @@ export async function GET(request) {
         .single(),
     ]);
 
-    if (resumesResult.error?.message?.includes('edited_version') || resumesResult.error?.message?.includes('edited_at')) {
+    if (resumesResult.error?.message?.includes('edited_version') || resumesResult.error?.message?.includes('edited_at') || resumesResult.error?.message?.includes('edit_count')) {
       resumesResult = await legacyResumesQuery();
     }
 
@@ -119,6 +119,7 @@ export async function GET(request) {
           bullets_rewritten: bulletsRewritten,
           has_edits: !!r.edited_version,
           edited_at: r.edited_at,
+          edit_count: r.edit_count || 0,
         };
       });
     }

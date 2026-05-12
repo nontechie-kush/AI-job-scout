@@ -162,6 +162,12 @@ function bulletRows(text) {
   return textRows(text, 44, 5, 12);
 }
 
+function editVersionLabel(data) {
+  if (!data?.has_edits || !data?.edited_at) return '';
+  const time = new Date(data.edited_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `Edit ${data.edit_count || 1} · ${time}`;
+}
+
 function normalizeForState(resume) {
   return {
     name: resume?.name || '',
@@ -304,6 +310,7 @@ export default function ResumeEditPage() {
 
   const currentStatus = status === 'saving' ? 'saving' : saveError ? 'error' : dirty ? 'dirty' : status === 'saved' ? 'saved' : 'pristine';
   const roleLabel = [data?.jd?.title, data?.jd?.company].filter(Boolean).join(' · ') || 'Tailored resume';
+  const versionLabel = editVersionLabel(data);
 
   const validation = useMemo(() => {
     if (!resume) return null;
@@ -411,7 +418,7 @@ export default function ResumeEditPage() {
             <div className="rp-job-icon">{companyInitials(data?.jd?.company)}</div>
             <div style={{ minWidth: 0 }}>
               <div className="rp-h1">Edit your tailored resume</div>
-              <div className="rp-sub">{roleLabel}</div>
+              <div className="rp-sub">{versionLabel ? `${versionLabel} · ${roleLabel}` : roleLabel}</div>
             </div>
           </div>
           <div className="rp-actions">
@@ -444,6 +451,11 @@ export default function ResumeEditPage() {
           </aside>
 
           <main className="rp-editor-pane">
+            {versionLabel && !dirty && (
+              <div className="rp-warning" style={{ background: 'var(--green-dim)', borderColor: 'oklch(0.55 0.17 155 / 0.28)' }}>
+                <strong>{versionLabel}</strong><span>This saved edit is the version used by Download current PDF.</span>
+              </div>
+            )}
             {!data.layout_available && <LayoutWarning />}
             {data.migration_required && <div className="rp-alert"><strong>Editor setup is pending.</strong><span>The resume can be viewed, but saving edits needs the production database migration.</span></div>}
             {saveError && <div className="rp-alert"><strong>Couldn&apos;t save that.</strong><span>Your edits are still here. {saveError}</span></div>}
@@ -466,7 +478,7 @@ export default function ResumeEditPage() {
         </div>
 
         <div className="rp-mobile-bottom">
-          <div className="rp-mobile-hint">{downloading ? 'Keeping this page open while the PDF is prepared' : currentStatus === 'pristine' ? 'Tap a section to make edits' : currentStatus === 'dirty' ? 'Save before downloading the updated PDF' : ''}</div>
+          <div className="rp-mobile-hint">{downloading ? 'Keeping this page open while the PDF is prepared' : currentStatus === 'pristine' ? (versionLabel || 'Tap a section to make edits') : currentStatus === 'dirty' ? 'Save before downloading the updated PDF' : versionLabel}</div>
           <button className="rp-btn-primary" onClick={currentStatus === 'dirty' || currentStatus === 'error' ? save : download} disabled={downloading || currentStatus === 'saving' || ((currentStatus === 'dirty' || currentStatus === 'error') && (!!validation || data.migration_required))}>
             {currentStatus === 'saving' || downloading ? <span className="rp-spinner" /> : currentStatus === 'dirty' || currentStatus === 'error' ? icon('check') : icon('download')}
             {downloading ? 'Preparing PDF...' : currentStatus === 'dirty' ? 'Save changes' : currentStatus === 'error' ? 'Retry save' : currentStatus === 'saving' ? 'Saving...' : currentStatus === 'saved' ? 'Download updated PDF' : 'Download current PDF'}

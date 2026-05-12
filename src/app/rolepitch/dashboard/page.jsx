@@ -90,6 +90,12 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function downloadLabel(resume) {
+  if (!resume?.has_edits || !resume?.edited_at) return '';
+  const time = new Date(resume.edited_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `Edit ${resume.edit_count || 1} · ${time}`;
+}
+
 function companyInitials(company) {
   if (!company) return '?';
   return company.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -299,18 +305,37 @@ export default function RolePitchDashboard() {
     }
   }, []);
 
-  const handleDownload = (resumeId) => {
+  const handleDownload = async (resumeId) => {
     setDownloading(resumeId);
     const resume = resumes.find(r => r.id === resumeId);
     track('rp_pdf_downloaded', { resume_id: resumeId, jd_title: resume?.jd?.title, jd_company: resume?.jd?.company });
-    // Direct navigation — no probe. The server redirects 302 to the reupload
-    // page when layout is unavailable, so browsers resolve to the right
-    // destination without us blocking on a probe call. window.open must run
-    // synchronously inside the click handler or mobile browsers swallow it.
-    window.open(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, '_blank');
-    if (resume) setDownloadPrompt(resume);
-    // Brief click-feedback flash, then reset so the spinner doesn't hang.
-    setTimeout(() => setDownloading(null), 1500);
+    try {
+      const res = await fetch(`/api/rolepitch/download-pdf?tailored_resume_id=${resumeId}`, {
+        headers: { Accept: 'text/html,application/json' },
+      });
+      if (res.redirected && res.url.includes('/rolepitch/start')) {
+        window.location.href = res.url;
+        return;
+      }
+      if (!res.ok) throw new Error('Could not prepare PDF');
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const filename = match?.[1] || 'RolePitch_resume.pdf';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      if (resume) setDownloadPrompt(resume);
+    } catch (e) {
+      setError(e.message || 'Could not prepare PDF');
+    } finally {
+      setDownloading(null);
+    }
   };
 
   const handleSignOut = async () => {
@@ -433,7 +458,7 @@ export default function RolePitchDashboard() {
                           <span>{formatDate(r.created_at)}</span>
                           {r.has_edits && (
                             <span style={{ marginLeft: 6, color: 'var(--green)', fontWeight: 700 }}>
-                              · Edited
+                              · {downloadLabel(r) || 'Edited'}
                             </span>
                           )}
                         </div>
@@ -472,18 +497,21 @@ export default function RolePitchDashboard() {
                         >
                           Edit
                         </button>
-                        <button
-                          className="rp-btn-primary"
-                          onClick={() => handleDownload(r.id)}
-                          disabled={downloading === r.id}
-                          style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
-                        >
-                          {downloading === r.id
-                            ? <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
-                            : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          }
-                          PDF
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                          <button
+                            className="rp-btn-primary"
+                            onClick={() => handleDownload(r.id)}
+                            disabled={downloading === r.id}
+                            style={{ fontSize: 12, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                          >
+                            {downloading === r.id
+                              ? <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                              : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            }
+                            {downloading === r.id ? 'Preparing...' : 'PDF'}
+                          </button>
+                          {downloadLabel(r) && <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{downloadLabel(r)}</span>}
+                        </div>
                       </div>
                     </div>
 
@@ -518,8 +546,9 @@ export default function RolePitchDashboard() {
                           ? <div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid white', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
                           : <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         }
-                        Download PDF
+                        {downloading === r.id ? 'Preparing PDF...' : 'Download PDF'}
                       </button>
+                      {downloadLabel(r) && <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 11 }}>{downloadLabel(r)}</div>}
                     </div>
                   </div>
                 );
