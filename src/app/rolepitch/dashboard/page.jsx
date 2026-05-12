@@ -93,15 +93,7 @@ function formatDate(iso) {
 function formatEditStamp(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  const sameDay = (a, b) => a.toDateString() === b.toDateString();
-  const day = sameDay(d, today)
-    ? 'Today'
-    : sameDay(d, yesterday)
-      ? 'Yesterday'
-      : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
   return `${day}, ${time}`;
 }

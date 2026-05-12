@@ -1,24 +1,32 @@
 /**
  * GET /api/rolepitch/download-pdf?tailored_resume_id=xxx
  *
- * Promise: the user's original CV layout, preserved.
- * If we can't keep that promise, we refuse — we never silently fall back to
- * the generic Georgia template. The client uses the 409 to prompt a reupload.
+ * Promise:
+ *   - Initially tailored resumes preserve the user's original CV layout.
+ *   - Manually edited resumes render deterministically from edited_version, so
+ *     every user edit appears exactly in the downloaded PDF.
+ *
+ * If we can't preserve original layout for a non-edited resume, we refuse — we
+ * never silently fall back to the generic Georgia template. The client uses the
+ * 409 to prompt a reupload.
  *
  * Pipeline:
- *   1. If tailored_resumes.tailored_html is cached AND vision-merged → serve it.
+ *   1. If edited_version exists → render edited JSON directly, cache, serve.
+ *   2. If tailored_resumes.tailored_html is cached AND vision-merged → serve it.
  *      (Cached fast-template HTML is treated as a miss — see isFastTemplate.)
- *   2. If profile has original_html → run Sonnet merge, cache, serve.
- *   3. If profile has only original_pdf_path (vision never ran) → fetch PDF,
+ *   3. If profile has original_html → run Sonnet merge, cache, serve.
+ *   4. If profile has only original_pdf_path (vision never ran) → fetch PDF,
  *      run Gemini vision, write original_html to profile, then merge + cache.
- *   4. If we have neither → respond 409 LAYOUT_UNAVAILABLE so the client can
+ *   5. If we have neither → respond 409 LAYOUT_UNAVAILABLE so the client can
  *      route the user to /rolepitch/start to recapture their PDF.
  */
 
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service-client';
 import { renderTailoredHtml } from '@/lib/ai/render-tailored-html';
+import { renderEditedResumeHtml } from '@/lib/ai/render-edited-resume-html';
 import { pdfToVisionHtml } from '@/lib/ai/vision-to-html';
 
 // Detects HTML from buildFastHtml() — fast template uses Georgia + a known
@@ -40,7 +48,11 @@ function makeSafeFilename(name, role) {
 
 function cacheKeyFor(tr) {
   if (!tr?.edited_version) return 'tailored';
-  return `edited:${tr.edited_at || tr.edit_count || 'unknown'}`;
+  const digest = createHash('sha256')
+    .update(JSON.stringify(tr.edited_version))
+    .digest('hex')
+    .slice(0, 16);
+  return `edited:${digest}`;
 }
 
 function withCacheMarker(html, key) {
@@ -89,18 +101,84 @@ export async function GET(request) {
 
     if (trErr || !tr) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    let jdTitle = '', jdCompany = '', jdDescription = '';
+    if (tr.jd_id) {
+      const { data: jd } = await supabase
+        .from('job_descriptions')
+        .select('title, company, description')
+        .eq('id', tr.jd_id)
+        .maybeSingle();
+      jdTitle = jd?.title || '';
+      jdCompany = jd?.company || '';
+      jdDescription = (jd?.description || '').slice(0, 3000);
+    }
+
+    const tv = tr.edited_version || tr.tailored_version || {};
+    const bv = tr.base_version || {};
+
+    // Resolve name/contact — edited/tailored version → base_version → profile fallback.
+    let profileName = '', profileContact = {};
+    if (!tv.name && !bv.name) {
+      profileName = profileRow?.structured_resume?.name || '';
+      profileContact = profileRow?.structured_resume?.contact || {};
+    }
+
+    const mergedResume = {
+      name: tv.name || bv.name || profileName,
+      title: tv.title || tv.headline || bv.title || bv.headline || jdTitle || '',
+      headline: tv.headline || tv.title || bv.headline || bv.title || jdTitle || '',
+      contact: (tv.contact && Object.keys(tv.contact).length > 0)
+        ? tv.contact
+        : (bv.contact && Object.keys(bv.contact).length > 0 ? bv.contact : profileContact),
+      summary: tv.summary || bv.summary || '',
+      experience: tv.experience || bv.experience || [],
+      education: tv.education || bv.education || [],
+      skills: tv.skills || bv.skills || [],
+    };
+
     const cacheKey = cacheKeyFor(tr);
+    const service = createServiceClient();
+
+    // Manual edits are deterministic. Once a user edits text themselves, the
+    // saved edited_version JSON is the product promise, not AI layout recovery.
+    if (tr.edited_version) {
+      const cacheIsCurrent = hasCacheMarker(tr.tailored_html, cacheKey);
+      if (cacheIsCurrent && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
+        const cachedFilename = makeSafeFilename(mergedResume.name, jdTitle);
+        return new Response(tr.tailored_html, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${cachedFilename}.pdf"`,
+          },
+        });
+      }
+
+      const renderedHtml = renderEditedResumeHtml({ resume: mergedResume, jobTitle: jdTitle });
+      const finalHtml = withCacheMarker(renderedHtml, cacheKey);
+
+      try {
+        await service
+          .from('tailored_resumes')
+          .update({ tailored_html: finalHtml })
+          .eq('id', tailoredResumeId);
+      } catch (e) {
+        console.warn('[download-pdf] edited cache write failed (non-fatal)', { message: e?.message });
+      }
+
+      const filename = makeSafeFilename(mergedResume.name, jdTitle);
+      return new Response(finalHtml, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}.pdf"`,
+        },
+      });
+    }
 
     // ── Fast path: cached HTML (vision-merged only — fast template is treated as a miss) ──
-    // Edited resumes may use cache only when the embedded cache key matches
-    // the current edit. This avoids serving a stale original tailored render.
-    const cacheIsCurrent = tr.edited_version
-      ? hasCacheMarker(tr.tailored_html, cacheKey)
-      : !!tr.tailored_html;
-    if (cacheIsCurrent && tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
+    if (tr.tailored_html && !isFastTemplate(tr.tailored_html)) {
       const cachedFilename = makeSafeFilename(
-        (tr.edited_version?.name || tr.tailored_version?.name || tr.base_version?.name || ''),
-        '',
+        (tr.tailored_version?.name || tr.base_version?.name || ''),
+        jdTitle,
       );
       return new Response(tr.tailored_html, {
         headers: {
@@ -109,8 +187,6 @@ export async function GET(request) {
         },
       });
     }
-
-    const service = createServiceClient();
 
     // ── Try to recover original_html if missing but a PDF is on file ──
     let originalHtml = profileRow?.original_html || null;
@@ -159,39 +235,6 @@ export async function GET(request) {
       return NextResponse.redirect(new URL(reuploadUrl, request.url), 302);
     }
 
-    let jdTitle = '', jdCompany = '', jdDescription = '';
-    if (tr.jd_id) {
-      const { data: jd } = await supabase
-        .from('job_descriptions')
-        .select('title, company, description')
-        .eq('id', tr.jd_id)
-        .maybeSingle();
-      jdTitle = jd?.title || '';
-      jdCompany = jd?.company || '';
-      jdDescription = (jd?.description || '').slice(0, 3000);
-    }
-
-    const tv = tr.edited_version || tr.tailored_version || {};
-    const bv = tr.base_version || {};
-
-    // Resolve name/contact — tailored_version → base_version → profile fallback
-    let profileName = '', profileContact = {};
-    if (!tv.name && !bv.name) {
-      profileName = profileRow?.structured_resume?.name || '';
-      profileContact = profileRow?.structured_resume?.contact || {};
-    }
-
-    const mergedResume = {
-      name: tv.name || bv.name || profileName,
-      contact: (tv.contact && Object.keys(tv.contact).length > 0)
-        ? tv.contact
-        : (bv.contact && Object.keys(bv.contact).length > 0 ? bv.contact : profileContact),
-      summary: tv.summary || bv.summary || '',
-      experience: tv.experience || bv.experience || [],
-      education: tv.education || bv.education || [],
-      skills: tv.skills || bv.skills || [],
-    };
-
     // Vision-merged path only — buildFastHtml is intentionally NOT passed.
     // renderTailoredHtml falls back to it when buildFastHtml is provided AND
     // originalHtml is null. Above we've already 409'd in that case, so by
@@ -203,6 +246,7 @@ export async function GET(request) {
       jobContext: { title: jdTitle, company: jdCompany, description: jdDescription },
       buildFastHtml: () => { throw new Error('fast template disabled in download-pdf'); },
     });
+
     const finalHtml = withCacheMarker(renderedHtml, cacheKey);
 
     // Persist for instant subsequent downloads
