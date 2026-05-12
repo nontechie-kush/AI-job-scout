@@ -165,8 +165,8 @@ function bulletRows(text) {
 function formatEditStamp(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const day = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   return `${day}, ${time}`;
 }
 

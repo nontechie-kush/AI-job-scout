@@ -76,7 +76,7 @@ function ScoreBar({ before, after }) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 async function downloadBlobFromResponse(res, fallbackName = 'RolePitch_resume.pdf') {

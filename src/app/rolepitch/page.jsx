@@ -133,10 +133,10 @@ function RecruiterInbox({ tab, setTab }) {
   }, [paused, setTab]);
 
   const applicants = [
-    { name: 'Rahul S.', role: 'Backend Developer', match: 41, isYou: false },
-    { name: 'Anjali P.', role: 'Software Engineer', match: 55, isYou: false },
-    { name: 'You', role: 'Software Engineer', match: tab === 'after' ? 89 : 44, isYou: true },
-    { name: 'Meera K.', role: 'Full Stack Dev', match: 74, isYou: false },
+    { name: 'Alex R.', role: 'Product Manager', match: 41, isYou: false },
+    { name: 'Noura A.', role: 'Growth Lead', match: 55, isYou: false },
+    { name: 'You', role: 'Product Manager', match: tab === 'after' ? 89 : 44, isYou: true },
+    { name: 'Aarav M.', role: 'Senior PM', match: 74, isYou: false },
   ];
 
   return (
@@ -158,7 +158,7 @@ function RecruiterInbox({ tab, setTab }) {
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57' }} />
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }} />
-          <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>Applications · Senior PM, Stripe</span>
+          <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>Applications · Product Lead, global SaaS</span>
           <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: tab === 'after' ? 'var(--green)' : 'var(--text-faint)', animation: tab === 'after' ? 'rp-slideIn 0.4s ease' : 'none' }}>
             {tab === 'after' ? '✓ 1 shortlisted' : '0 shortlisted'}
           </span>
@@ -237,11 +237,11 @@ function Hero({ onGetStarted, onCritique }) {
           </h1>
 
           <p style={{ fontSize: 'clamp(15px, 1.8vw, 17px)', fontWeight: 700, color: 'var(--text)', lineHeight: 1.5, maxWidth: 460, marginBottom: 12 }}>
-            RolePitch makes it shortlist-worthy in 60 seconds.
+            RolePitch makes it shortlist-worthy for roles in the US, UAE, India, and beyond.
           </p>
 
           <p style={{ fontSize: 'clamp(14px, 1.6vw, 16px)', color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 460, marginBottom: 36 }}>
-            Paste a job link. We pick your strongest achievements, rewrite your bullets for that role, and keep your original layout.
+            Paste any job link. We pick your strongest achievements, rewrite your bullets for that role, and keep your original layout.
           </p>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 36 }}>
@@ -280,7 +280,7 @@ function Hero({ onGetStarted, onCritique }) {
               ))}
             </div>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text)' }}>5 free pitches</strong> · no card required
+              <strong style={{ color: 'var(--text)' }}>5 free pitches</strong> · no card required · built for global roles
             </span>
           </div>
         </div>
@@ -295,9 +295,9 @@ function Hero({ onGetStarted, onCritique }) {
 
 function Testimonials() {
   const quotes = [
-    { text: <span>Got <strong style={{ color: 'var(--accent)' }}>3 interview calls in one week</strong> after using RolePitch. Previously sending 30 apps with the same resume got me nothing.</span>, name: 'Shreya M.', role: 'Product Manager · Bangalore', color: '#4f46e5', init: 'S' },
-    { text: <span>I was applying to the same companies for months. RolePitch showed me <strong style={{ color: 'var(--accent)' }}>exactly why I wasn't getting picked</strong> — and fixed it in minutes.</span>, name: 'Arjun T.', role: 'Software Engineer · Hyderabad', color: '#0e9f6e', init: 'A' },
-    { text: <span>"Roast my resume" was brutal. And completely right. <strong style={{ color: 'var(--accent)' }}>Rewrote 4 bullets. Got a recruiter callback the same day.</strong></span>, name: 'Priya K.', role: 'Data Analyst · Mumbai', color: '#9333ea', init: 'P' },
+    { text: <span>Got <strong style={{ color: 'var(--accent)' }}>3 interview calls in one week</strong> after using RolePitch. Previously sending 30 apps with the same resume got me nothing.</span>, name: 'Maya R.', role: 'Product Manager · New York', color: '#4f46e5', init: 'M' },
+    { text: <span>I was applying to roles in Dubai for months. RolePitch showed me <strong style={{ color: 'var(--accent)' }}>exactly why I wasn't getting picked</strong> — and fixed it in minutes.</span>, name: 'Omar A.', role: 'Growth Lead · Dubai', color: '#0e9f6e', init: 'O' },
+    { text: <span>"Roast my resume" was brutal. And completely right. <strong style={{ color: 'var(--accent)' }}>Rewrote 4 bullets. Got a recruiter callback the same day.</strong></span>, name: 'Ananya K.', role: 'Data Analyst · Bengaluru', color: '#9333ea', init: 'A' },
   ];
   return (
     <section style={{ padding: '80px 24px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -329,7 +329,7 @@ function Testimonials() {
 function HowItWorks() {
   const steps = [
     { n: '01', title: 'Upload your resume once', desc: 'RolePitch reads your career history and builds a vault of every achievement, metric, and skill. No more copy-paste jobs ever again.', tag: 'Your vault' },
-    { n: '02', title: 'Drop any job link', desc: "RolePitch scores your fit against the JD in seconds. Spots gaps, asks 2–3 quick questions — only what it can't figure out itself.", tag: 'Fit scored' },
+    { n: '02', title: 'Drop any job link', desc: "RolePitch scores your fit against job descriptions from the US, UAE, India, Europe, or remote-first companies. It spots gaps and asks only the 2–3 questions it can't infer.", tag: 'Fit scored' },
     { n: '03', title: 'Download. Apply. Win.', desc: 'Your best achievements, repositioned for this specific role. Not a rewrite from scratch — a precise selection. In under 60 seconds.', tag: 'Interview-ready' },
   ];
 
@@ -455,9 +455,9 @@ function Pricing({ onGetStarted }) {
   const [buyError, setBuyError] = useState('');
 
   const plans = [
-    { id: 'free', name: 'Free',       price: '₹0',   sub: '5 pitches to start',          features: ['5 role pitches', 'Achievement vault', 'PDF download', 'Match score feedback'], cta: 'Start free',      highlight: false, badge: null },
-    { id: '25',   name: '25 Pitches', price: '₹299', sub: '+ GST · one-time, never expires', features: ['25 pitch credits', 'Never expires', 'Achievement vault', 'PDF download'],      cta: 'Buy 25 pitches', highlight: true,  badge: 'Most Popular' },
-    { id: '50',   name: '50 Pitches', price: '₹499', sub: '+ GST · one-time, never expires', features: ['50 pitch credits', 'Never expires', '₹9.98 per pitch', 'PDF download'],        cta: 'Buy 50 pitches', highlight: false, badge: null },
+    { id: 'free', name: 'Free',       price: '₹0',   sub: '5 pitches to start',          features: ['5 global role pitches', 'Achievement vault', 'PDF download', 'Match score feedback'], cta: 'Start free',      highlight: false, badge: null },
+    { id: '25',   name: '25 Pitches', price: '₹299', sub: 'Early access · one-time, never expires', features: ['25 pitch credits', 'US, UAE, India, remote roles', 'Achievement vault', 'PDF download'],      cta: 'Buy 25 pitches', highlight: true,  badge: 'Most Popular' },
+    { id: '50',   name: '50 Pitches', price: '₹499', sub: 'Early access · one-time, never expires', features: ['50 pitch credits', 'Never expires', 'Global job links supported', 'PDF download'],        cta: 'Buy 50 pitches', highlight: false, badge: null },
   ];
 
   const handleBuy = async (plan) => {
@@ -514,7 +514,7 @@ function Pricing({ onGetStarted }) {
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 14 }}>Pricing</span>
           <h2 style={{ fontSize: 'clamp(26px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.035em' }}>Pay only when you need more.</h2>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 12 }}>No subscription. No monthly pressure. Credits never expire.</p>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 12 }}>No subscription. No monthly pressure. Credits never expire. Early access pricing is shown in INR today.</p>
         </div>
         {buyError && <div style={{ textAlign: 'center', fontSize: 13, color: 'oklch(0.65 0.2 30)', marginBottom: 20 }}>{buyError}</div>}
         <div className="rp-pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'start' }}>
@@ -561,7 +561,7 @@ function Pricing({ onGetStarted }) {
             </div>
           ))}
         </div>
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-faint)', marginTop: 24 }}>All prices in INR · GST 18% added at checkout · Credits never expire</p>
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-faint)', marginTop: 24 }}>Early access checkout is in INR today · global currency support is coming · credits never expire</p>
       </div>
     </section>
   );
@@ -859,12 +859,9 @@ export default function RolePitchLanding() {
 
 function CampaignModal({ campaign, onClose, onClaim }) {
   const expiry = new Date(campaign.expires_at);
-  const expiryLabel = expiry.toLocaleString('en-IN', {
+  const expiryLabel = expiry.toLocaleString('en-US', {
     day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
   });
-  // ₹299 / 25 pitches = ₹11.96/pitch — round to ₹12 so the modal never claims
-  // a higher per-unit price than what the user can actually pay on the pricing page.
-  const inrValue = campaign.bonus_pitches * 12;
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -914,13 +911,13 @@ function CampaignModal({ campaign, onClose, onClaim }) {
           fontSize: 22, fontWeight: 600, color: 'var(--text)',
           letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 10px',
         }}>
-          Sign up to receive {campaign.bonus_pitches} additional pitches worth ₹{inrValue.toFixed(0)}/-
+          Sign up to receive {campaign.bonus_pitches} additional global role pitches
         </h2>
         <p style={{
           fontSize: 14, lineHeight: 1.6, color: 'var(--text-muted)', margin: '0 0 18px',
         }}>
           You'll get <strong style={{ color: 'var(--text)' }}>5 free pitches + {campaign.bonus_pitches} bonus = {5 + campaign.bonus_pitches} total</strong> on signup.
-          Tailor your resume for any job in under 30 seconds.
+          Tailor your resume for jobs across the US, UAE, India, remote teams, and global companies.
         </p>
         <div style={{
           padding: '10px 12px', borderRadius: 8,

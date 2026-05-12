@@ -133,7 +133,7 @@ const CSS_VARS = `
   .rp-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 `;
 
-const SAMPLE_JOB = `Product Manager, Payments Infrastructure\nStripe — Bengaluru, India\n\nWe're looking for a Product Manager to join our Payments Infrastructure team.\n\nResponsibilities:\n• Define strategy for B2B payment infrastructure\n• Lead cross-functional teams across Engineering, Design, and Data`;
+const SAMPLE_JOB = `Product Manager, Payments Infrastructure\nGlobal SaaS company — Remote / New York / Dubai / Bengaluru\n\nWe're looking for a Product Manager to join our Payments Infrastructure team.\n\nResponsibilities:\n• Define strategy for B2B payment infrastructure across global markets\n• Lead cross-functional teams across Engineering, Design, and Data`;
 
 // ── shared session state (persisted to localStorage) ─────────────────────────
 function loadSession() {
@@ -601,7 +601,7 @@ function StepUpload({ onNext, dir }) {
       const draftId = await ensureDraftId();
       const form = new FormData();
       form.append('type', 'paste');
-      form.append('text', `Kushendra Suryavanshi\nSenior Product Manager\nhttps://linkedin.com/in/kushendra\nhttps://github.com/nontechie-kush\n\nExperience:\nRazorpay (2024–Present) — Senior Product Manager\n• Led cross-functional team of 12 to redesign payment infrastructure, reducing latency by 40%\n• Launched RazorpayX Business Banking to 8,000+ SMEs in 3 months\n\nMeesho (2022–2024) — Product Manager\n• Owned seller onboarding v2 — reduced time-to-first-sale from 11 days to 3.5 days\n• Built A/B testing framework used by 6 product teams, improving experiment velocity by 60%\n• Drove supplier NPS from 34 to 61\n\nFlipkart (2020–2022) — Associate Product Manager\n• Redesigned checkout flow, increasing conversion by 32%\n• Shipped address autofill using ML signals, reducing manual input by 70%`);
+      form.append('text', `Maya Raman\nSenior Product Manager\nNew York · Dubai · Bengaluru\nhttps://linkedin.com/in/maya-raman\n\nExperience:\nStripe (2024–Present) — Senior Product Manager\n• Led cross-functional team of 12 to redesign payment infrastructure, reducing latency by 40% across US and UAE merchants\n• Launched B2B payments workflows to 8,000+ SMBs in 3 months\n\nCareem (2022–2024) — Product Manager\n• Owned marketplace onboarding v2 — reduced time-to-first-transaction from 11 days to 3.5 days\n• Built A/B testing framework used by 6 product teams, improving experiment velocity by 60%\n• Drove partner NPS from 34 to 61\n\nFlipkart (2020–2022) — Associate Product Manager\n• Redesigned checkout flow, increasing conversion by 32%\n• Shipped address autofill using ML signals, reducing manual input by 70%`);
       if (draftId) form.append('draft_id', draftId);
 
       const res = await fetch('/api/rolepitch/parse-resume', { method: 'POST', body: form });
