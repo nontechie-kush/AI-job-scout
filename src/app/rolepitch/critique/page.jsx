@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
+import { track } from '@/components/PostHogProvider';
 
 const CSS = `
   :root {
@@ -737,6 +738,11 @@ function CritiqueInner() {
     setTargetContext(context);
     setCritiqueError('');
     setStep('generating');
+    track('rp_resume_roast_started', {
+      has_target: !!context,
+      target_len: context?.length || 0,
+      experience_count: parsedResume?.experience?.length || 0,
+    });
 
     // Client-side timeout — if the function hangs past 70s, abort and surface
     // a real error instead of leaving the user staring at a spinner forever.
@@ -759,6 +765,11 @@ function CritiqueInner() {
       }
       setCritique(data.critique);
       setCritiqueId(data.critique_id);
+      track('rp_resume_roast_completed', {
+        critique_id: data.critique_id || null,
+        overall_score: data.critique?.overall_score ?? null,
+        has_target: !!context,
+      });
       setStep('report');
     } catch (e) {
       clearTimeout(timeoutId);

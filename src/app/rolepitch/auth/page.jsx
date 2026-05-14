@@ -14,6 +14,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrowserClient } from '@supabase/ssr';
+import { track } from '@/components/PostHogProvider';
 
 const CSS = `
   :root {
@@ -170,6 +171,8 @@ function RolePitchAuthInner() {
               // Successful end-to-end claim with a tailored pitch — go directly
               // to dashboard with welcome marker. Skip the start-page step=6 path.
               try { localStorage.removeItem('rp_draft_id'); } catch {}
+              track('sign_up', { method: 'google', source: source || 'rolepitch', has_tailored: true });
+              track('rp_signup_completed', { method: 'google', source: source || 'rolepitch', has_tailored: true });
               window.location.href = '/rolepitch/dashboard?welcome=1';
               return;
             }
@@ -263,6 +266,7 @@ function RolePitchAuthInner() {
           const j = await res.json().catch(() => ({}));
           if (j?.claimed && j?.has_tailored && j?.tailored_resume_id) {
             try { localStorage.removeItem('rp_draft_id'); } catch {}
+            track('rp_signup_completed', { method: 'existing_session', source: source || 'rolepitch', has_tailored: true });
             window.location.href = '/rolepitch/dashboard?welcome=1';
             return;
           }

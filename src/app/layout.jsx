@@ -63,7 +63,7 @@ export default function RootLayout({ children }) {
           gtag('config', '${GA_ID}', { send_page_view: false });
           window.rp_track = function(event, props) {
             if (typeof gtag === 'undefined') return;
-            gtag('event', event, props || {});
+            gtag('event', event, Object.assign({ transport_type: 'beacon' }, props || {}));
           };
         `}} />
       </head>

@@ -25,7 +25,7 @@ export default function PostHogProvider() {
 
 export function track(event, props) {
   if (typeof window === 'undefined' || typeof window.gtag === 'undefined') return;
-  window.gtag('event', event, props || {});
+  window.gtag('event', event, { transport_type: 'beacon', ...(props || {}) });
 }
 
 export function identify(userId, traits) {

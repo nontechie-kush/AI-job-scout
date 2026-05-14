@@ -1469,6 +1469,7 @@ function StepJobInput({ onNext, onBack, dir }) {
         tailoredResult: null,
       });
       track('rp_jd_submitted', { method: 'file', source: 'file_upload', company: matchData.company, title: matchData.title });
+      track('rp_resume_pitch_started', { method: 'file', source: 'file_upload', company: matchData.company, title: matchData.title });
       onNext();
     } catch (err) {
       setError(err.message);
@@ -1515,6 +1516,7 @@ function StepJobInput({ onNext, onBack, dir }) {
         tailoredResult: null,
       });
       track('rp_jd_submitted', { method: mode, source: data.source, company: data.company, title: data.title });
+      track('rp_resume_pitch_started', { method: mode, source: data.source, company: data.company, title: data.title });
       onNext();
     } catch (err) {
       setError(err.message);
@@ -1747,6 +1749,13 @@ function StepProcessing({ onNext, dir }) {
         if (data.error) throw new Error(data.error);
         saveSession({ tailoredResult: data, tailoredAt: new Date().toISOString() });
         track('rp_tailor_completed', {
+          before_score: data.before_score,
+          after_score: data.after_score,
+          improvement: (data.after_score || 0) - (data.before_score || 0),
+          jd_title: jdTitle,
+          jd_company: jdCompany,
+        });
+        track('rp_match_score_received', {
           before_score: data.before_score,
           after_score: data.after_score,
           improvement: (data.after_score || 0) - (data.before_score || 0),
