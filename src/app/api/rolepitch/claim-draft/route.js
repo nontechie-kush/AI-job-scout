@@ -349,6 +349,7 @@ export async function POST(request) {
         .select('original_html, original_page_count, original_pdf_path')
         .eq('user_id', user.id)
         .order('parsed_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (prof?.original_html) {
         visionHtml = prof.original_html;

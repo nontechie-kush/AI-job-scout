@@ -151,6 +151,8 @@ export async function POST(request) {
       .from('profiles')
       .select('id')
       .eq('user_id', user.id)
+      .order('parsed_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!existing) {

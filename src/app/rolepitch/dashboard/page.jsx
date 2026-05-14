@@ -98,6 +98,15 @@ function formatEditStamp(iso) {
   return `${day}, ${time}`;
 }
 
+function formatBaseStamp(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function downloadLabel(resume) {
   if (!resume?.has_edits || !resume?.edited_at) return '';
   return `Edit ${resume.edit_count || 1} · ${formatEditStamp(resume.edited_at)}`;
@@ -177,6 +186,7 @@ export default function RolePitchDashboard() {
   const [tab, setTab] = useState('pitches'); // 'pitches' | 'critiques'
   const [resumes, setResumes] = useState([]);
   const [critiques, setCritiques] = useState([]);
+  const [baseResume, setBaseResume] = useState(null);
   const [loading, setLoading] = useState(true);
   const [critiquesLoading, setCritiquesLoading] = useState(true);
   const [error, setError] = useState('');
@@ -305,6 +315,7 @@ export default function RolePitchDashboard() {
           if (data.error) { setError(data.error); setLoading(false); setCritiquesLoading(false); return; }
           setResumes(data.resumes || []);
           setCritiques(data.critiques || []);
+          setBaseResume(data.base_resume || null);
           setCredits(data.pitch_credits ?? 5);
           setPlanTier(data.plan_tier ?? 'free');
           setLoading(false);
@@ -381,7 +392,7 @@ export default function RolePitchDashboard() {
             <button className="rp-btn-ghost rp-nav-memory" onClick={() => router.push('/rolepitch/dashboard/memory')} style={{ fontSize: 12, padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
               🧠 <span className="rp-nav-label">Memory</span>
             </button>
-            <button onClick={() => router.push('/rolepitch/start')} aria-label="Start a new pitch" style={{ fontSize: 12, padding: '7px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', color: 'var(--text)', lineHeight: 1, fontFamily: 'var(--sans)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+            <button onClick={() => router.push('/rolepitch/start?fresh=1')} aria-label="Start a new pitch" style={{ fontSize: 12, padding: '7px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', color: 'var(--text)', lineHeight: 1, fontFamily: 'var(--sans)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
               <span style={{ fontSize: 15, lineHeight: 1 }}>＋</span>
               <span>Pitch</span>
             </button>
@@ -427,6 +438,42 @@ export default function RolePitchDashboard() {
             </div>
           </div>
 
+          {!loading && (
+            <div
+              className="rp-card"
+              style={{
+                marginBottom: 'clamp(14px, 2vw, 18px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 14,
+                animation: 'rp-fadeUp 0.35s 0.04s ease both',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Base resume
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {baseResume?.title || baseResume?.name || 'Add your latest resume'}
+                  {baseResume?.company ? ` · ${baseResume.company}` : ''}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12.5, marginTop: 3, lineHeight: 1.35 }}>
+                  {baseResume
+                    ? `Future pitches use this resume${baseResume.parsed_at ? ` · updated ${formatBaseStamp(baseResume.parsed_at)}` : ''}.`
+                    : 'Upload your source resume once, then tailor it for every role.'}
+                </div>
+              </div>
+              <button
+                className="rp-btn-ghost"
+                onClick={() => router.push('/rolepitch/base-resume')}
+                style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 800, padding: '9px 13px' }}
+              >
+                {baseResume ? 'Update resume' : 'Add resume'}
+              </button>
+            </div>
+          )}
+
           {/* ── Pitches Tab ── */}
           {tab === 'pitches' && (
             <>
@@ -445,7 +492,7 @@ export default function RolePitchDashboard() {
                   <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
                   <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No pitches yet</h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Tailor your resume for a role and it&apos;ll appear here.</p>
-                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/start')}>Start your first pitch →</button>
+                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/start?fresh=1')}>Start your first pitch →</button>
                 </div>
               )}
               {!loading && resumes.length > 0 && (
@@ -618,7 +665,7 @@ export default function RolePitchDashboard() {
           granted={welcome.granted}
           total={welcome.total}
           onClose={() => setWelcome(null)}
-          onTailor={() => { setWelcome(null); router.push('/rolepitch/start'); }}
+          onTailor={() => { setWelcome(null); router.push('/rolepitch/start?fresh=1'); }}
           onCritique={() => { setWelcome(null); router.push('/rolepitch/critique'); }}
         />
       )}

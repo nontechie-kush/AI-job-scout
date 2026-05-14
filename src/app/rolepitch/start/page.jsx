@@ -2933,6 +2933,8 @@ function RolePitchStartInner() {
           .from('profiles')
           .select('structured_resume, parsed_json, original_html, original_pdf_path')
           .eq('user_id', user.id)
+          .order('parsed_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         const hasParsed = !!(prof?.parsed_json || prof?.structured_resume);

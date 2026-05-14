@@ -6,12 +6,13 @@
  * my-critiques, credits) that each independently re-authenticated.
  *
  * Returns:
- *   { resumes, critiques, pitch_credits, plan_tier }
+ *   { resumes, critiques, base_resume, pitch_credits, plan_tier }
  */
 
 import { NextResponse } from 'next/server';
 import { createClientFromRequest } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service-client';
+import { summarizeBaseResume } from '@/lib/rolepitch/resume';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -41,8 +42,8 @@ export async function GET(request) {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    // One auth check — 3 parallel DB queries
-    let [resumesResult, critiquesResult, userResult] = await Promise.all([
+    // One auth check — 4 parallel DB queries
+    let [resumesResult, critiquesResult, userResult, profileResult] = await Promise.all([
       resumesQuery(),
       service
         .from('rp_critiques')
@@ -56,6 +57,14 @@ export async function GET(request) {
         .select('pitch_credits, plan_tier')
         .eq('id', user.id)
         .single(),
+
+      service
+        .from('profiles')
+        .select('id, source, parsed_at, parsed_json, structured_resume, original_html, original_pdf_path')
+        .eq('user_id', user.id)
+        .order('parsed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (resumesResult.error?.message?.includes('edited_version') || resumesResult.error?.message?.includes('edited_at') || resumesResult.error?.message?.includes('edit_count')) {
@@ -64,6 +73,7 @@ export async function GET(request) {
 
     const resumes = resumesResult.data || [];
     const critiques = critiquesResult.data || [];
+    const baseResume = profileResult.data ? summarizeBaseResume(profileResult.data) : null;
     const pitchCredits = userResult.data?.pitch_credits ?? 5;
     const planTier = userResult.data?.plan_tier ?? 'free';
 
@@ -127,6 +137,7 @@ export async function GET(request) {
     return NextResponse.json({
       resumes: shapedResumes,
       critiques,
+      base_resume: baseResume,
       pitch_credits: pitchCredits,
       plan_tier: planTier,
     });
