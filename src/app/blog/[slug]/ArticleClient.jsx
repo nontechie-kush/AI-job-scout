@@ -136,6 +136,45 @@ function RelatedCard({ p }) {
   );
 }
 
+const ATS_SCORE_SLUGS = new Set([
+  'why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies',
+  'ats-resume-checker-how-to-test-your-resume-before-you-apply',
+  'ats-friendly-resume-template-2026-formatting-rules',
+  'ats-keywords-by-job-title-software-engineer-product-manager-marketing-manager',
+  'why-ai-written-resumes-score-lower-ats',
+]);
+
+const TAILORING_SLUGS = new Set([
+  'the-resume-experiment-how-changing-3-lines-increased-my-interview-rate-by-40',
+  'why-you-re-spending-3-hours-on-resume-formatting-when-you-should-be-tailoring',
+  'the-skill-translation-framework-how-to-reframe-your-previous-role-for-a-completely-different-industry',
+]);
+
+function articleCta(post) {
+  if (ATS_SCORE_SLUGS.has(post.slug)) {
+    return {
+      title: 'Find out if your resume can pass ATS.',
+      body: 'Upload your resume — RolePitch checks parseability, keywords, structure, and impact before you apply.',
+      href: '/rolepitch/critique',
+      label: 'Check my ATS score free →',
+    };
+  }
+  if (TAILORING_SLUGS.has(post.slug)) {
+    return {
+      title: 'Make the resume fit the role.',
+      body: 'Paste a job link — RolePitch picks your strongest achievements, rewrites the bullets, and keeps your layout.',
+      href: '/rolepitch/start?fresh=1',
+      label: 'Tailor my resume free →',
+    };
+  }
+  return {
+    title: 'Turn the insight into your next application.',
+    body: 'RolePitch helps you check, tailor, and download a resume version built for the role you want.',
+    href: '/rolepitch',
+    label: 'See how RolePitch works →',
+  };
+}
+
 export default function ArticleClient({ post, related, sections }) {
   const [activeSection, setActiveSection] = useState(0);
   const [liked, setLiked] = useState(false);
@@ -143,6 +182,7 @@ export default function ArticleClient({ post, related, sections }) {
   const [pageUrl, setPageUrl] = useState('');
 
   const ts = tagStyle(post.primary_tag);
+  const cta = articleCta(post);
 
   useEffect(() => {
     const baseLikes = (post.id || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 400 + 50;
@@ -277,13 +317,13 @@ export default function ArticleClient({ post, related, sections }) {
               borderRadius: 14, padding: '28px',
               textAlign: 'center', marginTop: '1em',
             }}>
-              <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, marginBottom: 8, letterSpacing: '-0.01em' }}>Your ATS match score is the number that matters.</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>Most resumes score 61% before tailoring. Paste your job link — RolePitch scores your resume against the actual JD keywords in 60 seconds and rewrites the gaps.</p>
-              <Link href="/rolepitch/start?fresh=1" style={{
+              <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, marginBottom: 8, letterSpacing: '-0.01em' }}>{cta.title}</h3>
+              <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>{cta.body}</p>
+              <Link href={cta.href} style={{
                 background: 'var(--accent)', color: 'white', display: 'inline-block',
                 padding: '12px 28px', borderRadius: 9, fontSize: 15, fontWeight: 600,
                 textDecoration: 'none',
-              }}>Check your score free →</Link>
+              }}>{cta.label}</Link>
             </div>
           </div>
         </article>
