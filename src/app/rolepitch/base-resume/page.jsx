@@ -138,7 +138,7 @@ export default function BaseResumePage() {
   const [pagePreference, setPagePreference] = useState('one_page');
   const [updateType, setUpdateType] = useState('new_role');
   const [messages, setMessages] = useState([]);
-  const [userText, setUserText] = useState('');
+  const [userTextByType, setUserTextByType] = useState({});
   const [draft, setDraft] = useState(null);
   const [revisionText, setRevisionText] = useState('');
 
@@ -161,6 +161,7 @@ export default function BaseResumePage() {
   }, []);
 
   const preferences = { keep_design: keepDesign, page_preference: pagePreference, update_type: updateType };
+  const userText = userTextByType[updateType] || '';
 
   const draftUpdate = async ({ extraMessage, useCurrentDraft = false } = {}) => {
     const content = (extraMessage ?? userText).trim();
@@ -187,7 +188,7 @@ export default function BaseResumePage() {
       const assistantMsg = data.assistant_note || 'I drafted an updated base resume for review.';
       setMessages([...nextMessages, { role: 'assistant', content: assistantMsg }]);
       setDraft(data);
-      setUserText('');
+      setUserTextByType(prev => ({ ...prev, [updateType]: '' }));
       setRevisionText('');
       setScreen('review');
       track('rp_base_resume_draft_generated', preferences);
@@ -418,7 +419,7 @@ export default function BaseResumePage() {
                   className="br-input"
                   rows={8}
                   value={userText}
-                  onChange={e => setUserText(e.target.value)}
+                  onChange={e => setUserTextByType(prev => ({ ...prev, [updateType]: e.target.value }))}
                   placeholder="Tell RolePitch what changed. Add dates, company, role, achievements, tools, metrics, or anything you want included."
                 />
                 {error && <ErrorBox message={error} />}
