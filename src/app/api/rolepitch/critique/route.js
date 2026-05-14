@@ -27,6 +27,80 @@ function makeRid() {
   return `crit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function clampScore(value, fallback = 60) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function atsLabel(score) {
+  if (score >= 82) return 'ATS-safe';
+  if (score >= 68) return 'Strong';
+  if (score >= 52) return 'Needs targeting';
+  return 'Likely filtered';
+}
+
+function buildAtsReport({ critique, hasTarget }) {
+  const sections = critique.sections || {};
+  const overall = clampScore(critique.overall_score, 50);
+  const parseability = clampScore(sections.structure?.score, overall);
+  const keywords = clampScore(
+    ((sections.skills?.score ?? overall) * 0.6) + ((sections.summary?.score ?? overall) * 0.4),
+    overall
+  );
+  const impact = clampScore(sections.impact?.score, overall);
+  const structure = clampScore(
+    ((sections.structure?.score ?? overall) * 0.65) + ((sections.bullets?.score ?? overall) * 0.35),
+    overall
+  );
+
+  const targetFitScore = hasTarget
+    ? clampScore(
+        (overall * 0.45) +
+        ((sections.skills?.score ?? overall) * 0.22) +
+        ((sections.summary?.score ?? overall) * 0.18) +
+        ((sections.bullets?.score ?? overall) * 0.15),
+        overall
+      )
+    : null;
+
+  return {
+    review_mode: hasTarget ? 'targeted' : 'general',
+    ats_report: {
+      score: overall,
+      label: atsLabel(overall),
+      diagnosis: critique.headline_verdict || 'RolePitch found the strongest fixes to improve ATS readability.',
+      drivers: {
+        parseability: {
+          score: parseability,
+          label: 'Parseability',
+          note: 'Can hiring systems read sections, dates, roles, and contact details cleanly?',
+        },
+        keywords: {
+          score: keywords,
+          label: hasTarget ? 'Target keywords' : 'Keyword signal',
+          note: hasTarget ? 'How clearly your resume reflects the target role language.' : 'How searchable your skills and role language are.',
+        },
+        impact: {
+          score: impact,
+          label: 'Impact proof',
+          note: 'Metrics, outcomes, scope, and business value inside bullets.',
+        },
+        structure: {
+          score: structure,
+          label: 'Scan structure',
+          note: 'Reverse chronology, bullet density, section order, and skim speed.',
+        },
+      },
+    },
+    target_fit: targetFitScore == null ? null : {
+      score: targetFitScore,
+      label: targetFitScore >= 80 ? 'Strong role fit' : targetFitScore >= 65 ? 'Close fit' : targetFitScore >= 50 ? 'Needs sharper targeting' : 'Weak target signal',
+      feedback: critique.gap_to_target || 'RolePitch found the missing signals to close the gap for this target role.',
+    },
+  };
+}
+
 export async function POST(request) {
   const rid = makeRid();
   const t0 = Date.now();
@@ -64,9 +138,9 @@ export async function POST(request) {
 
     const targetLine = target_context
       ? `TARGET: ${target_context}`
-      : 'TARGET: Not specified — critique for general professional roles';
+      : 'TARGET: Not specified — score ATS readiness for general professional roles';
 
-    const prompt = `You are a ruthlessly honest resume coach. Critique this resume for the target below.
+    const prompt = `You are an expert ATS resume auditor and direct resume coach. Score this resume for ATS readability, recruiter skim strength, and role relevance.
 
 ${targetLine}
 
@@ -80,7 +154,7 @@ ${resumeText}
 Return ONLY valid JSON — no markdown, no explanation.
 
 {
-  "headline_verdict": "<one punchy sentence: what this resume's biggest problem is right now>",
+  "headline_verdict": "<one punchy sentence: what is most likely to hurt ATS/recruiter performance right now>",
   "sections": {
     "summary": { "score": <0-100>, "status": <"strong"|"weak"|"missing">, "feedback": "<2-3 sentences>", "rewrite": "<improved version or null>" },
     "bullets": { "score": <0-100>, "status": <"strong"|"weak"|"missing">, "feedback": "<2-3 sentences>", "examples": [ { "original": "<worst bullet>", "rewrite": "<better version>" }, { "original": "<second worst>", "rewrite": "<better version>" } ] },
@@ -96,7 +170,7 @@ Return ONLY valid JSON — no markdown, no explanation.
     "<Fifth fix>"
   ],
   "what_works": ["<one genuine strength>", "<another strength>"],
-  "gap_to_target": "<1-2 sentences on what's missing vs their stated target, or 'Resume is reasonably aligned with your target' if context not given>"
+  "gap_to_target": "<If target is given: 1-2 sentences on what's missing vs that target. If no target: 1-2 sentences on what would raise ATS readiness fastest.>"
 }
 
 SCORING RUBRIC — apply consistently:
@@ -232,9 +306,13 @@ Rules:
     const overall = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
     critique.overall_score = overall;
     critique.score_label =
-      overall < 50 ? 'Needs Work' :
-      overall < 65 ? 'Getting There' :
-      overall < 80 ? 'Strong' : 'Excellent';
+      overall < 50 ? 'Likely Filtered' :
+      overall < 65 ? 'Needs Targeting' :
+      overall < 80 ? 'Strong' : 'ATS-Safe';
+    const ats = buildAtsReport({ critique, hasTarget: !!target_context });
+    critique.review_mode = ats.review_mode;
+    critique.ats_report = ats.ats_report;
+    critique.target_fit = ats.target_fit;
 
     // Store in DB — passive lead capture from resume
     const supabase = createServiceClient();

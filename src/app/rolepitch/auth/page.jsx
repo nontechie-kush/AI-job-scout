@@ -191,7 +191,7 @@ function RolePitchAuthInner() {
       };
 
       setLoadingMsg(
-        source === 'critique' ? (redirect ? 'Saving your roast…' : 'Tailoring your resume…')
+        source === 'critique' ? (redirect ? 'Saving your ATS report…' : 'Tailoring your resume…')
         : source === 'campaign' ? 'Adding your bonus pitches…'
         : redirect ? 'Redirecting you to payment…'
         : 'Redirecting…'
@@ -317,7 +317,7 @@ function RolePitchAuthInner() {
   const headline = isCampaignFlow
     ? 'Claim your bonus'
     : isCritiqueFlow
-    ? 'Save your roast'
+    ? 'Save your ATS report'
     : isPricingFlow
     ? 'Continue to checkout'
     : isDashboardSignIn
@@ -328,11 +328,11 @@ function RolePitchAuthInner() {
   const subline = isCampaignFlow
     ? 'Sign up with Google — your bonus pitches will be added to your account instantly.'
     : isCritiqueFlow
-    ? 'Sign up free — your roast will be saved to your dashboard and you can tailor your resume from there.'
+    ? 'Sign up free — your ATS report will be saved to your dashboard and you can tailor your resume from there.'
     : isPricingFlow
     ? 'Sign in with Google, then we\'ll take you to checkout.'
     : isDashboardSignIn
-    ? 'Sign in to open your dashboard, saved pitches, resume roasts, and credits.'
+    ? 'Sign in to open your dashboard, saved pitches, ATS reports, and credits.'
     : hasResume
     ? 'Sign in to save your tailored resume and keep it in your dashboard.'
     : 'Sign in to continue with your RolePitch dashboard.';
@@ -365,7 +365,7 @@ function RolePitchAuthInner() {
             <div style={{ background: 'oklch(0.50 0.19 248 / 0.08)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 2H3a1 1 0 00-1 1v9a1 1 0 001 1h3l2 2 2-2h3a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M5 6h6M5 9h4" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round"/></svg>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Your roast is ready</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Your ATS report is ready</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sign up to save it and tailor your resume from your dashboard</div>
               </div>
             </div>

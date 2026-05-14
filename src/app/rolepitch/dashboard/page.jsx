@@ -125,7 +125,7 @@ function scoreColor(score) {
 function CritiqueCard({ c, i, router }) {
   const score = c.critique_json?.overall_score || 0;
   const verdict = c.critique_json?.headline_verdict || '';
-  const label = c.critique_json?.score_label || '';
+  const label = c.critique_json?.ats_report?.label || c.critique_json?.score_label || '';
   const expiresAt = new Date(c.expires_at);
   const msLeft = expiresAt - Date.now();
   const daysLeft = Math.max(0, Math.ceil(msLeft / 86400000));
@@ -147,7 +147,8 @@ function CritiqueCard({ c, i, router }) {
           <span style={{ fontSize: 8, color: scoreColor(score), opacity: 0.7 }}>/100</span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>ATS score</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: scoreColor(score), background: `${scoreColor(score)}15`, padding: '2px 8px', borderRadius: 20 }}>{label}</span>
             {c.target_context && <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>· {c.target_context}</span>}
           </div>
@@ -401,7 +402,7 @@ export default function RolePitchDashboard() {
             <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
               {[
                 { id: 'pitches', label: 'Pitches', count: resumes.length },
-                { id: 'critiques', label: 'Resume Roasts', count: critiques.length },
+                { id: 'critiques', label: 'ATS Reports', count: critiques.length },
               ].map(t => (
                 <button
                   key={t.id}
@@ -581,9 +582,9 @@ export default function RolePitchDashboard() {
               {!critiquesLoading && critiques.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '80px 24px' }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
-                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No roasts yet</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Get a free roast of your resume — no job link needed.</p>
-                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/critique')}>Roast my resume →</button>
+                  <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No ATS reports yet</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 28 }}>Get a free ATS score check — no job link needed.</p>
+                  <button className="rp-btn-primary" onClick={() => router.push('/rolepitch/critique')}>Check my ATS score →</button>
                 </div>
               )}
               {!critiquesLoading && critiques.length > 0 && (
@@ -591,7 +592,7 @@ export default function RolePitchDashboard() {
                   {critiques.map((c, i) => <CritiqueCard key={c.id} c={c} i={i} router={router} />)}
                   <div style={{ textAlign: 'center', paddingTop: 8 }}>
                     <button className="rp-btn-ghost" style={{ fontSize: 13 }} onClick={() => router.push('/rolepitch/critique')}>
-                      + New roast
+                      + New ATS check
                     </button>
                   </div>
                 </div>
@@ -855,7 +856,7 @@ function WelcomeModal({ granted, total, onClose, onTailor, onCritique }) {
               fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', cursor: 'pointer',
             }}
           >
-            Roast my resume first
+            Check my ATS score first
           </button>
         </div>
       </div>

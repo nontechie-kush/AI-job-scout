@@ -62,7 +62,7 @@ function TailoringPage() {
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
-          setError(j.error || 'Could not load your roast.');
+          setError(j.error || 'Could not load your ATS report.');
           setPhase('error');
           return;
         }
@@ -212,7 +212,7 @@ function TailoringPage() {
           {phase === 'loading' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: 'var(--text-muted)', fontSize: 15 }}>
               <div style={{ width: 18, height: 18, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'rp-spin 0.8s linear infinite' }} />
-              Pulling your roast…
+              Pulling your ATS report…
             </div>
           )}
 
@@ -220,7 +220,7 @@ function TailoringPage() {
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, letterSpacing: '-0.02em' }}>Welcome aboard.</h1>
               <p style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6, marginBottom: 24 }}>
-                We don't have a roast to start from — let's build one together.
+                We don't have an ATS report to start from — let's build one together.
               </p>
               <button
                 onClick={() => router.replace('/rolepitch/start?step=0')}

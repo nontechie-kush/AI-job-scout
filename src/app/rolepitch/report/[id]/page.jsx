@@ -1,7 +1,7 @@
 /**
  * /rolepitch/report/[id]
  *
- * Public shareable critique report. Fetches from rp_critiques by UUID.
+ * Public shareable ATS report. Fetches from rp_critiques by UUID.
  * Expires after 7 days (checked server-side via expires_at column).
  * No auth required — anyone with the link can view.
  */
@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }) {
   const { id } = await params;
   const generic = {
-    title: 'Resume Roast — RolePitch',
-    description: 'Free resume roast powered by RolePitch AI',
+    title: 'ATS Resume Report — RolePitch',
+    description: 'Free ATS resume score report powered by RolePitch AI',
   };
   try {
     const supabase = createServiceClient();
@@ -28,11 +28,11 @@ export async function generateMetadata({ params }) {
     const firstName = (row.name || '').trim().split(/\s+/)[0] || 'Anonymous';
     const score = row.critique_json?.overall_score;
     const title = score != null
-      ? `${firstName}'s Resume Roast — ${score}/100 · RolePitch`
-      : `${firstName}'s Resume Roast · RolePitch`;
+      ? `${firstName}'s ATS Resume Report — ${score}/100 · RolePitch`
+      : `${firstName}'s ATS Resume Report · RolePitch`;
     const description = score != null
-      ? `RolePitch scored ${firstName}'s resume ${score}/100. See the full roast — get yours free.`
-      : `See the full roast of ${firstName}'s resume — get yours free with RolePitch.`;
+      ? `RolePitch scored ${firstName}'s resume ${score}/100 for ATS readiness. See the report — get yours free.`
+      : `See ${firstName}'s ATS resume report — get yours free with RolePitch.`;
     return {
       title,
       description,
@@ -82,11 +82,11 @@ function ExpiredOrNotFound({ reason }) {
           </h1>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 24 }}>
             {reason === 'expired'
-              ? 'Roast reports are available for 7 days after creation. Get a fresh roast of your resume below.'
+              ? 'ATS reports are available for 7 days after creation. Get a fresh score check below.'
               : "We couldn't find this report. It may have been removed or the link is incorrect."}
           </p>
           <a href="/rolepitch/critique" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
-            Roast my resume — free →
+            Check my ATS score — free →
           </a>
           <div style={{ marginTop: 16 }}>
             <a href="/rolepitch" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' }}>← Back to RolePitch</a>

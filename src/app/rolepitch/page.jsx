@@ -269,7 +269,7 @@ function Hero({ onGetStarted, onCritique }) {
                 <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
                 <path d="M7 4.5v3M7 9.5h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Roast my resume
+              Check my ATS score
             </button>
           </div>
 
@@ -297,7 +297,7 @@ function Testimonials() {
   const quotes = [
     { text: <span>Got <strong style={{ color: 'var(--accent)' }}>3 interview calls in one week</strong> after using RolePitch. Previously sending 30 apps with the same resume got me nothing.</span>, name: 'Maya R.', role: 'Product Manager · New York', color: '#4f46e5', init: 'M' },
     { text: <span>I was applying to roles in Dubai for months. RolePitch showed me <strong style={{ color: 'var(--accent)' }}>exactly why I wasn't getting picked</strong> — and fixed it in minutes.</span>, name: 'Omar A.', role: 'Growth Lead · Dubai', color: '#0e9f6e', init: 'O' },
-    { text: <span>"Roast my resume" was brutal. And completely right. <strong style={{ color: 'var(--accent)' }}>Rewrote 4 bullets. Got a recruiter callback the same day.</strong></span>, name: 'Ananya K.', role: 'Data Analyst · Bengaluru', color: '#9333ea', init: 'A' },
+    { text: <span>The ATS report was blunt and useful. <strong style={{ color: 'var(--accent)' }}>Rewrote 4 bullets. Got a recruiter callback the same day.</strong></span>, name: 'Ananya K.', role: 'Data Analyst · Bengaluru', color: '#9333ea', init: 'A' },
   ];
   return (
     <section style={{ padding: '80px 24px', borderTop: '1px solid var(--border-subtle)' }}>

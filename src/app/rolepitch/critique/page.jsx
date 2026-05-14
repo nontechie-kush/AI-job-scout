@@ -3,7 +3,7 @@
 /**
  * /rolepitch/critique
  *
- * Free resume critique flow — no auth required.
+ * Free ATS score check flow — no auth required.
  * Steps: upload → target context → generating → report + upsell
  */
 
@@ -66,14 +66,23 @@ const CSS = `
   .rc-textarea:focus { border-color: var(--accent); }
   .rc-section-score { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 6px; }
   .rc-section-score-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+  .rc-ats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .rc-score-orbit { width: 132px; height: 132px; border-radius: 999px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.04); }
+  .rc-score-core { width: 104px; height: 104px; border-radius: 999px; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 14px 32px oklch(0 0 0 / 0.08); }
+  @media (max-width: 640px) {
+    .rc-card { padding: 24px 20px; }
+    .rc-ats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rc-score-orbit { width: 112px; height: 112px; }
+    .rc-score-core { width: 88px; height: 88px; }
+  }
 `;
 
 const PILOT_LINES = [
   'Reading your resume…',
-  'Checking bullet strength…',
-  'Scoring impact and metrics…',
-  'Identifying the weak spots…',
-  'Writing your roast…',
+  'Checking ATS parseability…',
+  'Scoring keywords and impact…',
+  'Finding recruiter skim risks…',
+  'Building your ATS report…',
 ];
 
 function statusColor(status) {
@@ -98,6 +107,93 @@ function scoreColor(score) {
   if (score >= 75) return 'var(--green)';
   if (score >= 50) return 'var(--yellow)';
   return 'var(--red)';
+}
+
+function scoreLabel(score) {
+  if (score >= 82) return 'ATS-safe';
+  if (score >= 68) return 'Strong';
+  if (score >= 52) return 'Needs targeting';
+  return 'Likely filtered';
+}
+
+function getDriverValue(driver, fallback) {
+  if (typeof driver === 'number') return { score: driver };
+  return driver || { score: fallback };
+}
+
+function atsDrivers(critique) {
+  const s = critique.sections || {};
+  const overall = critique.overall_score || 50;
+  const drivers = critique.ats_report?.drivers || {};
+  return [
+    {
+      key: 'parseability',
+      ...getDriverValue(drivers.parseability, s.structure?.score ?? overall),
+      label: drivers.parseability?.label || 'Parseability',
+      note: drivers.parseability?.note || 'Can ATS systems read your sections and dates?',
+    },
+    {
+      key: 'keywords',
+      ...getDriverValue(drivers.keywords, Math.round(((s.skills?.score ?? overall) + (s.summary?.score ?? overall)) / 2)),
+      label: drivers.keywords?.label || 'Keyword signal',
+      note: drivers.keywords?.note || 'Does the resume carry searchable role language?',
+    },
+    {
+      key: 'impact',
+      ...getDriverValue(drivers.impact, s.impact?.score ?? overall),
+      label: drivers.impact?.label || 'Impact proof',
+      note: drivers.impact?.note || 'Metrics, outcomes, and business value.',
+    },
+    {
+      key: 'structure',
+      ...getDriverValue(drivers.structure, s.structure?.score ?? overall),
+      label: drivers.structure?.label || 'Scan structure',
+      note: drivers.structure?.note || 'Order, density, and recruiter skim speed.',
+    },
+  ];
+}
+
+function targetFitFor(critique, hasTarget) {
+  if (!hasTarget) return null;
+  if (critique.target_fit?.score != null) return critique.target_fit;
+  const s = critique.sections || {};
+  const overall = critique.overall_score || 50;
+  const score = Math.max(0, Math.min(100, Math.round(
+    (overall * 0.45) +
+    ((s.skills?.score ?? overall) * 0.22) +
+    ((s.summary?.score ?? overall) * 0.18) +
+    ((s.bullets?.score ?? overall) * 0.15)
+  )));
+  return { score, label: scoreLabel(score), feedback: critique.gap_to_target || '' };
+}
+
+function ScoreRing({ score, label }) {
+  const color = scoreColor(score);
+  return (
+    <div className="rc-score-orbit" style={{ background: `conic-gradient(${color} ${score * 3.6}deg, var(--border) 0deg)` }}>
+      <div className="rc-score-core">
+        <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1, color }}>{score}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-faint)', fontWeight: 700 }}>/100</span>
+        <span style={{ fontSize: 10, color, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 5 }}>{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function AtsDriverCard({ driver }) {
+  const score = Math.max(0, Math.min(100, Number(driver.score) || 0));
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em' }}>{driver.label}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: scoreColor(score), fontFamily: 'var(--sans)' }}>{score}</span>
+      </div>
+      <div className="rc-section-score">
+        <div className="rc-section-score-fill" style={{ width: `${score}%`, background: scoreColor(score) }} />
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45, margin: '8px 0 0' }}>{driver.note}</p>
+    </div>
+  );
 }
 
 const COUNTDOWN_SECS = 10;
@@ -287,8 +383,8 @@ function StepUpload({ onParsed }) {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Upload your resume</h2>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>PDF, screenshots, link, or paste — Pilot will read everything and give you a brutally honest roast.</p>
+        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Check your ATS score</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>PDF, screenshots, link, or paste — RolePitch will score ATS readiness and show the exact fixes.</p>
         <p style={{ fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5, marginTop: 6 }}>
           Not sure if your resume will pass ATS screening?{' '}
           <a href="/blog/why-your-resume-gets-rejected-by-ats-and-exactly-how-to-fix-it-for-remote-first-companies" style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
@@ -473,7 +569,7 @@ function StepTarget({ onSubmit }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>What are you aiming for?</h2>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          The more specific you are, the sharper the roast. Skip if you just want a general review.
+          Add a target role if you want keyword and fit scoring. Skip for a general ATS readiness check.
         </p>
       </div>
 
@@ -488,7 +584,7 @@ function StepTarget({ onSubmit }) {
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
         <button className="rc-btn-primary" onClick={() => onSubmit(context.trim())}>
-          Roast my resume →
+          Check ATS score →
         </button>
         <button className="rc-btn-outline" onClick={() => onSubmit('')}>
           Skip — general review
@@ -590,25 +686,38 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
 
   const s = critique.sections || {};
   const overallScore = critique.overall_score || 0;
+  const drivers = atsDrivers(critique);
+  const hasTarget = !!targetContext;
+  const targetFit = targetFitFor(critique, hasTarget);
+  const verdict = critique.ats_report?.diagnosis || critique.headline_verdict;
+  const primaryLabel = critique.ats_report?.label || scoreLabel(overallScore);
 
   return (
     <div style={{ animation: 'rc-fadeUp 0.4s ease both' }}>
       {/* Score header */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '28px 24px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Resume score</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 52, fontWeight: 700, letterSpacing: '-0.04em', color: scoreColor(overallScore), lineHeight: 1 }}>{overallScore}</span>
-              <span style={{ fontSize: 18, color: 'var(--text-faint)', fontWeight: 500 }}>/100</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: scoreColor(overallScore), background: `${scoreColor(overallScore)}18`, padding: '3px 10px', borderRadius: 20 }}>{critique.score_label}</span>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+            <ScoreRing score={overallScore} label={primaryLabel} />
+            <div style={{ maxWidth: 380 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>ATS Readiness Score</div>
+              <h2 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 1.12, margin: 0 }}>
+                {hasTarget ? 'Your resume is readable. Now make it unmistakably relevant.' : 'Your ATS report is ready.'}
+              </h2>
+              {targetFit && (
+                <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '7px 11px' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Target fit</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(targetFit.score) }}>{targetFit.score}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/100</span>
+                </div>
+              )}
             </div>
           </div>
           {shareUrl && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
               <button onClick={handleCopy} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontFamily: 'var(--sans)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5 3H3a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V8M8 1h4m0 0v4m0-4L5.5 7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                {copied ? 'Copied!' : 'Copy share link'}
+                {copied ? 'Copied!' : 'Copy report link'}
               </button>
               <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Link expires in 7 days</div>
             </div>
@@ -616,7 +725,11 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
         </div>
 
         <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--bg)', borderRadius: 10, borderLeft: '3px solid var(--accent)' }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, lineHeight: 1.5 }}>"{critique.headline_verdict}"</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, lineHeight: 1.5 }}>"{verdict}"</p>
+        </div>
+
+        <div className="rc-ats-grid" style={{ marginTop: 18 }}>
+          {drivers.map(driver => <AtsDriverCard key={driver.key} driver={driver} />)}
         </div>
       </div>
 
@@ -684,24 +797,26 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
       {/* Gap to target */}
       {critique.gap_to_target && (
         <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Gap to your target</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>{hasTarget ? 'Gap to your target' : 'What is holding this resume back'}</div>
           <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: 0 }}>{critique.gap_to_target}</p>
         </div>
       )}
 
       {/* Upsell — tailor flow */}
       <div style={{ background: 'linear-gradient(135deg, oklch(0.50 0.19 248 / 0.08) 0%, oklch(0.55 0.17 155 / 0.08) 100%)', border: '1px solid var(--border)', borderRadius: 16, padding: '28px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>Want a tailored version for a specific job?</div>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{hasTarget ? 'Ready to close the gap?' : 'Want RolePitch to fix this for a real job?'}</div>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
-          Pilot will take your resume, match it to the job description, rewrite every bullet, and generate a PDF — in 60 seconds.
+          {hasTarget
+            ? 'Generate a tailored resume that rewrites the weak bullets for this exact role and exports a PDF in 60 seconds.'
+            : 'Paste a job link next. RolePitch will turn this diagnosis into a tailored resume with rewritten bullets and a PDF.'}
         </p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button className="rc-btn-primary" onClick={handleTailor} style={{ padding: '13px 28px', fontSize: 15 }}>
-            Tailor my resume — free →
+            {hasTarget ? 'Generate tailored resume →' : 'Tailor for a job — free →'}
           </button>
           {shareUrl && (
             <button className="rc-btn-outline" onClick={handleCopy}>
-              {copied ? 'Copied!' : 'Share this roast'}
+              {copied ? 'Copied!' : 'Share report'}
             </button>
           )}
         </div>
@@ -738,6 +853,11 @@ function CritiqueInner() {
     setTargetContext(context);
     setCritiqueError('');
     setStep('generating');
+    track('rp_ats_score_started', {
+      has_target: !!context,
+      target_len: context?.length || 0,
+      experience_count: parsedResume?.experience?.length || 0,
+    });
     track('rp_resume_roast_started', {
       has_target: !!context,
       target_len: context?.length || 0,
@@ -761,10 +881,16 @@ function CritiqueInner() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
         console.error('[critique-page] critique API failed', { status: res.status, error: data?.error, rid: data?.rid });
-        throw new Error(data?.error || `Critique failed (HTTP ${res.status})${data?.rid ? ` · ref ${data.rid}` : ''}`);
+        throw new Error(data?.error || `ATS score check failed (HTTP ${res.status})${data?.rid ? ` · ref ${data.rid}` : ''}`);
       }
       setCritique(data.critique);
       setCritiqueId(data.critique_id);
+      track('rp_ats_score_completed', {
+        critique_id: data.critique_id || null,
+        overall_score: data.critique?.overall_score ?? null,
+        target_fit_score: data.critique?.target_fit?.score ?? null,
+        has_target: !!context,
+      });
       track('rp_resume_roast_completed', {
         critique_id: data.critique_id || null,
         overall_score: data.critique?.overall_score ?? null,
@@ -775,7 +901,7 @@ function CritiqueInner() {
       clearTimeout(timeoutId);
       const msg = e.name === 'AbortError'
         ? 'Took too long — the model is overloaded. Try again in a moment.'
-        : e.message || 'Critique failed — please retry.';
+        : e.message || 'ATS score check failed — please retry.';
       console.error('[critique-page] caught error', { name: e.name, message: e.message });
       setCritiqueError(msg);
       setStep('target');

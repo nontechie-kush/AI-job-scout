@@ -5,7 +5,7 @@ export const metadata = {
     template: '%s | RolePitch',
   },
   description:
-    'Paste a job link. Pilot reads the JD, picks your strongest achievements, and rewrites your resume bullets to match — in under 60 seconds. Free resume critique included.',
+    'Paste a job link. RolePitch reads the JD, picks your strongest achievements, and rewrites your resume bullets to match — in under 60 seconds. Free ATS score check included.',
   keywords: [
     'resume tailor',
     'resume tailoring',
@@ -13,6 +13,8 @@ export const metadata = {
     'resume for job description',
     'resume rewrite',
     'resume critique',
+    'ATS score checker',
+    'ATS resume checker',
     'ATS resume',
     'resume optimizer',
     'job application resume',
@@ -39,7 +41,7 @@ export const metadata = {
     siteName: 'RolePitch',
     title: 'RolePitch — Your resume, tailored for every role',
     description:
-      'Paste a job link. Pilot rewrites your resume bullets to match the JD — in under 60 seconds. Free critique, no sign-up required.',
+      'Paste a job link. RolePitch rewrites your resume bullets to match the JD — in under 60 seconds. Free ATS score check, no sign-up required.',
     images: [
       {
         url: '/icons/icon-512x512.png',

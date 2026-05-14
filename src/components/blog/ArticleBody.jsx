@@ -36,13 +36,13 @@ function InlineCta() {
         See where your resume is losing points.
       </p>
       <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
-        Paste your job link — get your ATS match score in 60 seconds.
+        Upload your resume — get an ATS readiness score and the fixes to improve it.
       </p>
       <a href="/rolepitch/critique" style={{
         background: 'var(--accent)', color: 'white', display: 'inline-block',
         padding: '11px 26px', borderRadius: 9, fontSize: 14, fontWeight: 600,
         textDecoration: 'none', letterSpacing: '-0.01em',
-      }}>Check my score free →</a>
+      }}>Check my ATS score free →</a>
     </div>
   );
 }
