@@ -13,9 +13,8 @@ export async function GET() {
   }
 
   const staticUrls = [
-    { loc: 'https://www.rolepitch.com/rolepitch', lastmod: today, changefreq: 'weekly', priority: '1.0' },
-    { loc: 'https://www.rolepitch.com/rolepitch/critique', lastmod: today, changefreq: 'weekly', priority: '0.8' },
-    { loc: 'https://www.rolepitch.com/rolepitch/start', lastmod: today, changefreq: 'monthly', priority: '0.7' },
+    { loc: 'https://www.rolepitch.com/', lastmod: today, changefreq: 'weekly', priority: '1.0' },
+    { loc: 'https://www.rolepitch.com/critique', lastmod: today, changefreq: 'weekly', priority: '0.8' },
     { loc: 'https://www.rolepitch.com/blog', lastmod: today, changefreq: 'daily', priority: '0.9' },
   ];
 

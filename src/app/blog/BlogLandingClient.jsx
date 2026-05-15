@@ -38,7 +38,7 @@ function Nav() {
       transition: 'all 0.3s',
     }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Link href="/rolepitch" style={{ display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none', color: 'var(--text)', flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
           </div>
@@ -47,9 +47,9 @@ function Nav() {
         <div style={{ flex: 1 }} />
         <div className="blog-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <Link href="/blog" style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', borderBottom: '2px solid var(--accent)', paddingBottom: 2 }}>Blog</Link>
-          <Link href="/rolepitch#how" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>How it works</Link>
-          <Link href="/rolepitch#pricing" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>Pricing</Link>
-          <Link href="/rolepitch/start?fresh=1" style={{
+          <Link href="/#how" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>How it works</Link>
+          <Link href="/#pricing" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'none' }}>Pricing</Link>
+          <Link href="/start?fresh=1" style={{
             background: 'var(--accent)', color: 'white', padding: '10px 16px', borderRadius: 10,
             fontSize: 14, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
           }}>Get Started</Link>

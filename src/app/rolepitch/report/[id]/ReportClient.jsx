@@ -203,7 +203,7 @@ export default function ReportClient({ row }) {
       <div className="rc-root" style={{ padding: '24px 16px' }}>
         {/* Nav */}
         <div className="no-print" style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-          <a href="/rolepitch" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' }}>
             <div style={{ width: 26, height: 26, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </div>
@@ -330,7 +330,7 @@ export default function ReportClient({ row }) {
                 ? 'Generate a tailored resume that rewrites weak bullets for this exact role and exports a PDF.'
                 : 'Paste a job link next. RolePitch will turn this report into a tailored resume and PDF.'}
             </p>
-            <a href="/rolepitch/start" className="rc-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '13px 28px', fontSize: 14 }}>
+            <a href="/start" className="rc-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', padding: '13px 28px', fontSize: 14 }}>
               {hasTarget ? 'Generate tailored resume →' : 'Tailor for a job — free →'}
             </a>
             <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 10 }}>5 free pitches · no credit card</div>

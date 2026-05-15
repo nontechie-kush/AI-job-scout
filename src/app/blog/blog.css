@@ -109,8 +109,8 @@
     gap: 12px !important;
   }
 
-  .rp-blog .blog-nav-links a[href="/rolepitch#how"],
-  .rp-blog .blog-nav-links a[href="/rolepitch#pricing"] {
+  .rp-blog .blog-nav-links a[href="/#how"],
+  .rp-blog .blog-nav-links a[href="/#pricing"] {
     display: none !important;
   }
 

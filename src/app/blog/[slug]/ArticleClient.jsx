@@ -39,7 +39,7 @@ function Nav() {
       transition: 'all 0.3s',
     }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Link href="/rolepitch" style={{ display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none', color: 'var(--text)' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none', color: 'var(--text)' }}>
           <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
           </div>
@@ -48,7 +48,7 @@ function Nav() {
         <span className="blog-nav-divider" style={{ color: 'var(--border)', fontSize: 14 }}>/</span>
         <Link className="blog-nav-label" href="/blog" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 600 }}>Blog</Link>
         <div style={{ flex: 1 }} />
-        <Link href="/rolepitch/start?fresh=1" style={{
+        <Link href="/start?fresh=1" style={{
           background: 'var(--accent)', color: 'white', padding: '10px 16px', borderRadius: 10,
           fontSize: 14, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
         }}>Get Started</Link>
@@ -155,7 +155,8 @@ function articleCta(post) {
     return {
       title: 'Find out if your resume can pass ATS.',
       body: 'Upload your resume — RolePitch checks parseability, keywords, structure, and impact before you apply.',
-      href: '/rolepitch/critique',
+      href: '/critique',
+      inlineVariant: 'ats',
       label: 'Check my ATS score free →',
     };
   }
@@ -163,14 +164,16 @@ function articleCta(post) {
     return {
       title: 'Make the resume fit the role.',
       body: 'Paste a job link — RolePitch picks your strongest achievements, rewrites the bullets, and keeps your layout.',
-      href: '/rolepitch/start?fresh=1',
+      href: '/start?fresh=1',
+      inlineVariant: 'tailor',
       label: 'Tailor my resume free →',
     };
   }
   return {
     title: 'Turn the insight into your next application.',
     body: 'RolePitch helps you check, tailor, and download a resume version built for the role you want.',
-    href: '/rolepitch',
+    href: '/',
+    inlineVariant: 'tailor',
     label: 'See how RolePitch works →',
   };
 }
@@ -309,7 +312,7 @@ export default function ArticleClient({ post, related, sections }) {
           padding: '52px 64px',
         }}>
           <div className="prose">
-            <ArticleBody markdown={post.content} />
+            <ArticleBody markdown={post.content} ctaVariant={cta.inlineVariant} />
             <hr />
             <div style={{
               background: 'linear-gradient(135deg,var(--accent-dim) 0%,var(--green-dim) 100%)',

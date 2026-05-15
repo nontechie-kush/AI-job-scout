@@ -16,6 +16,10 @@ export async function generateMetadata({ params }) {
   const generic = {
     title: 'ATS Resume Report — RolePitch',
     description: 'Free ATS resume score report powered by RolePitch AI',
+    robots: {
+      index: false,
+      follow: true,
+    },
   };
   try {
     const supabase = createServiceClient();
@@ -36,6 +40,10 @@ export async function generateMetadata({ params }) {
     return {
       title,
       description,
+      robots: {
+        index: false,
+        follow: true,
+      },
       openGraph: { title, description, type: 'article' },
       twitter: { card: 'summary_large_image', title, description },
     };
@@ -85,11 +93,11 @@ function ExpiredOrNotFound({ reason }) {
               ? 'ATS reports are available for 7 days after creation. Get a fresh score check below.'
               : "We couldn't find this report. It may have been removed or the link is incorrect."}
           </p>
-          <a href="/rolepitch/critique" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
+          <a href="/critique" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
             Check my ATS score — free →
           </a>
           <div style={{ marginTop: 16 }}>
-            <a href="/rolepitch" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' }}>← Back to RolePitch</a>
+            <a href="/" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' }}>← Back to RolePitch</a>
           </div>
         </div>
       </div>

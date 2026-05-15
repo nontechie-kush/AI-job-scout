@@ -24,7 +24,21 @@ function PullQuote({ text }) {
   );
 }
 
-function InlineCta() {
+function InlineCta({ variant = 'ats' }) {
+  const copy = variant === 'tailor'
+    ? {
+        title: 'Make the resume fit the role.',
+        body: 'Paste a job link — RolePitch picks your strongest achievements, rewrites the bullets, and keeps your layout.',
+        href: '/start?fresh=1',
+        label: 'Tailor my resume free →',
+      }
+    : {
+        title: 'See where your resume is losing points.',
+        body: 'Upload your resume — get an ATS readiness score and the fixes to improve it.',
+        href: '/critique',
+        label: 'Check my ATS score free →',
+      };
+
   return (
     <div style={{
       background: 'linear-gradient(135deg,var(--accent-dim) 0%,var(--green-dim) 100%)',
@@ -33,16 +47,16 @@ function InlineCta() {
       margin: '2.5em 0', textAlign: 'center',
     }}>
       <p style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)', marginBottom: 6, letterSpacing: '-0.01em' }}>
-        See where your resume is losing points.
+        {copy.title}
       </p>
       <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
-        Upload your resume — get an ATS readiness score and the fixes to improve it.
+        {copy.body}
       </p>
-      <a href="/rolepitch/critique" style={{
+      <a href={copy.href} style={{
         background: 'var(--accent)', color: 'white', display: 'inline-block',
         padding: '11px 26px', borderRadius: 9, fontSize: 14, fontWeight: 600,
         textDecoration: 'none', letterSpacing: '-0.01em',
-      }}>Check my ATS score free →</a>
+      }}>{copy.label}</a>
     </div>
   );
 }
@@ -109,7 +123,7 @@ export function extractSections(markdown) {
   return out;
 }
 
-export default function ArticleBody({ markdown }) {
+export default function ArticleBody({ markdown, ctaVariant = 'ats' }) {
   if (!markdown) return null;
   const lines = markdown.split('\n');
   const out = [];
@@ -138,7 +152,7 @@ export default function ArticleBody({ markdown }) {
       if (dir[1] === 'stat') push(<StatCallout stat={attrs.stat} label={attrs.label} sub={attrs.sub} />);
       else if (dir[1] === 'quote') push(<PullQuote text={attrs.text} />);
       else if (dir[1] === 'compare') push(<ComparisonBox bad_label={attrs.bad_label} bad={attrs.bad} good_label={attrs.good_label} good={attrs.good} />);
-      else if (dir[1] === 'cta') push(<InlineCta />);
+      else if (dir[1] === 'cta') push(<InlineCta variant={ctaVariant} />);
       i++; continue;
     }
 

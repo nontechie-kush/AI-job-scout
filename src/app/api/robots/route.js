@@ -2,13 +2,18 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const txt = `User-agent: *
-Allow: /rolepitch
-Allow: /rolepitch/
-Allow: /rolepitch/critique
-Allow: /rolepitch/start
-Allow: /rolepitch/report/
+Allow: /
+Allow: /critique
 Allow: /blog
 Allow: /blog/
+Disallow: /start
+Disallow: /rolepitch/start
+Disallow: /rolepitch/auth
+Disallow: /rolepitch/dashboard
+Disallow: /rolepitch/base-resume
+Disallow: /rolepitch/tailoring
+Disallow: /rolepitch/resume/
+Disallow: /rolepitch/report/
 Disallow: /dashboard/
 Disallow: /api/
 Disallow: /onboarding/

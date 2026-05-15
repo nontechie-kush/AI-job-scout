@@ -37,7 +37,7 @@ export const metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://www.rolepitch.com/rolepitch',
+    url: 'https://www.rolepitch.com/',
     siteName: 'RolePitch',
     title: 'RolePitch — Your resume, tailored for every role',
     description:
@@ -59,7 +59,7 @@ export const metadata = {
     images: ['/icons/icon-512x512.png'],
   },
   alternates: {
-    canonical: 'https://www.rolepitch.com/rolepitch',
+    canonical: 'https://www.rolepitch.com/',
   },
 };
 

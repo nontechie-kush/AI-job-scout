@@ -26,6 +26,22 @@ export async function middleware(request) {
     return NextResponse.redirect(url, 308);
   }
 
+  // Keep the public RolePitch domain on clean URLs for SEO. The app still
+  // lives under /rolepitch internally and on preview deployments.
+  if (isRolePitch) {
+    const publicAliases = {
+      '/rolepitch': '/',
+      '/rolepitch/critique': '/critique',
+      '/rolepitch/start': '/start',
+    };
+    const cleanPath = publicAliases[pathname];
+    if (cleanPath) {
+      const url = request.nextUrl.clone();
+      url.pathname = cleanPath;
+      return NextResponse.redirect(url, 308);
+    }
+  }
+
   // ── RolePitch hostname routing ──────────────────────────────────
   // rolepitch.com/ → rewrite to /rolepitch
   // rolepitch.com/start → rewrite to /rolepitch/start
