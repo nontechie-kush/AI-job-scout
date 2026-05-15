@@ -1,9 +1,10 @@
 /**
  * POST /api/rolepitch/base-resume
  *
- * Saves a signed-in user's latest base/source resume. This creates a new
- * profiles row so future tailoring uses it, while old tailored resumes remain
- * historical snapshots.
+ * Saves a signed-in user's latest base/source resume. Production has a unique
+ * profiles.user_id constraint, so the user's profile row is updated in place.
+ * Old tailored resumes remain historical snapshots because their base_version
+ * is stored on tailored_resumes.
  */
 
 import { NextResponse } from 'next/server';
@@ -56,24 +57,46 @@ export async function POST(request) {
     const service = createServiceClient();
     const source = ALLOWED_SOURCES.has(rawSource) ? rawSource : 'text';
     const structured_resume = buildStructuredResume(parsed);
+    const now = new Date().toISOString();
 
-    const { data: row, error } = await service
+    const { data: current } = await service
       .from('profiles')
-      .insert({
-        user_id: user.id,
-        raw_text: '',
-        source,
-        parsed_json: parsed,
-        structured_resume,
-        parsed_at: new Date().toISOString(),
-        claude_model: 'claude-opus-4-6',
-        original_pdf_path: pdfPath || null,
-      })
+      .select('id')
+      .eq('user_id', user.id)
+      .order('parsed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const payload = {
+      raw_text: '',
+      source,
+      parsed_json: parsed,
+      structured_resume,
+      parsed_at: now,
+      claude_model: 'claude-opus-4-6',
+      original_html: null,
+      original_page_count: null,
+      original_pdf_path: pdfPath || null,
+    };
+
+    const write = current?.id
+      ? service
+          .from('profiles')
+          .update(payload)
+          .eq('id', current.id)
+      : service
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            ...payload,
+          });
+
+    const { data: row, error } = await write
       .select('id, source, parsed_at, parsed_json, structured_resume, original_html, original_pdf_path')
       .single();
 
     if (error) {
-      console.error(`[rolepitch/base-resume ${rid}] profile insert failed`, {
+      console.error(`[rolepitch/base-resume ${rid}] profile write failed`, {
         message: error.message,
         code: error.code,
         details: error.details,
@@ -85,6 +108,7 @@ export async function POST(request) {
       user_id: user.id,
       profile_id: row.id,
       source,
+      mode: current?.id ? 'update' : 'insert',
       has_pdf_path: !!pdfPath,
       experience_count: parsed.experience?.length || 0,
     });
@@ -111,7 +135,7 @@ export async function PATCH(request) {
     const service = createServiceClient();
     const { data: current, error: readErr } = await service
       .from('profiles')
-      .select('source, parsed_json, structured_resume, original_html, original_page_count, original_pdf_path')
+      .select('id, source, parsed_json, structured_resume, original_html, original_page_count, original_pdf_path')
       .eq('user_id', user.id)
       .order('parsed_at', { ascending: false })
       .limit(1)
@@ -136,7 +160,7 @@ export async function PATCH(request) {
 
     const { data: row, error } = await service
       .from('profiles')
-      .insert({
+      .update({
         user_id: user.id,
         raw_text: '',
         source: current.source || 'text',
@@ -148,6 +172,7 @@ export async function PATCH(request) {
         original_page_count: current.original_page_count || null,
         original_pdf_path: current.original_pdf_path || null,
       })
+      .eq('id', current.id)
       .select('id, source, parsed_at, parsed_json, structured_resume, original_html, original_pdf_path')
       .single();
 

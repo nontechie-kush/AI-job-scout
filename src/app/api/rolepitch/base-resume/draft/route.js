@@ -28,6 +28,29 @@ function resumeForPrompt(profile) {
   return buildStructuredResume(base);
 }
 
+function mergeDraftResume(proposed, fallback) {
+  const draft = buildStructuredResume(proposed || {});
+  const base = buildStructuredResume(fallback || {});
+  const draftContact = draft.contact || {};
+  const baseContact = base.contact || {};
+
+  return {
+    ...draft,
+    name: draft.name || base.name || '',
+    title: draft.title || draft.experience?.[0]?.title || base.title || base.experience?.[0]?.title || '',
+    contact: {
+      ...baseContact,
+      ...Object.fromEntries(
+        Object.entries(draftContact).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      ),
+    },
+    summary: draft.summary || base.summary || '',
+    experience: draft.experience?.length ? draft.experience : base.experience || [],
+    education: draft.education?.length ? draft.education : base.education || [],
+    skills: draft.skills?.length ? draft.skills : base.skills || [],
+  };
+}
+
 function normalizeMessages(messages = []) {
   return messages
     .filter(m => m && typeof m.content === 'string' && m.content.trim())
@@ -107,6 +130,7 @@ Rules:
 - If keep_design is true, avoid major section sprawl and warn if added content may affect layout.
 - If keep_design is false, you may optimize for an ATS-friendly layout, but still return the same structured JSON.
 - Keep contact/name from the current resume unless the user explicitly changes them.
+- Always return the user's name, title/headline, contact, summary, education, and skills. Do not omit fields just because they did not change.
 - Keep output globally usable for US, UAE, India, and remote roles. Avoid country-specific assumptions.
 - The user's latest instruction wins, but retain useful content from the current resume.
 
@@ -133,9 +157,11 @@ ${JSON.stringify(messages, null, 2)}`;
       return NextResponse.json({ error: 'Could not draft the update. Try adding a little more detail.' }, { status: 502 });
     }
 
+    const mergedResume = mergeDraftResume(parsed.resume, currentResume);
+
     return NextResponse.json({
       ok: true,
-      resume: buildStructuredResume(parsed.resume),
+      resume: mergedResume,
       assistant_note: parsed.assistant_note || 'I drafted an updated base resume for review.',
       change_summary: Array.isArray(parsed.change_summary) ? parsed.change_summary.slice(0, 8) : [],
       review_flags: Array.isArray(parsed.review_flags) ? parsed.review_flags.slice(0, 6) : [],
