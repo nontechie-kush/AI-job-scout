@@ -358,6 +358,36 @@ export default function RolePitchDashboard() {
     }
   };
 
+  const handleBaseDownload = async () => {
+    setDownloading('base');
+    track('rp_base_resume_downloaded');
+    try {
+      const res = await fetch('/api/rolepitch/base-resume/download', {
+        headers: { Accept: 'application/pdf,application/json' },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not prepare base resume');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const filename = match?.[1] || 'RolePitch_base_resume.pdf';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      setError(e.message || 'Could not prepare base resume');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -464,13 +494,29 @@ export default function RolePitchDashboard() {
                     : 'Upload your source resume once, then tailor it for every role.'}
                 </div>
               </div>
-              <button
-                className="rp-btn-ghost"
-                onClick={() => router.push('/rolepitch/base-resume')}
-                style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 800, padding: '9px 13px' }}
-              >
-                {baseResume ? 'Update resume' : 'Add resume'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {baseResume && (
+                  <button
+                    className="rp-btn-ghost"
+                    onClick={handleBaseDownload}
+                    disabled={downloading === 'base'}
+                    style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 13px', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    {downloading === 'base'
+                      ? <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', animation: 'rp-spin 0.7s linear infinite' }} />
+                      : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M3 5.5l3 3 3-3M2 10h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    }
+                    {downloading === 'base' ? 'Preparing...' : 'Download base'}
+                  </button>
+                )}
+                <button
+                  className="rp-btn-ghost"
+                  onClick={() => router.push('/rolepitch/base-resume')}
+                  style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 13px' }}
+                >
+                  {baseResume ? 'Update base resume' : 'Add resume'}
+                </button>
+              </div>
             </div>
           )}
 
