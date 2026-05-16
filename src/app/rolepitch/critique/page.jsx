@@ -10,6 +10,7 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/components/PostHogProvider';
+import ATSReport from '@/components/rolepitch/ATSReport';
 
 const CSS = `
   :root {
@@ -633,6 +634,7 @@ function SectionRow({ label, data }) {
 }
 
 function StepReport({ critique, critiqueId, parsedResume, targetContext, router }) {
+  const [copied, setCopied] = useState(false);
   const shareUrl = (() => {
     if (!critiqueId || typeof window === 'undefined') return null;
     const origin = window.location.origin;
@@ -642,13 +644,16 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
       : `/rolepitch/report/${critiqueId}`;
     return `${origin}${path}`;
   })();
-  const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this report link', shareUrl);
+    }
   };
 
   const handleTailor = async () => {
@@ -657,7 +662,6 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
       has_target: !!targetContext,
     });
 
-    // Persist to BOTH storages so start page (localStorage) + auth page can read it.
     const patch = { parsedResume, critiqueId, fromCritique: true };
     try {
       const sExist = JSON.parse(sessionStorage.getItem('rp_session') || '{}');
@@ -668,8 +672,6 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
       localStorage.setItem('rp_session', JSON.stringify({ ...lExist, ...patch }));
     } catch {}
 
-    // If already signed in, skip the auth round-trip — claim and go straight
-    // to tailoring. Otherwise fall through to OAuth.
     try {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
@@ -697,145 +699,15 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
     router.push('/rolepitch/auth?source=critique&step=0');
   };
 
-  const s = critique.sections || {};
-  const overallScore = critique.overall_score || 0;
-  const drivers = atsDrivers(critique);
-  const hasTarget = !!targetContext;
-  const targetFit = targetFitFor(critique, hasTarget);
-  const verdict = critique.ats_report?.diagnosis || critique.headline_verdict;
-  const primaryLabel = critique.ats_report?.label || scoreLabel(overallScore);
-
   return (
-    <div style={{ animation: 'rc-fadeUp 0.4s ease both' }}>
-      {/* Score header */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '28px 24px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-            <ScoreRing score={overallScore} label={primaryLabel} />
-            <div style={{ maxWidth: 380 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>ATS Readiness Score</div>
-              <h2 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 1.12, margin: 0 }}>
-                {hasTarget ? 'Your resume is readable. Now make it unmistakably relevant.' : 'Your ATS report is ready.'}
-              </h2>
-              {targetFit && (
-                <div style={{ marginTop: 12, display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '7px 11px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Target fit</span>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(targetFit.score) }}>{targetFit.score}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/100</span>
-                </div>
-              )}
-            </div>
-          </div>
-          {shareUrl && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-              <button onClick={handleCopy} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontFamily: 'var(--sans)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5 3H3a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V8M8 1h4m0 0v4m0-4L5.5 7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                {copied ? 'Copied!' : 'Copy report link'}
-              </button>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Link expires in 7 days</div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--bg)', borderRadius: 10, borderLeft: '3px solid var(--accent)' }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, lineHeight: 1.5 }}>"{verdict}"</p>
-        </div>
-
-        <div className="rc-ats-grid" style={{ marginTop: 18 }}>
-          {drivers.map(driver => <AtsDriverCard key={driver.key} driver={driver} />)}
-        </div>
-      </div>
-
-      {/* What works */}
-      {(critique.what_works || []).length > 0 && (
-        <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.2)', borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>What's working</div>
-          {critique.what_works.map((w, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: i < critique.what_works.length - 1 ? 6 : 0 }}>
-              <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>✓</span>
-              <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{w}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Top 5 fixes */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px', marginBottom: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>Top fixes — prioritized</div>
-        {(critique.top_fixes || []).map((fix, i) => (
-          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: i < (critique.top_fixes.length - 1) ? 14 : 0 }}>
-            <span style={{ width: 22, height: 22, borderRadius: 6, background: i === 0 ? 'var(--red-dim)' : 'var(--accent-dim)', color: i === 0 ? 'var(--red)' : 'var(--accent)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-            <span style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text)' }}>{fix}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Section breakdown */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px', marginBottom: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Section breakdown</div>
-        {s.summary && <SectionRow label="Summary" data={s.summary} />}
-        {s.bullets && <SectionRow label="Bullet points" data={s.bullets} />}
-        {s.skills && <SectionRow label="Skills" data={s.skills} />}
-        {s.structure && <SectionRow label="Structure" data={s.structure} />}
-        {s.impact && <SectionRow label="Impact & metrics" data={s.impact} />}
-      </div>
-
-      {/* Before → After bullet rewrites */}
-      {s.bullets?.examples?.length > 0 && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>Bullet rewrites — before → after</div>
-          {s.bullets.examples.map((ex, i) => (
-            <div key={i} style={{ marginBottom: i < s.bullets.examples.length - 1 ? 20 : 0 }}>
-              <div style={{ background: 'var(--red-dim)', border: '1px solid oklch(0.58 0.19 25 / 0.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--red)', letterSpacing: '0.06em', marginBottom: 4 }}>BEFORE</div>
-                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{ex.original}</div>
-              </div>
-              <div style={{ background: 'var(--green-dim)', border: '1px solid oklch(0.55 0.17 155 / 0.2)', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.06em', marginBottom: 4 }}>AFTER</div>
-                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{ex.rewrite}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Summary rewrite if suggested */}
-      {s.summary?.rewrite && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Suggested summary rewrite</div>
-          <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.65, margin: 0 }}>{s.summary.rewrite}</p>
-        </div>
-      )}
-
-      {/* Gap to target */}
-      {critique.gap_to_target && (
-        <div style={{ background: 'var(--accent-dim)', border: '1px solid oklch(0.50 0.19 248 / 0.2)', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>{hasTarget ? 'Gap to your target' : 'What is holding this resume back'}</div>
-          <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: 0 }}>{critique.gap_to_target}</p>
-        </div>
-      )}
-
-      {/* Upsell — tailor flow */}
-      <div style={{ background: 'linear-gradient(135deg, oklch(0.50 0.19 248 / 0.08) 0%, oklch(0.55 0.17 155 / 0.08) 100%)', border: '1px solid var(--border)', borderRadius: 16, padding: '28px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{hasTarget ? 'Ready to close the gap?' : 'Want RolePitch to fix this for a real job?'}</div>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
-          {hasTarget
-            ? 'Generate a tailored resume that rewrites the weak bullets for this exact role and exports a PDF in 60 seconds.'
-            : 'Paste a job link next. RolePitch will turn this diagnosis into a tailored resume with rewritten bullets and a PDF.'}
-        </p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="rc-btn-primary" onClick={handleTailor} style={{ padding: '13px 28px', fontSize: 15 }}>
-            {hasTarget ? 'Generate tailored resume →' : 'Tailor for a job — free →'}
-          </button>
-          {shareUrl && (
-            <button className="rc-btn-outline" onClick={handleCopy}>
-              {copied ? 'Copied!' : 'Share report'}
-            </button>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 12 }}>5 free pitches · no credit card</div>
-      </div>
-    </div>
+    <ATSReport
+      critique={critique}
+      critiqueId={critiqueId}
+      targetContext={targetContext}
+      onTailor={handleTailor}
+      shareUrl={shareUrl}
+      onShare={shareUrl ? handleCopy : null}
+    />
   );
 }
 
@@ -924,7 +796,7 @@ function CritiqueInner() {
   return (
     <div className="rc-root" style={{ padding: '24px 16px', minHeight: '100vh' }}>
       {/* Nav */}
-      <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+      <div style={{ maxWidth: step === 'report' ? 1080 : 640, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' }}>
           <div style={{ width: 26, height: 26, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h7M2 11h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" /></svg>
@@ -945,7 +817,7 @@ function CritiqueInner() {
         </div>
       )}
 
-      <div style={{ maxWidth: step === 'report' ? 680 : 520, margin: '0 auto' }}>
+      <div style={{ maxWidth: step === 'report' ? 1080 : 520, margin: '0 auto' }}>
         {step === 'upload' && (
           <div className="rc-card"><StepUpload onParsed={handleParsed} /></div>
         )}
@@ -979,7 +851,7 @@ export default function CritiquePage() {
   return (
     <>
       <style>{CSS}</style>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
       <Suspense fallback={null}>
         <CritiqueInner />
       </Suspense>
