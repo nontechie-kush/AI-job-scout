@@ -31,6 +31,7 @@ export async function middleware(request) {
   if (isRolePitch) {
     const publicAliases = {
       '/rolepitch': '/',
+      '/rolepitch/ats-checker': '/ats-checker',
       '/rolepitch/critique': '/critique',
       '/rolepitch/start': '/start',
     };

@@ -14,7 +14,7 @@ export async function GET() {
 
   const staticUrls = [
     { loc: 'https://www.rolepitch.com/', lastmod: today, changefreq: 'weekly', priority: '1.0' },
-    { loc: 'https://www.rolepitch.com/critique', lastmod: today, changefreq: 'weekly', priority: '0.8' },
+    { loc: 'https://www.rolepitch.com/ats-checker', lastmod: today, changefreq: 'weekly', priority: '0.9' },
     { loc: 'https://www.rolepitch.com/blog', lastmod: today, changefreq: 'daily', priority: '0.9' },
   ];
 

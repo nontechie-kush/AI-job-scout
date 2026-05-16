@@ -93,7 +93,7 @@ function ExpiredOrNotFound({ reason }) {
               ? 'ATS reports are available for 7 days after creation. Get a fresh score check below.'
               : "We couldn't find this report. It may have been removed or the link is incorrect."}
           </p>
-          <a href="/critique" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
+          <a href="/ats-checker" style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', textDecoration: 'none', padding: '12px 24px', borderRadius: 10, fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em' }}>
             Check my ATS score — free →
           </a>
           <div style={{ marginTop: 16 }}>

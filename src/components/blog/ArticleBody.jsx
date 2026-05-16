@@ -35,7 +35,7 @@ function InlineCta({ variant = 'ats' }) {
     : {
         title: 'See where your resume is losing points.',
         body: 'Upload your resume — get an ATS readiness score and the fixes to improve it.',
-        href: '/critique',
+        href: '/ats-checker',
         label: 'Check my ATS score free →',
       };
 

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const txt = `User-agent: *
 Allow: /
+Allow: /ats-checker
 Allow: /critique
 Allow: /blog
 Allow: /blog/

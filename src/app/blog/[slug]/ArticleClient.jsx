@@ -155,7 +155,7 @@ function articleCta(post) {
     return {
       title: 'Find out if your resume can pass ATS.',
       body: 'Upload your resume — RolePitch checks parseability, keywords, structure, and impact before you apply.',
-      href: '/critique',
+      href: '/ats-checker',
       inlineVariant: 'ats',
       label: 'Check my ATS score free →',
     };
