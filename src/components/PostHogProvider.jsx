@@ -23,9 +23,27 @@ export default function PostHogProvider() {
   return null;
 }
 
+const GA4_KEY_EVENT_ALIASES = {
+  rp_signup_completed: 'sign_up',
+  rp_resume_pitch_started: 'resume_pitch_started',
+  rp_tailor_completed: 'resume_tailored',
+  rp_match_score_received: 'match_score_received',
+  rp_ats_score_started: 'ats_score_started',
+  rp_ats_score_completed: 'ats_report_generated',
+  rp_ats_to_tailor_clicked: 'ats_to_tailor_clicked',
+  rp_pdf_downloaded: 'pdf_downloaded',
+  rp_base_resume_downloaded: 'base_resume_downloaded',
+};
+
 export function track(event, props) {
   if (typeof window === 'undefined' || typeof window.gtag === 'undefined') return;
-  window.gtag('event', event, { transport_type: 'beacon', ...(props || {}) });
+  const payload = { transport_type: 'beacon', ...(props || {}) };
+  window.gtag('event', event, payload);
+
+  const alias = GA4_KEY_EVENT_ALIASES[event];
+  if (alias && alias !== event) {
+    window.gtag('event', alias, payload);
+  }
 }
 
 export function identify(userId, traits) {

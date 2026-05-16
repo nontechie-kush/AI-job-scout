@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { track } from '@/components/PostHogProvider';
 
 const CSS = `
   :root {
@@ -399,6 +400,11 @@ export default function ResumeEditPage() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
+      track('rp_pdf_downloaded', {
+        resume_id: id,
+        source: 'resume_editor',
+        has_edits: true,
+      });
     } catch (e) {
       setSaveError(e.message || 'Could not prepare PDF');
     } finally {

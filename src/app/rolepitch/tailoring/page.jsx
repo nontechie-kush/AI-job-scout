@@ -17,6 +17,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { track } from '@/components/PostHogProvider';
 
 const PILOT_BEATS = [
   'Reading your story.',
@@ -134,6 +135,13 @@ function TailoringPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
       try {
+        track('rp_resume_pitch_started', {
+          source: 'ats_report',
+          critique_id: critiqueId,
+          mode: decision,
+          has_target: !!preview?.target_context,
+        });
+
         const res = await fetch('/api/rolepitch/auto-tailor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -152,6 +160,13 @@ function TailoringPage() {
           sessionStorage.removeItem('rp_session');
           localStorage.removeItem('rp_session');
         } catch {}
+        track('rp_tailor_completed', {
+          source: 'ats_report',
+          critique_id: critiqueId,
+          tailored_resume_id: data.tailored_resume_id,
+          mode: data.used?.mode || decision,
+          cached: !!data.cached,
+        });
         router.replace(`/rolepitch/resume/${data.tailored_resume_id}?welcome=1`);
       } catch (err) {
         clearTimeout(timeoutId);

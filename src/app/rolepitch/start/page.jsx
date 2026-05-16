@@ -2678,6 +2678,11 @@ function StepReturningDone({ onTailorAnother, dir }) {
       }
       if (!res.ok) throw new Error('Could not prepare PDF');
       await downloadBlobFromResponse(res);
+      track('rp_pdf_downloaded', {
+        resume_id: savedId,
+        source: 'start_done',
+        jd_title: jdLabel || null,
+      });
     } catch (e) {
       setDownloadError(e.message || 'Could not prepare PDF');
     } finally {

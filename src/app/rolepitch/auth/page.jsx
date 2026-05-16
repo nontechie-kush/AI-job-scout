@@ -171,7 +171,6 @@ function RolePitchAuthInner() {
               // Successful end-to-end claim with a tailored pitch — go directly
               // to dashboard with welcome marker. Skip the start-page step=6 path.
               try { localStorage.removeItem('rp_draft_id'); } catch {}
-              track('sign_up', { method: 'google', source: source || 'rolepitch', has_tailored: true });
               track('rp_signup_completed', { method: 'google', source: source || 'rolepitch', has_tailored: true });
               window.location.href = '/rolepitch/dashboard?welcome=1';
               return;

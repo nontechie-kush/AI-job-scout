@@ -633,7 +633,15 @@ function SectionRow({ label, data }) {
 }
 
 function StepReport({ critique, critiqueId, parsedResume, targetContext, router }) {
-  const shareUrl = critiqueId ? `${typeof window !== 'undefined' ? window.location.origin : ''}/rolepitch/report/${critiqueId}` : null;
+  const shareUrl = (() => {
+    if (!critiqueId || typeof window === 'undefined') return null;
+    const origin = window.location.origin;
+    const host = window.location.hostname;
+    const path = host === 'rolepitch.com' || host === 'www.rolepitch.com'
+      ? `/report/${critiqueId}`
+      : `/rolepitch/report/${critiqueId}`;
+    return `${origin}${path}`;
+  })();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -644,6 +652,11 @@ function StepReport({ critique, critiqueId, parsedResume, targetContext, router 
   };
 
   const handleTailor = async () => {
+    track('rp_ats_to_tailor_clicked', {
+      critique_id: critiqueId || null,
+      has_target: !!targetContext,
+    });
+
     // Persist to BOTH storages so start page (localStorage) + auth page can read it.
     const patch = { parsedResume, critiqueId, fromCritique: true };
     try {

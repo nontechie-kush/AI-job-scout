@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { track } from '@/components/PostHogProvider';
 
 const CSS_VARS = `
   :root {
@@ -129,6 +130,11 @@ export default function ResumeDetailPage() {
       }
       if (!res.ok) throw new Error('Could not prepare PDF');
       await downloadBlobFromResponse(res);
+      track('rp_pdf_downloaded', {
+        resume_id: id,
+        source: 'resume_detail',
+        has_edits: !!data?.has_edits,
+      });
       if (!data?.has_edits) setShowEditPrompt(true);
     } catch (e) {
       setDownloadError(e.message || 'Could not prepare PDF');
