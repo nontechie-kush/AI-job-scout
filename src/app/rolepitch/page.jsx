@@ -763,7 +763,7 @@ export default function RolePitchLanding() {
   };
   const handleCritique = () => {
     track('rp_critique_clicked', { source: 'landing' });
-    router.push(isRolePitchDomain ? '/ats-checker' : '/rolepitch/ats-checker');
+    router.push(isRolePitchDomain ? '/critique' : '/rolepitch/critique');
   };
   const handleSignIn = () => {
     track('rp_sign_in_clicked', { source: 'landing' });
