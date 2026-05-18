@@ -142,6 +142,7 @@ const ATS_SCORE_SLUGS = new Set([
   'ats-friendly-resume-template-2026-formatting-rules',
   'ats-keywords-by-job-title-software-engineer-product-manager-marketing-manager',
   'why-ai-written-resumes-score-lower-ats',
+  'how-to-use-ai-improve-resume-without-ats-filter',
 ]);
 
 const TAILORING_SLUGS = new Set([
